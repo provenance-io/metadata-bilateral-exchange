@@ -1,0 +1,44 @@
+[package]
+name = "metadata-bilateral-exchange"
+version = "1.0.0-beta1"
+authors = ["Ken Talley <ktalley@figure.com>", "Jake Schwartz <jschwartz@figure.com>"]
+edition = "2018"
+
+exclude = [
+  "metadata_bilateral_exchange.wasm",
+  "checksums.txt",
+]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
+overflow-checks = true
+
+[features]
+# for more explicit tests, cargo test --features=backtraces
+#backtraces = ["cosmwasm-std/backtraces"]
+enable-test-utils = []
+
+[dependencies]
+cosmwasm-std = { version = "=1.0.0", features = ["staking"] }
+cosmwasm-storage = { version = "=1.0.0" }
+cw-storage-plus = { version = "=0.13.4" }
+provwasm-std = { version = "=1.0.0" }
+schemars = "=0.8.3"
+semver = "=1.0.7"
+serde = { version = "=1.0.137", default-features = false, features = ["derive"] }
+take-if = "=1.0.0"
+thiserror = { version = "=1.0.26" }
+
+[dev-dependencies]
+cosmwasm-schema = { version = "=1.0.0" }
+provwasm-mocks = { version = "=1.0.0" }
