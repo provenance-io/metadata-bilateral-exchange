@@ -70,7 +70,7 @@ jobs:
         run: |
           echo "Publishing release for version [$RELEASE_VERSION]"
           ./kotlin-client/gradlew publishToSonatype $(if [ "${{github.event.release.prerelease}}" = "true" ]; then echo 'closeSonatypeStagingRepository'; else echo 'closeAndReleaseSonatypeStagingRepository'; fi) \
-            -PlibraryVersion=$RELEASE_VERSION \
+            -Pversion=$RELEASE_VERSION \
             -Psigning.keyId=B7D30ABE -Psigning.password="${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}" -Psigning.secretKeyRingFile=$GITHUB_WORKSPACE/release.gpg \
             --info \
             --project-dir ./kotlin-client
