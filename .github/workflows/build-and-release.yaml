@@ -14,22 +14,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+
+      - name: Setup Toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-        working-directory: ./smart-contract
-      - uses: actions-rs/cargo@v1
+
+      - name: Check Fmt
+        uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
         working-directory: ./smart-contract
-      - uses: actions-rs/cargo@v1
+
+      - name: Run Clippy
+        uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D warnings
         working-directory: ./smart-contract
-      - uses: actions-rs/cargo@v1
+
+      - name: Run Tests
+        uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --verbose
+          args: --verbose --features=enable-test-utils
         working-directory: ./smart-contract
