@@ -3,10 +3,10 @@ use std::fs::create_dir_all;
 
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
 
-use bilateral_exchange::storage::contract_info::ContractInfo;
-use bilateral_exchange::types::core::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
-use bilateral_exchange::types::request::ask_types::ask_order::AskOrder;
-use bilateral_exchange::types::request::bid_types::bid_order::BidOrder;
+use metadata_bilateral_exchange::storage::contract_info::ContractInfo;
+use metadata_bilateral_exchange::types::core::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use metadata_bilateral_exchange::types::request::ask_types::ask_order::AskOrder;
+use metadata_bilateral_exchange::types::request::bid_types::bid_order::BidOrder;
 
 fn main() {
     let mut out_dir = current_dir().unwrap();

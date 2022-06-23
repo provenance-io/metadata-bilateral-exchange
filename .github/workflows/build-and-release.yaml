@@ -17,19 +17,19 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-        working_directory: ./smart-contract
+        working-directory: ./smart-contract
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-        working_directory: ./smart-contract
+        working-directory: ./smart-contract
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D warnings
-        working_directory: ./smart-contract
+        working-directory: ./smart-contract
       - uses: actions-rs/cargo@v1
         with:
           command: test
           args: --verbose
-        working_directory: ./smart-contract
+        working-directory: ./smart-contract
