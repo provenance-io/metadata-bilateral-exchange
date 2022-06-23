@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./smart-contract
+        working-directory: smart-contract
     steps:
       - name: Checkout
         uses: actions/checkout@v2
