@@ -31,7 +31,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check --manifest-path=./smart-contract/Cargo.toml
+          args: --all --manifest-path=./smart-contract/Cargo.toml -- --check 
 
       - name: Cargo Clippy
         uses: actions-rs/cargo@v1
