@@ -6,7 +6,7 @@ on:
 
 jobs:
   contract-release:
-    name: Release Project Files
+    name: Contract File Release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,7 +26,7 @@ jobs:
             smart-contract/artifacts/checksums.txt
 
   kotlin-client-release:
-    name: Build and Publish Jar
+    name: Kotlin Client Jar Release
     runs-on: ubuntu-latest
     env:
       # Needed to allow release version to be fetched and then sent to the publish artifact step
@@ -54,7 +54,7 @@ jobs:
           server-id: github
 
       - name: Build with Gradle
-        run: ./gradlew clean build --refresh-dependencies -Pversion=$RELEASE_VERSION --project-dir ./kotlin-client
+        run: ./kotlin-client/gradlew clean build --refresh-dependencies -Pversion=$RELEASE_VERSION --project-dir ./kotlin-client
 
       - name: Install gpg secret key
         run: |
@@ -69,7 +69,7 @@ jobs:
           OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
         run: |
           echo "Publishing release for version [$RELEASE_VERSION]"
-          ./gradlew publishToSonatype $(if [ "${{github.event.release.prerelease}}" = "true" ]; then echo 'closeSonatypeStagingRepository'; else echo 'closeAndReleaseSonatypeStagingRepository'; fi) \
+          ./kotlin-client/gradlew publishToSonatype $(if [ "${{github.event.release.prerelease}}" = "true" ]; then echo 'closeSonatypeStagingRepository'; else echo 'closeAndReleaseSonatypeStagingRepository'; fi) \
             -PlibraryVersion=$RELEASE_VERSION \
             -Psigning.keyId=B7D30ABE -Psigning.password="${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}" -Psigning.secretKeyRingFile=$GITHUB_WORKSPACE/release.gpg \
             --info
