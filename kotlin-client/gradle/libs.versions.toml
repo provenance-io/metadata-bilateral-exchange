@@ -1,0 +1,27 @@
+[versions]
+assetSpec = "1.0.0"
+bouncyCastle = "1.70"
+jackson = "2.13.3"
+jacksonProtobuf = "0.9.12"
+kotlin = "1.6.10"
+protobuf = "3.21.1"
+provenanceClient = "1.1.1"
+provenanceHdWallet = "0.1.15"
+provenanceProtoKotlin = "1.10.0"
+provenanceScope = "0.6.0"
+
+[libraries]
+assetSpec = { module = "io.provenance.spec:asset-specs", version.ref = "assetSpec" }
+bouncyCastle = { module = "org.bouncycastle:bcprov-jdk15on", version.ref = "bouncyCastle" }
+jacksonDataTypeJdk8 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jdk8", version.ref = "jackson" }
+jacksonDataTypeJsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson" }
+jacksonDataTypeProtobuf = { module = "com.hubspot.jackson:jackson-datatype-protobuf", version.ref = "jacksonProtobuf" }
+jacksonModuleKotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
+kotlinStdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8", version.ref = "kotlin" }
+protobuf = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
+protobufUtil = { module = "com.google.protobuf:protobuf-java-util", version.ref = "protobuf" }
+provenanceGrpcClient = { module = "io.provenance.client:pb-grpc-client-kotlin", version.ref = "provenanceClient" }
+provenanceHdWallet = { module = "io.provenance.hdwallet:hdwallet", version.ref = "provenanceHdWallet" }
+provenanceProtoKotlin = { module = "io.provenance:proto-kotlin", version.ref = "provenanceProtoKotlin" }
+provenanceScopeEncryption = { module = "io.provenance.scope:encryption", version.ref = "provenanceScope" }
+provenanceScopeUtil = { module = "io.provenance.scope:util", version.ref = "provenanceScope" }

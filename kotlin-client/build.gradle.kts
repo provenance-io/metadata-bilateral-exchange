@@ -3,41 +3,119 @@ plugins {
     kotlin("plugin.serialization") version "1.6.10"
     id("java")
     idea
+    `maven-publish`
+    `java-library`
+    signing
+    id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
 }
+
+group = "io.provenance.bilateral"
+version = project.property("version")?.takeIf { it != "unspecified" }?.toString() ?: "1.0-SNAPSHOT"
 
 repositories {
     mavenLocal()
     mavenCentral()
 }
 
+dependencies {
+    listOf(
+        libs.bouncyCastle,
+        libs.jacksonDataTypeJdk8,
+        libs.jacksonDataTypeJsr310,
+        libs.jacksonDataTypeProtobuf,
+        libs.jacksonModuleKotlin,
+        libs.kotlinStdlib,
+        libs.protobuf,
+        libs.protobufUtil,
+        libs.provenanceGrpcClient,
+        libs.provenanceHdWallet,
+        libs.provenanceProtoKotlin,
+        libs.provenanceScopeEncryption,
+        libs.provenanceScopeUtil,
+    ).forEach(::api)
+
+    listOf(
+        libs.assetSpec
+    ).forEach(::testImplementation)
+}
+
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     sourceCompatibility = "11"
     targetCompatibility = "11"
 
     kotlinOptions {
-        freeCompilerArgs = listOf(
-            "-Xjsr305=strict",
-            "-Xopt-in=kotlinx.coroutines.ExperimentalCoroutinesApi"
-        )
+        freeCompilerArgs = listOf("-Xjsr305=strict")
         jvmTarget = "11"
     }
 }
 
-dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.6.10")
-    implementation("org.bouncycastle:bcprov-jdk15on:1.70")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.13.3")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.13.3")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.3")
-    implementation("com.hubspot.jackson:jackson-datatype-protobuf:0.9.12")
-    implementation("com.google.protobuf:protobuf-java:3.21.1")
-    implementation("com.google.protobuf:protobuf-java-util:3.21.1")
-    implementation("io.provenance.spec:asset-specs:1.0.0")
-    implementation("io.provenance.client:pb-grpc-client-kotlin:1.1.1")
-    implementation("io.provenance.hdwallet:hdwallet:0.1.15")
-    implementation("io.provenance:proto-kotlin:1.10.0")
-    implementation("io.provenance.scope:encryption:0.6.0")
-    implementation("io.provenance.scope:util:0.6.0")
-    implementation("com.akuleshov7:ktoml-core:0.2.11")
-    implementation("com.akuleshov7:ktoml-file:0.2.11")
+tasks.withType<JavaCompile> {
+    sourceCompatibility = JavaVersion.VERSION_11.toString()
+    targetCompatibility = JavaVersion.VERSION_11.toString()
+}
+
+configure<JavaPluginExtension> {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+configure<io.github.gradlenexus.publishplugin.NexusPublishExtension> {
+    repositories {
+        sonatype {
+            nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
+            username.set(findProject("ossrhUsername")?.toString() ?: System.getenv("OSSRH_USERNAME"))
+            password.set(findProject("ossrhPassword")?.toString() ?: System.getenv("OSSRH_PASSWORD"))
+            stagingProfileId.set("3180ca260b82a7") // prevents querying for the staging profile id, performance optimization
+        }
+    }
+}
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+val artifactName = "bilateral-client"
+val artifactVersion = version.toString()
+
+configure<PublishingExtension> {
+    publications {
+        create<MavenPublication>("maven") {
+            groupId = "io.provenance.bilateral"
+            artifactId = artifactName
+            version = artifactVersion
+
+            from(components["java"])
+
+            pom {
+                name.set("Provenance Blockchain Metadata Bilateral Exchange Kotlin Client")
+                description.set("A client to make GRPC requests to the Metadata Bilateral Exchange smart contract")
+                url.set("https://provenance.io")
+                licenses {
+                    license {
+                        name.set("The Apache License, Version 2.0")
+                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("hyperschwartz")
+                        name.set("Jacob Schwartz")
+                        email.set("jschwartz@figure.com")
+                    }
+                }
+                scm {
+                    developerConnection.set("git@github.com:provenance.io/metadata-bilateral-exchange.git")
+                    connection.set("https://github.com/provenance-io/metadata-bilateral-exchange.git")
+                    url.set("https://github.com/provenance-io/metadata-bilateral-exchange")
+                }
+            }
+        }
+
+        configure<SigningExtension> {
+            sign(publications["maven"])
+        }
+    }
 }

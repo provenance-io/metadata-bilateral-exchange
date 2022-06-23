@@ -1,4 +1,4 @@
-package io.provenance.bilateral.runtimeexamples.config
+package io.provenance.bilateral.util
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.databind.DeserializationFeature
@@ -8,7 +8,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule
 
-object Singletons {
+internal object ObjectMapperProvider {
     val OBJECT_MAPPER: ObjectMapper by lazy {
         ObjectMapper()
             .registerKotlinModule()

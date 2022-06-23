@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
+  check-contract:
     name: Check Contract Integrity
     runs-on: ubuntu-latest
     steps:
@@ -41,4 +41,23 @@ jobs:
         with:
           command: test
           args: --manifest-path=./smart-contract/Cargo.toml --verbose --features=enable-test-utils
+
+  check-client:
+    name: Check Kotlin Client Integrity
+    runs-on: ubuntu-latest
+    env:
+      NEXUS_USER: ${{ secrets.NEXUS_USER }}
+      NEXUS_PASS: ${{ secrets.NEXUS_PASS }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'adopt'
+      
+      - name: Build Project
+        run: ./kotlin-client/gradlew clean build --refresh-dependencies --parallel
   
