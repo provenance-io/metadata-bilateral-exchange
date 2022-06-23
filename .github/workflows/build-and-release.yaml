@@ -13,9 +13,6 @@ jobs:
   check:
     name: Check Contract Integrity
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: smart-contract
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -37,10 +34,11 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
+          args: --manifest-path=./smart-contract/Cargo.toml
 
       - name: Run Tests
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --verbose --features=enable-test-utils
+          args: --manifest-path=./smart-contract/Cargo.toml --verbose --features=enable-test-utils
   

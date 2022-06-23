@@ -562,7 +562,8 @@ mod tests {
                     "expected the scope address to be properly included in the error",
                 );
                 assert_eq!(
-                    "the scope owner was expected to be [owner2], not [owner1]", explanation,
+                    "the scope's value owner was expected to be [badowner], not [goodowner]",
+                    explanation,
                     "unexpected error explanation",
                 );
             }

@@ -189,7 +189,7 @@ mod tests {
         match cancel_response {
             ContractError::StorageError { message } => {
                 assert_eq!(
-                    "failed to find AskOrder by id [unknown_id]: NotFound { kind: \"bilateral_exchange::types::request::ask_types::ask_order::AskOrder\" }",
+                    "failed to find AskOrder by id [unknown_id]: NotFound { kind: \"metadata_bilateral_exchange::types::request::ask_types::ask_order::AskOrder\" }",
                     message,
                 );
             }
