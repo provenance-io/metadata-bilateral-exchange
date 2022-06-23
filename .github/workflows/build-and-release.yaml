@@ -25,18 +25,18 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-        working-directory: ./smart-contract
+          working-directory: ./smart-contract
 
       - name: Run Clippy
         uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D warnings
-        working-directory: ./smart-contract
+          working-directory: ./smart-contract
 
       - name: Run Tests
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --verbose --features=enable-test-utils
-        working-directory: ./smart-contract
+          working-directory: ./smart-contract
