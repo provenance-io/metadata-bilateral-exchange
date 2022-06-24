@@ -7,6 +7,7 @@ kotlin = "1.6.10"
 kotlinCoroutines = "1.6.2"
 kotlinLogging = "2.1.21"
 logback = "1.2.6"
+mockk = "1.12.4"
 protobuf = "3.21.1"
 provenanceClient = "1.1.1"
 provenanceHdWallet = "0.1.15"
@@ -27,6 +28,7 @@ kotlinLogging = { module = "io.github.microutils:kotlin-logging-jvm", version.re
 kotlinStdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8", version.ref = "kotlin" }
 kotlinTest = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 logbackClassic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 protobuf = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
 protobufUtil = { module = "com.google.protobuf:protobuf-java-util", version.ref = "protobuf" }
 provenanceGrpcClient = { module = "io.provenance.client:pb-grpc-client-kotlin", version.ref = "provenanceClient" }

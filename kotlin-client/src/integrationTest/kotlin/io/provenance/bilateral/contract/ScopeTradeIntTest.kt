@@ -75,13 +75,13 @@ class ScopeTradeIntTest : ContractIntTest() {
         val createBid = CreateBid.newScopeTrade(
             id = bidUuid.toString(),
             scopeAddress = MetadataAddress.forScope(scopeUuid).toString(),
+            quote = newCoins(50000, "nhash"),
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
         )
         logger.info("Creating scope trade bid [$bidUuid]")
         bilateralClient.createBid(
             createBid = createBid,
             signer = BilateralAccounts.bidderAccount,
-            options = BroadcastOptions(funds = newCoins(50000, "nhash")),
         )
         bilateralClient.assertBidExists(bidUuid.toString())
         val executeMatch = ExecuteMatch.new(askUuid.toString(), bidUuid.toString())

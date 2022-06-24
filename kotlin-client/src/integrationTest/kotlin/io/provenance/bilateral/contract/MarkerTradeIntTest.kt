@@ -47,12 +47,12 @@ class MarkerTradeIntTest : ContractIntTest() {
         val createBid = CreateBid.newMarkerTrade(
             id = bidUuid.toString(),
             denom = markerDenom,
+            quote = newCoins(500, "nhash"),
             descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
         )
         bilateralClient.createBid(
             createBid = createBid,
             signer = BilateralAccounts.bidderAccount,
-            options = BroadcastOptions(funds = newCoins(500, "nhash")),
         )
         bilateralClient.assertBidExists(bidUuid.toString())
         bilateralClient.executeMatch(

@@ -74,25 +74,25 @@ class BilateralContractClient private constructor(
         createAsk: CreateAsk,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(createAsk, signer, options)
+    ): BroadcastTxResponse = executeContract(createAsk, signer, options, funds = createAsk.getFunds())
 
     fun createBid(
         createBid: CreateBid,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(createBid, signer, options)
+    ): BroadcastTxResponse = executeContract(createBid, signer, options, funds = createBid.getFunds())
 
     fun cancelAsk(
         cancelAsk: CancelAsk,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(cancelAsk, signer, options)
+    ): BroadcastTxResponse = executeContract(cancelAsk, signer, options, funds = emptyList())
 
     fun cancelBid(
         cancelBid: CancelBid,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(cancelBid, signer, options)
+    ): BroadcastTxResponse = executeContract(cancelBid, signer, options, funds = emptyList())
 
     // IMPORTANT: The Signer used in this function must be the contract's admin account.  This value can be found by
     // running getContractInfo()
@@ -100,37 +100,32 @@ class BilateralContractClient private constructor(
         executeMatch: ExecuteMatch,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(executeMatch, signer, options)
+    ): BroadcastTxResponse = executeContract(executeMatch, signer, options, funds = emptyList())
 
     fun generateCreateAskMsg(
         createAsk: CreateAsk,
         senderAddress: String,
-        funds: List<Coin> = emptyList(),
-    ): MsgExecuteContract = generateProtoExecuteMsg(createAsk, senderAddress, funds)
+    ): MsgExecuteContract = generateProtoExecuteMsg(createAsk, senderAddress, funds = createAsk.getFunds())
 
     fun generateCreateBidMsg(
         createBid: CreateBid,
         senderAddress: String,
-        funds: List<Coin> = emptyList(),
-    ): MsgExecuteContract = generateProtoExecuteMsg(createBid, senderAddress, funds)
+    ): MsgExecuteContract = generateProtoExecuteMsg(createBid, senderAddress, funds = createBid.getFunds())
 
     fun generateCancelAskMsg(
         cancelAsk: CancelAsk,
         senderAddress: String,
-        funds: List<Coin> = emptyList()
-    ): MsgExecuteContract = generateProtoExecuteMsg(cancelAsk, senderAddress, funds)
+    ): MsgExecuteContract = generateProtoExecuteMsg(cancelAsk, senderAddress, funds = emptyList())
 
     fun generateCancelBidMsg(
         cancelBid: CancelBid,
         senderAddress: String,
-        funds: List<Coin> = emptyList()
-    ): MsgExecuteContract = generateProtoExecuteMsg(cancelBid, senderAddress, funds)
+    ): MsgExecuteContract = generateProtoExecuteMsg(cancelBid, senderAddress, funds = emptyList())
 
     fun generateExecuteMatchMsg(
         executeMatch: ExecuteMatch,
         senderAddress: String,
-        funds: List<Coin> = emptyList()
-    ): MsgExecuteContract = generateProtoExecuteMsg(executeMatch, senderAddress, funds)
+    ): MsgExecuteContract = generateProtoExecuteMsg(executeMatch, senderAddress, funds = emptyList())
 
     /**
      * Converts a class that inherits from ContractExecuteMsg to a MsgExecuteContract.  This ensures
@@ -138,7 +133,7 @@ class BilateralContractClient private constructor(
     private fun generateProtoExecuteMsg(
         executeMsg: ContractExecuteMsg,
         senderAddress: String,
-        funds: List<Coin> = emptyList()
+        funds: List<Coin>,
     ): MsgExecuteContract = executeMsg.toExecuteMsg(
         objectMapper = objectMapper,
         contractAddress = contractAddress,
@@ -154,8 +149,9 @@ class BilateralContractClient private constructor(
         executeMsg: ContractExecuteMsg,
         signer: Signer,
         options: BroadcastOptions,
+        funds: List<Coin>,
     ): BroadcastTxResponse {
-        val msg = generateProtoExecuteMsg(executeMsg, signer.address(), options.funds)
+        val msg = generateProtoExecuteMsg(executeMsg, signer.address(), funds)
         return pbClient.estimateAndBroadcastTx(
             txBody = msg.toAny().toTxBody(),
             signers = listOf(BaseReqSigner(

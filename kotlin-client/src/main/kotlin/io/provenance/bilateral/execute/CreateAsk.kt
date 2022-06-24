@@ -1,8 +1,13 @@
 package io.provenance.bilateral.execute
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 import cosmos.base.v1beta1.CoinOuterClass.Coin
+import io.provenance.bilateral.execute.Ask.CoinTradeAsk
+import io.provenance.bilateral.execute.Ask.MarkerShareSaleAsk
+import io.provenance.bilateral.execute.Ask.MarkerTradeAsk
+import io.provenance.bilateral.execute.Ask.ScopeTradeAsk
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.models.RequestDescriptor
 import io.provenance.bilateral.models.ShareSaleType
@@ -41,6 +46,7 @@ data class CreateAsk(
               }
             }
 
+            // Derived from input from BASE
             With Funds: [ {
               "denom" : "nhash",
               "amount" : "50"
@@ -49,10 +55,11 @@ data class CreateAsk(
         fun newCoinTrade(
             id: String,
             quote: List<Coin>,
+            base: List<Coin>,
             descriptor: RequestDescriptor? = null,
         ): CreateAsk = CreateAsk(
             createAsk = Body(
-                ask = Ask.newCoinTrade(id, quote),
+                ask = Ask.newCoinTrade(id, quote, base),
                 descriptor = descriptor,
             )
         )
@@ -224,13 +231,44 @@ data class CreateAsk(
             )
         )
     }
+
+    /**
+     * Allows the ask type to be consumed and mapped based on value.  This can be used to derive an output type for any
+     * of the request types.
+     */
+    @JsonIgnore
+    fun <T> mapAsk(
+        coinTrade: (coinTrade: CoinTradeAsk.Body) -> T,
+        markerTrade: (markerTrade: MarkerTradeAsk.Body) -> T,
+        markerShareSale: (markerShareSale: MarkerShareSaleAsk.Body) -> T,
+        scopeTrade: (scopeTrade: ScopeTradeAsk.Body) -> T,
+    ): T = when (this.createAsk.ask) {
+        is CoinTradeAsk -> coinTrade(this.createAsk.ask.coinTrade)
+        is MarkerTradeAsk -> markerTrade(this.createAsk.ask.markerTrade)
+        is MarkerShareSaleAsk -> markerShareSale(this.createAsk.ask.markerShareSale)
+        is ScopeTradeAsk -> scopeTrade(this.createAsk.ask.scopeTrade)
+    }
+
+    @JsonIgnore
+    internal fun getFunds(): List<Coin> = mapAsk(
+        coinTrade = { coinTrade -> coinTrade.base },
+        markerTrade = { emptyList() },
+        markerShareSale = { emptyList() },
+        scopeTrade = { emptyList() },
+    )
 }
 
 sealed interface Ask {
     @JsonNaming(SnakeCaseStrategy::class)
     data class CoinTradeAsk(val coinTrade: Body) : Ask {
         @JsonNaming(SnakeCaseStrategy::class)
-        data class Body(val id: String, val quote: List<Coin>)
+        data class Body(
+            val id: String,
+            val quote: List<Coin>,
+            // This value is used as funds in the client and never included in the json payload
+            @JsonIgnore
+            val base: List<Coin>,
+        )
     }
 
     @JsonNaming(SnakeCaseStrategy::class)
@@ -252,8 +290,8 @@ sealed interface Ask {
     }
 
     companion object {
-        fun newCoinTrade(id: String, quote: List<Coin>): Ask = CoinTradeAsk(
-            coinTrade = CoinTradeAsk.Body(id, quote)
+        fun newCoinTrade(id: String, quote: List<Coin>, base: List<Coin>): Ask = CoinTradeAsk(
+            coinTrade = CoinTradeAsk.Body(id, quote, base)
         )
 
         fun newMarkerTrade(id: String, denom: String, quotePerShare: List<Coin>): Ask = MarkerTradeAsk(

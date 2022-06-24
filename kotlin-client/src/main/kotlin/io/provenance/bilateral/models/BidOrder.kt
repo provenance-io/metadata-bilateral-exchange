@@ -1,9 +1,14 @@
 package io.provenance.bilateral.models
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 import cosmos.base.v1beta1.CoinOuterClass.Coin
+import io.provenance.bilateral.models.BidCollateral.CoinTrade
+import io.provenance.bilateral.models.BidCollateral.MarkerShareSale
+import io.provenance.bilateral.models.BidCollateral.MarkerTrade
+import io.provenance.bilateral.models.BidCollateral.ScopeTrade
 
 @JsonNaming(SnakeCaseStrategy::class)
 data class BidOrder(
@@ -12,7 +17,20 @@ data class BidOrder(
     val owner: String,
     val collateral: BidCollateral,
     val descriptor: RequestDescriptor?,
-)
+) {
+    @JsonIgnore
+    fun <T> mapCollateral(
+        coinTrade: (coinTrade: CoinTrade.Body) -> T,
+        markerTrade: (markerTrade: MarkerTrade.Body) -> T,
+        markerShareSale: (markerShareSale: MarkerShareSale.Body) -> T,
+        scopeTrade: (ScopeTrade.Body) -> T,
+    ): T = when (this.collateral) {
+        is CoinTrade -> coinTrade(this.collateral.coinTrade)
+        is MarkerTrade -> markerTrade(this.collateral.markerTrade)
+        is MarkerShareSale -> markerShareSale(this.collateral.markerShareSale)
+        is ScopeTrade -> scopeTrade(this.collateral.scopeTrade)
+    }
+}
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.DEDUCTION)
 sealed interface BidCollateral {

@@ -9,6 +9,7 @@ plugins {
     `java-library`
     signing
     id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
+    id("com.adarshr.test-logger") version "3.2.0"
 }
 
 group = "io.provenance.bilateral"
@@ -71,7 +72,10 @@ dependencies {
         libs.provenanceScopeUtil,
     ).forEach(::api)
 
-    testImplementation(libs.kotlinTest)
+    listOf(
+        libs.kotlinTest,
+        libs.mockk,
+    ).forEach(::testImplementation)
 
     listOf(
         libs.assetSpec,

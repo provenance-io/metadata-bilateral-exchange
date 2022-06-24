@@ -57,12 +57,12 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             id = bidUuid.toString(),
             denom = markerDenom,
             shareCount = shareSaleAmount.toString(),
+            quote = newCoins(50 * shareSaleAmount, "nhash"),
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now())
         )
         bilateralClient.createBid(
             createBid = createBid,
             signer = BilateralAccounts.bidderAccount,
-            options = BroadcastOptions(newCoins(50 * shareSaleAmount, "nhash")),
         )
         bilateralClient.assertBidExists(bidUuid.toString())
         val executeMatch = ExecuteMatch.new(askUuid.toString(), bidUuid.toString())
@@ -110,13 +110,13 @@ class MarkerShareSaleIntTest : ContractIntTest() {
                 id = bidUuid.toString(),
                 denom = markerDenom,
                 shareCount = sharePurchaseCount.toString(),
+                // Pay 1000nhash per share purchased
+                quote = newCoins(1000 * sharePurchaseCount, "nhash"),
                 descriptor = RequestDescriptor("Example description", OffsetDateTime.now())
             )
             bilateralClient.createBid(
                 createBid = createBid,
                 signer = BilateralAccounts.bidderAccount,
-                // Pay 1000nhash per share purchased
-                options = BroadcastOptions(funds = newCoins(1000 * sharePurchaseCount, "nhash")),
             )
             bilateralClient.assertBidExists(bidUuid.toString())
             val executeMatch = ExecuteMatch.new(askUuid.toString(), bidUuid.toString())

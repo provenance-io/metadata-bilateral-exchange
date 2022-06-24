@@ -1,8 +1,13 @@
 package io.provenance.bilateral.execute
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 import cosmos.base.v1beta1.CoinOuterClass.Coin
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
+import io.provenance.bilateral.execute.Bid.MarkerShareSaleBid
+import io.provenance.bilateral.execute.Bid.MarkerTradeBid
+import io.provenance.bilateral.execute.Bid.ScopeTradeBid
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.models.RequestDescriptor
 
@@ -35,6 +40,7 @@ data class CreateBid(val createBid: Body) : ContractExecuteMsg {
                   }
                 }
 
+                // Derived from QUOTE
                 With Funds: [ {
                   "denom" : "nhash",
                   "amount" : "100"
@@ -42,12 +48,14 @@ data class CreateBid(val createBid: Body) : ContractExecuteMsg {
          */
         fun newCoinTrade(
             id: String,
+            quote: List<Coin>,
             base: List<Coin>,
             descriptor: RequestDescriptor? = null,
         ): CreateBid = CreateBid(
             createBid = Body(
                 bid = Bid.newCoinTrade(
                     id = id,
+                    quote = quote,
                     base = base,
                 ),
                 descriptor = descriptor,
@@ -82,12 +90,14 @@ data class CreateBid(val createBid: Body) : ContractExecuteMsg {
         fun newMarkerTrade(
             id: String,
             denom: String,
+            quote: List<Coin>,
             descriptor: RequestDescriptor? = null,
         ): CreateBid = CreateBid(
             createBid = Body(
                 bid = Bid.newMarkerTrade(
                     id = id,
                     denom = denom,
+                    quote = quote,
                 ),
                 descriptor = descriptor,
             )
@@ -153,6 +163,7 @@ data class CreateBid(val createBid: Body) : ContractExecuteMsg {
             id: String,
             denom: String,
             shareCount: String,
+            quote: List<Coin>,
             descriptor: RequestDescriptor? = null,
         ): CreateBid = CreateBid(
             createBid = Body(
@@ -160,6 +171,7 @@ data class CreateBid(val createBid: Body) : ContractExecuteMsg {
                     id = id,
                     denom = denom,
                     shareCount = shareCount,
+                    quote = quote,
                 ),
                 descriptor = descriptor,
             )
@@ -192,60 +204,108 @@ data class CreateBid(val createBid: Body) : ContractExecuteMsg {
         fun newScopeTrade(
             id: String,
             scopeAddress: String,
+            quote: List<Coin>,
             descriptor: RequestDescriptor? = null,
         ): CreateBid = CreateBid(
             createBid = Body(
                 bid = Bid.newScopeTrade(
                     id = id,
                     scopeAddress = scopeAddress,
+                    quote = quote,
                 ),
                 descriptor = descriptor,
             )
         )
     }
+
+    @JsonIgnore
+    fun <T> mapBid(
+        coinTrade: (coinTrade: CoinTradeBid.Body) -> T,
+        markerTrade: (markerTrade: MarkerTradeBid.Body) -> T,
+        markerShareSale: (markerShareSale: MarkerShareSaleBid.Body) -> T,
+        scopeTrade: (scopeTrade: ScopeTradeBid.Body) -> T,
+    ): T = when (this.createBid.bid) {
+        is CoinTradeBid -> coinTrade(this.createBid.bid.coinTrade)
+        is MarkerTradeBid -> markerTrade(this.createBid.bid.markerTrade)
+        is MarkerShareSaleBid -> markerShareSale(this.createBid.bid.markerShareSale)
+        is ScopeTradeBid -> scopeTrade(this.createBid.bid.scopeTrade)
+    }
+
+    @JsonIgnore
+    internal fun getFunds(): List<Coin> = mapBid(
+        coinTrade = { coinTrade -> coinTrade.quote },
+        markerTrade = { markerTrade -> markerTrade.quote },
+        markerShareSale = { markerShareSale -> markerShareSale.quote },
+        scopeTrade = { scopeTrade -> scopeTrade.quote },
+    )
 }
 
 sealed interface Bid {
     @JsonNaming(SnakeCaseStrategy::class)
     data class CoinTradeBid(val coinTrade: Body) : Bid {
         @JsonNaming(SnakeCaseStrategy::class)
-        data class Body(val id: String, val base: List<Coin>)
+        data class Body(
+            val id: String,
+            // The quote is used for funds, and never added to the json payload send to the contract
+            @JsonIgnore
+            val quote: List<Coin>,
+            val base: List<Coin>,
+        )
     }
 
     @JsonNaming(SnakeCaseStrategy::class)
     data class MarkerTradeBid(val markerTrade: Body) : Bid {
         @JsonNaming(SnakeCaseStrategy::class)
-        data class Body(val id: String, val denom: String)
+        data class Body(
+            val id: String,
+            val denom: String,
+            // The quote is used for funds, and never added to the json payload send to the contract
+            @JsonIgnore
+            val quote: List<Coin>,
+        )
     }
 
     @JsonNaming(SnakeCaseStrategy::class)
     data class MarkerShareSaleBid(val markerShareSale: Body) : Bid {
         @JsonNaming(SnakeCaseStrategy::class)
-        data class Body(val id: String, val denom: String, val shareCount: String)
+        data class Body(
+            val id: String,
+            val denom: String,
+            val shareCount: String,
+            // The quote is used for funds, and never added to the json payload send to the contract
+            @JsonIgnore
+            val quote: List<Coin>,
+        )
     }
 
     @JsonNaming(SnakeCaseStrategy::class)
     data class ScopeTradeBid(val scopeTrade: Body) : Bid {
         @JsonNaming(SnakeCaseStrategy::class)
-        data class Body(val id: String, val scopeAddress: String)
+        data class Body(
+            val id: String,
+            val scopeAddress: String,
+            // The quote is used for funds, and never added to the json payload send to the contract
+            @JsonIgnore
+            val quote: List<Coin>,
+        )
     }
 
 
     companion object {
-        fun newCoinTrade(id: String, base: List<Coin>): Bid = CoinTradeBid(
-            coinTrade = CoinTradeBid.Body(id, base)
+        fun newCoinTrade(id: String, quote: List<Coin>, base: List<Coin>): Bid = CoinTradeBid(
+            coinTrade = CoinTradeBid.Body(id, quote, base)
         )
 
-        fun newMarkerTrade(id: String, denom: String): Bid = MarkerTradeBid(
-            markerTrade = MarkerTradeBid.Body(id, denom)
+        fun newMarkerTrade(id: String, denom: String, quote: List<Coin>): Bid = MarkerTradeBid(
+            markerTrade = MarkerTradeBid.Body(id, denom, quote)
         )
 
-        fun newMarkerShareSale(id: String, denom: String, shareCount: String): Bid = MarkerShareSaleBid(
-            markerShareSale = MarkerShareSaleBid.Body(id, denom, shareCount)
+        fun newMarkerShareSale(id: String, denom: String, shareCount: String, quote: List<Coin>): Bid = MarkerShareSaleBid(
+            markerShareSale = MarkerShareSaleBid.Body(id, denom, shareCount, quote)
         )
 
-        fun newScopeTrade(id: String, scopeAddress: String): Bid = ScopeTradeBid(
-            scopeTrade = ScopeTradeBid.Body(id, scopeAddress)
+        fun newScopeTrade(id: String, scopeAddress: String, quote: List<Coin>): Bid = ScopeTradeBid(
+            scopeTrade = ScopeTradeBid.Body(id, scopeAddress, quote)
         )
     }
 }

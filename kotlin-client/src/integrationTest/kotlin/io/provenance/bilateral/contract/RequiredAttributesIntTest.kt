@@ -35,25 +35,26 @@ import kotlin.test.assertFails
 
 class RequiredAttributesIntTest : ContractIntTest() {
     private companion object : KLogging() {
-        private val DEFAULT_ATTRIBUTES: List<String> = listOf("first.pb", "second.pb", "third.pb")
         private val DEFAULT_QUOTE: List<Coin> = newCoins(100, "nhash")
         private val DEFAULT_BASE: List<Coin> = newCoins(100, "nhash")
     }
 
     @Test
     fun testRequiredAttributesTypeAll() {
+        val attributePrefix = "testRequiredAttributesTypeAll".lowercase()
+        val testAttributes = listOf("${attributePrefix}a.pb", "${attributePrefix}b.pb", "${attributePrefix}c.pb")
         bindNamesToSigner(
             pbClient = pbClient,
-            names = DEFAULT_ATTRIBUTES,
+            names = testAttributes,
             signer = BilateralAccounts.adminAccount,
             restricted = true,
         )
         val askUuid = UUID.randomUUID()
-        logger.info("Creating an ask with UUID: $askUuid, requiring all attributes: $DEFAULT_ATTRIBUTES")
-        createAndSendAsk(askUuid, DEFAULT_ATTRIBUTES, AttributeRequirementType.ALL)
+        logger.info("Creating an ask with UUID: $askUuid, requiring all attributes: $testAttributes")
+        createAndSendAsk(askUuid, testAttributes, AttributeRequirementType.ALL)
         val bidUuid = UUID.randomUUID()
-        logger.info("Creating bid with UUID: $bidUuid, requiring all attributes: $DEFAULT_ATTRIBUTES")
-        createAndSendBid(bidUuid, DEFAULT_ATTRIBUTES, AttributeRequirementType.ALL)
+        logger.info("Creating bid with UUID: $bidUuid, requiring all attributes: $testAttributes")
+        createAndSendBid(bidUuid, testAttributes, AttributeRequirementType.ALL)
         val executeMatch = ExecuteMatch.new(
             askId = askUuid.toString(),
             bidId = bidUuid.toString(),
@@ -64,7 +65,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         }
         addDummyAttributesToAddress(
             attributeOwner = BilateralAccounts.adminAccount,
-            attributes = DEFAULT_ATTRIBUTES,
+            attributes = testAttributes,
             targetAddress = BilateralAccounts.askerAccount.address(),
         )
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid] and expecting a failure")
@@ -73,7 +74,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         }
         addDummyAttributesToAddress(
             attributeOwner = BilateralAccounts.adminAccount,
-            attributes = DEFAULT_ATTRIBUTES,
+            attributes = testAttributes,
             targetAddress = BilateralAccounts.bidderAccount.address(),
         )
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid] and expecting success")
@@ -86,18 +87,20 @@ class RequiredAttributesIntTest : ContractIntTest() {
 
     @Test
     fun testRequiredAttributesTypeAny() {
+        val attributePrefix = "testRequiredAttributesTypeAny".lowercase()
+        val testAttributes = listOf("${attributePrefix}a.pb", "${attributePrefix}b.pb", "${attributePrefix}c.pb")
         bindNamesToSigner(
             pbClient = pbClient,
-            names = DEFAULT_ATTRIBUTES,
+            names = testAttributes,
             signer = BilateralAccounts.adminAccount,
             restricted = true,
         )
         val askUuid = UUID.randomUUID()
-        logger.info("Creating an ask with UUID: $askUuid, requiring any of attributes: $DEFAULT_ATTRIBUTES")
-        createAndSendAsk(askUuid, DEFAULT_ATTRIBUTES, AttributeRequirementType.ANY)
+        logger.info("Creating an ask with UUID: $askUuid, requiring any of attributes: $testAttributes")
+        createAndSendAsk(askUuid, testAttributes, AttributeRequirementType.ANY)
         val bidUuid = UUID.randomUUID()
-        println("Creating bid with UUID: $bidUuid, requiring any of attributes: $DEFAULT_ATTRIBUTES")
-        createAndSendBid(bidUuid, DEFAULT_ATTRIBUTES, AttributeRequirementType.ANY)
+        logger.info("Creating bid with UUID: $bidUuid, requiring any of attributes: $testAttributes")
+        createAndSendBid(bidUuid, testAttributes, AttributeRequirementType.ANY)
         val executeMatch = ExecuteMatch.new(
             askId = askUuid.toString(),
             bidId = bidUuid.toString(),
@@ -110,7 +113,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         // any of the values is required
         addDummyAttributesToAddress(
             attributeOwner = BilateralAccounts.adminAccount,
-            attributes = DEFAULT_ATTRIBUTES.random().let(::listOf),
+            attributes = testAttributes.random().let(::listOf),
             targetAddress = BilateralAccounts.askerAccount.address(),
         )
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid] and expecting a failure")
@@ -121,7 +124,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         // any of the values is required
         addDummyAttributesToAddress(
             attributeOwner = BilateralAccounts.adminAccount,
-            attributes = DEFAULT_ATTRIBUTES.random().let(::listOf),
+            attributes = testAttributes.random().let(::listOf),
             targetAddress = BilateralAccounts.bidderAccount.address(),
         )
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid] and expecting success")
@@ -130,6 +133,68 @@ class RequiredAttributesIntTest : ContractIntTest() {
         }
         bilateralClient.assertAskIsDeleted(askUuid.toString())
         bilateralClient.assertBidIsDeleted(bidUuid.toString())
+    }
+
+    @Test
+    fun testRequiredAttributesTypeNone() {
+        val attributePrefix = "testRequiredAttributesTypeNone".lowercase()
+        val testAttributes = listOf("${attributePrefix}a.pb", "${attributePrefix}b.pb", "${attributePrefix}c.pb")
+        bindNamesToSigner(
+            pbClient = pbClient,
+            names = testAttributes,
+            signer = BilateralAccounts.adminAccount,
+            restricted = true,
+        )
+        val firstAskUuid = UUID.randomUUID()
+        logger.info("Creating an ask with UUID: $firstAskUuid, requiring none of attributes: $testAttributes")
+        createAndSendAsk(firstAskUuid, testAttributes, AttributeRequirementType.NONE)
+        val firstBidUuid = UUID.randomUUID()
+        logger.info("Creating bid with UUID: $firstBidUuid, requiring none of attributes: $testAttributes")
+        createAndSendBid(firstBidUuid, testAttributes, AttributeRequirementType.NONE)
+        val firstExecuteMatch = ExecuteMatch.new(
+            askId = firstAskUuid.toString(),
+            bidId = firstBidUuid.toString(),
+        )
+        logger.info("Executing match for ask [$firstAskUuid] and bid [$firstBidUuid]")
+        assertSucceeds("Expecting the match to succeed because neither account has any of the specified attributes") {
+            bilateralClient.executeMatch(firstExecuteMatch, BilateralAccounts.adminAccount)
+        }
+        bilateralClient.assertAskIsDeleted(firstAskUuid.toString())
+        bilateralClient.assertBidIsDeleted(firstBidUuid.toString())
+        val secondAskUuid = UUID.randomUUID()
+        logger.info("Creating ask with uuid: $secondAskUuid, requiring none of attributes: $testAttributes")
+        createAndSendAsk(secondAskUuid, testAttributes, AttributeRequirementType.NONE)
+        val secondBidUuid = UUID.randomUUID()
+        logger.info("Creating bid with uuid: $secondBidUuid, requiring none of attributes: $testAttributes")
+        createAndSendBid(secondBidUuid, testAttributes, AttributeRequirementType.NONE)
+        val secondExecuteMatch = ExecuteMatch.new(
+            askId = secondAskUuid.toString(),
+            bidId = secondBidUuid.toString(),
+        )
+        // Only add a random one of the attributes to the asker account to spice things up and verify that only one of
+        // any of the values is required to cause a rejection
+        addDummyAttributesToAddress(
+            attributeOwner = BilateralAccounts.adminAccount,
+            attributes = testAttributes.random().let(::listOf),
+            targetAddress = BilateralAccounts.askerAccount.address(),
+        )
+        logger.info("Executing match for ask [$secondAskUuid] and bid [$secondBidUuid] and expecting a failure")
+        assertFails("Expected the match to fail because the asker has one of the attributes") {
+            bilateralClient.executeMatch(secondExecuteMatch, BilateralAccounts.adminAccount)
+        }
+        // Only add a random one of the attributes to the bidder account to spice things up and verify that only one of
+        // any of the values is required to cause a rejection
+        addDummyAttributesToAddress(
+            attributeOwner = BilateralAccounts.adminAccount,
+            attributes = testAttributes.random().let(::listOf),
+            targetAddress = BilateralAccounts.bidderAccount.address(),
+        )
+        logger.info("Executing match for ask [$secondAskUuid] and bid [$secondBidUuid] and expecting a failure")
+        assertFails("Expected the match to fail because both asker and bidder have attributes that are not allowed") {
+            bilateralClient.executeMatch(secondExecuteMatch, BilateralAccounts.adminAccount)
+        }
+        bilateralClient.assertAskExists(secondAskUuid.toString(), "Expected the ask to exist because a match was never made")
+        bilateralClient.assertBidExists(secondBidUuid.toString(), "Expected the bid to exist because a match was never made")
     }
 
     private fun addDummyAttributesToAddress(
@@ -164,6 +229,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         val createAsk = CreateAsk.newCoinTrade(
             id = askUuid.toString(),
             quote = DEFAULT_QUOTE,
+            base = DEFAULT_BASE,
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
@@ -173,7 +239,6 @@ class RequiredAttributesIntTest : ContractIntTest() {
         bilateralClient.createAsk(
             createAsk = createAsk,
             signer = BilateralAccounts.askerAccount,
-            options = BroadcastOptions(funds = DEFAULT_BASE),
         )
         val askOrder = bilateralClient.assertAskExists(askUuid.toString())
         assertEquals(
@@ -191,6 +256,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         val createBid = CreateBid.newCoinTrade(
             id = bidUuid.toString(),
             base = DEFAULT_BASE,
+            quote = DEFAULT_QUOTE,
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
@@ -200,7 +266,6 @@ class RequiredAttributesIntTest : ContractIntTest() {
         bilateralClient.createBid(
             createBid = createBid,
             signer = BilateralAccounts.bidderAccount,
-            options = BroadcastOptions(funds = DEFAULT_QUOTE),
         )
         val bidOrder = bilateralClient.assertBidExists(bidUuid.toString())
         assertEquals(

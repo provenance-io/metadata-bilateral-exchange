@@ -1,6 +1,5 @@
 package io.provenance.bilateral.contract
 
-import io.provenance.bilateral.client.BroadcastOptions
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -28,6 +27,7 @@ class CoinTradeIntTest : ContractIntTest() {
         val askUuid = UUID.randomUUID()
         val createAsk = CreateAsk.newCoinTrade(
             id = askUuid.toString(),
+            base = base,
             quote = quote,
             descriptor = RequestDescriptor(
                 description = "Example description",
@@ -39,7 +39,6 @@ class CoinTradeIntTest : ContractIntTest() {
             bilateralClient.createAsk(
                 createAsk = createAsk,
                 signer = BilateralAccounts.askerAccount,
-                options = BroadcastOptions(funds = base),
             )
         }
         bilateralClient.assertAskExists(askUuid.toString())
@@ -47,6 +46,7 @@ class CoinTradeIntTest : ContractIntTest() {
         val createBid = CreateBid.newCoinTrade(
             id = bidUuid.toString(),
             base = base,
+            quote = quote,
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
@@ -57,7 +57,6 @@ class CoinTradeIntTest : ContractIntTest() {
             bilateralClient.createBid(
                 createBid = createBid,
                 signer = BilateralAccounts.bidderAccount,
-                options = BroadcastOptions(funds = quote),
             )
         }
         bilateralClient.assertBidExists(bidUuid.toString())
