@@ -14,12 +14,11 @@ import testconfiguration.accounts.BilateralAccounts
 import testconfiguration.util.BilateralSmartContractUtil
 import testconfiguration.util.CoinFundingUtil
 import testconfiguration.util.ContractInstantiationResult
+import java.util.TimeZone
 
 @Testcontainers
 abstract class ContractIntTest {
     private companion object : KLogging()
-
-    private var contractLoaded: Boolean = false
 
     @Container
     val provenanceContainer: ProvenanceTestContainer = ProvenanceTestContainer()
@@ -48,15 +47,15 @@ abstract class ContractIntTest {
 
     @BeforeEach
     fun beforeEachTest() {
-        if (!contractLoaded) {
-            logger.info("Setting up the local bilateral exchange smart contract")
-            CoinFundingUtil.fundAccounts(
-                pbClient = pbClient,
-                senderAccount = BilateralAccounts.fundingAccount,
-                receiverAccounts = listOf(BilateralAccounts.adminAccount, BilateralAccounts.askerAccount, BilateralAccounts.bidderAccount),
-            )
-            contractInfo = BilateralSmartContractUtil.instantiateSmartContract(pbClient, BilateralAccounts.adminAccount)
-            contractLoaded = true
-        }
+        logger.info("Normalizing timezone to UTC to ensure deserialized values match in tests")
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+        CoinFundingUtil.fundAccounts(
+            pbClient = pbClient,
+            senderAccount = BilateralAccounts.fundingAccount,
+            receiverAccounts = listOf(BilateralAccounts.adminAccount, BilateralAccounts.askerAccount, BilateralAccounts.bidderAccount),
+        )
+        logger.info("Setting up the local bilateral exchange smart contract")
+        contractInfo = BilateralSmartContractUtil.instantiateSmartContract(pbClient, BilateralAccounts.adminAccount)
+        logger.info("Successfully established the contract with name [${contractInfo.contractBindingName}] at address [${contractInfo.contractAddress}]")
     }
 }

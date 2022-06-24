@@ -1,6 +1,8 @@
 package testconfiguration.functions
 
 import io.provenance.bilateral.client.BilateralContractClient
+import io.provenance.bilateral.models.AskOrder
+import io.provenance.bilateral.models.BidOrder
 import kotlin.test.DefaultAsserter.fail
 
 fun <T> assertSucceeds(message: String = "Expected function invocation to succeed", fn: () -> T): T =
@@ -10,13 +12,15 @@ fun <T> assertSucceeds(message: String = "Expected function invocation to succee
         fail(message, e)
     }
 
-fun BilateralContractClient.assertAskExists(askId: String, message: String = "Expected ask [$askId] to exist") {
-    assertSucceeds(message) { this.getAsk(askId) }
-}
+fun BilateralContractClient.assertAskExists(
+    askId: String,
+    message: String = "Expected ask [$askId] to exist",
+): AskOrder = assertSucceeds(message) { this.getAsk(askId) }
 
-fun BilateralContractClient.assertBidExists(bidId: String, message: String = "Expected bid [$bidId] to exist") {
-    assertSucceeds(message) { this.getBid(bidId) }
-}
+fun BilateralContractClient.assertBidExists(
+    bidId: String,
+    message: String = "Expected bid [$bidId] to exist",
+): BidOrder = assertSucceeds(message) { this.getBid(bidId) }
 
 fun BilateralContractClient.assertAskIsDeleted(askId: String, message: String = "Expected ask [$askId] to not be found, but it existed in the contract") {
     try {

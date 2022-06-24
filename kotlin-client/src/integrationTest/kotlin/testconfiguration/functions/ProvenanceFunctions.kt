@@ -59,12 +59,13 @@ fun createMarker(
         req.administrator = ownerAccount.address()
         req.denom = denomName
     }.build()
+    logger.info("Creating marker [$denomName] with admin address [${ownerAccount.address()}")
     pbClient.estimateAndBroadcastTx(
         txBody = listOf(addReq, activateReq).map { it.toAny() }.toTxBody(),
         signers = listOf(BaseReqSigner(ownerAccount)),
         mode = BroadcastMode.BROADCAST_MODE_BLOCK,
         gasAdjustment = 1.3,
-    ).checkIsSuccess()
+    ).checkIsSuccess().also { logger.info("Successfully created marker [$denomName] for owner [${ownerAccount.address()}]") }
 }
 
 fun grantMarkerAccess(
@@ -82,12 +83,13 @@ fun grantMarkerAccess(
             grant.addAllPermissions(permissions)
         })
     }.build()
+    logger.info("Granting access $permissions to account [$grantAddress] using admin address [${markerAdminAccount.address()}] for marker [$markerDenom]")
     pbClient.estimateAndBroadcastTx(
         txBody = accessReq.toAny().toTxBody(),
         signers = listOf(BaseReqSigner(markerAdminAccount)),
         mode = BroadcastMode.BROADCAST_MODE_BLOCK,
         gasAdjustment = 1.3,
-    ).checkIsSuccess()
+    ).checkIsSuccess().also { logger.info("Granted access $permissions to account [$grantAddress] on marker [$markerDenom]") }
 }
 
 fun bindNamesToSigner(
@@ -112,11 +114,12 @@ fun bindNamesToSigner(
             }.build()
         }.build().toAny()
     }.also { nameMsgs ->
+        logger.info("Binding names $names to account [${signer.address()}] with restricted=$restricted")
         pbClient.estimateAndBroadcastTx(
             txBody = nameMsgs.toTxBody(),
             signers = listOf(BaseReqSigner(signer)),
             mode = BroadcastMode.BROADCAST_MODE_BLOCK,
             gasAdjustment = 1.3,
-        ).checkIsSuccess()
+        ).checkIsSuccess().also { logger.info("Successfully bound names $names to account [${signer.address()}]") }
     }
 }
