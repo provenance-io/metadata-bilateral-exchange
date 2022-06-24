@@ -76,6 +76,7 @@ pub fn update_ask_order(
 ) -> Result<(), ContractError> {
     let state = ask_orders();
     if state.load(storage, ask_order.get_pk()).is_ok() {
+        delete_ask_order_by_id(storage, &ask_order.id)?;
         store_ask_order(storage, ask_order)
     } else {
         ContractError::StorageError {
