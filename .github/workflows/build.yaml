@@ -60,4 +60,7 @@ jobs:
       
       - name: Build Project
         run: ./kotlin-client/gradlew clean build --refresh-dependencies --parallel --project-dir ./kotlin-client
+
+      - name: Run Integration Tests
+        run: ./kotlin-client/gradlew --info integrationTest --project-dir ./kotlin-client
   
