@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
 plugins {
     kotlin("jvm") version "1.6.10"
     kotlin("plugin.serialization") version "1.6.10"
@@ -17,6 +19,41 @@ repositories {
     mavenCentral()
 }
 
+sourceSets {
+    create("integrationTest") {
+        compileClasspath += main.get().output + test.get().output + configurations.testCompileClasspath
+        runtimeClasspath += main.get().output + test.get().output + compileClasspath
+        java.srcDir("src/integrationTest")
+    }
+}
+
+tasks.create<Exec>("build-smart-contract") {
+    group = "Integration Testing"
+    description = "Builds the metadata_bilateral_exchange smart contract for use in integration tests"
+    commandLine("./src/integrationTest/resources/scripts/build-smart-contract.sh")
+}
+
+tasks.register<Test>("integrationTest") {
+    dependsOn("build-smart-contract")
+    description = "Run integration tests"
+    group = "Integration Testing"
+    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
+    classpath =
+        sourceSets["main"].runtimeClasspath + sourceSets["test"].runtimeClasspath + sourceSets["integrationTest"].runtimeClasspath
+    testLogging {
+        exceptionFormat = TestExceptionFormat.FULL
+    }
+    useJUnitPlatform {
+        includeEngines = setOf("junit-jupiter", "junit-vintage")
+    }
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+    // Always re-run tests
+    outputs.upToDateWhen { false }
+}
+
 dependencies {
     listOf(
         libs.bouncyCastle,
@@ -34,9 +71,17 @@ dependencies {
         libs.provenanceScopeUtil,
     ).forEach(::api)
 
+    testImplementation(libs.kotlinTest)
+
     listOf(
-        libs.assetSpec
-    ).forEach(::testImplementation)
+        libs.assetSpec,
+        libs.coroutinesCoreJvm,
+        libs.coroutinesJdk8,
+        libs.kotlinLogging,
+        libs.logbackClassic,
+        libs.testContainers,
+        libs.testContainersJUnit,
+    ).forEach { configurations["integrationTestImplementation"].invoke(it) }
 }
 
 

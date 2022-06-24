@@ -2,7 +2,7 @@ package io.provenance.bilateral.interfaces
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import cosmos.base.v1beta1.CoinOuterClass
-import cosmwasm.wasm.v1beta1.Tx.MsgExecuteContract
+import cosmwasm.wasm.v1.Tx.MsgExecuteContract
 
 interface ContractExecuteMsg : ContractMsg {
     fun toExecuteMsg(

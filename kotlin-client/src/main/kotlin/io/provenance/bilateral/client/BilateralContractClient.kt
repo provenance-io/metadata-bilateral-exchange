@@ -3,7 +3,7 @@ package io.provenance.bilateral.client
 import com.fasterxml.jackson.databind.ObjectMapper
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import cosmwasm.wasm.v1.QueryOuterClass
-import cosmwasm.wasm.v1beta1.Tx.MsgExecuteContract
+import cosmwasm.wasm.v1.Tx.MsgExecuteContract
 import io.provenance.bilateral.execute.CancelAsk
 import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
