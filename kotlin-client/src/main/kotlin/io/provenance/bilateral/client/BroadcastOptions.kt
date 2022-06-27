@@ -1,7 +1,6 @@
 package io.provenance.bilateral.client
 
 import cosmos.auth.v1beta1.Auth.BaseAccount
-import cosmos.base.v1beta1.CoinOuterClass.Coin
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastMode
 
 data class BroadcastOptions(

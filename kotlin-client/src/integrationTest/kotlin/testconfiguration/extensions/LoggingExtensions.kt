@@ -23,4 +23,3 @@ private fun KLogger.logDynamicInternal(level: KLogLevel, message: String, throwa
         KLogLevel.ERROR -> this.error(message, throwable)
     }
 }
-

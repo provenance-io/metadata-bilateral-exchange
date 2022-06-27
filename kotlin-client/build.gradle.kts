@@ -10,6 +10,7 @@ plugins {
     signing
     id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
     id("com.adarshr.test-logger") version "3.2.0"
+    id("org.jlleitschuh.gradle.ktlint") version "10.3.0"
 }
 
 group = "io.provenance.bilateral"
@@ -87,7 +88,6 @@ dependencies {
         libs.testContainersJUnit,
     ).forEach { configurations["integrationTestImplementation"].invoke(it) }
 }
-
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     sourceCompatibility = "11"

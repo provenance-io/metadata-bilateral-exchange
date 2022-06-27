@@ -62,7 +62,7 @@ sealed interface BidCollateral {
         }
      */
     @JsonNaming(SnakeCaseStrategy::class)
-    data class CoinTrade(val coinTrade: Body): BidCollateral {
+    data class CoinTrade(val coinTrade: Body) : BidCollateral {
         @JsonNaming(SnakeCaseStrategy::class)
         data class Body(
             val base: List<Coin>,
@@ -96,7 +96,7 @@ sealed interface BidCollateral {
         }
      */
     @JsonNaming(SnakeCaseStrategy::class)
-    data class MarkerTrade(val markerTrade: Body): BidCollateral {
+    data class MarkerTrade(val markerTrade: Body) : BidCollateral {
         @JsonNaming(SnakeCaseStrategy::class)
         data class Body(
             val address: String,

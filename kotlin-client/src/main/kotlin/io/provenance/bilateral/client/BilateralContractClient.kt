@@ -154,11 +154,13 @@ class BilateralContractClient private constructor(
         val msg = generateProtoExecuteMsg(executeMsg, signer.address(), funds)
         return pbClient.estimateAndBroadcastTx(
             txBody = msg.toAny().toTxBody(),
-            signers = listOf(BaseReqSigner(
-                signer = signer,
-                sequenceOffset = options.sequenceOffset,
-                account = options.baseAccount
-            )),
+            signers = listOf(
+                BaseReqSigner(
+                    signer = signer,
+                    sequenceOffset = options.sequenceOffset,
+                    account = options.baseAccount
+                )
+            ),
             mode = options.broadcastMode,
             gasAdjustment = options.gasAdjustment,
         ).also { response ->

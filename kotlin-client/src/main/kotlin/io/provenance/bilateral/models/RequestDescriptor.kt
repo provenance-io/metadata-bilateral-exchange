@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import io.provenance.bilateral.serialization.ContractUTCTimestampDeserializer
 import io.provenance.bilateral.serialization.ContractUTCTimestampSerializer
-
 import java.time.OffsetDateTime
 
 /**

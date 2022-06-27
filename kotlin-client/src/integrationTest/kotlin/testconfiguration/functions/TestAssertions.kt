@@ -8,7 +8,7 @@ import kotlin.test.DefaultAsserter.fail
 fun <T> assertSucceeds(message: String = "Expected function invocation to succeed", fn: () -> T): T =
     try {
         fn()
-    } catch(e: Exception) {
+    } catch (e: Exception) {
         fail(message, e)
     }
 
@@ -38,4 +38,28 @@ fun BilateralContractClient.assertBidIsDeleted(bidId: String, message: String = 
     } catch (_: Exception) {
         // Success - we want an exception to be thrown, indicating the bid is not present
     }
+}
+
+fun <T> T?.assertNotNull(message: String = "Expected value to not be null"): T {
+    kotlin.test.assertNotNull(
+        actual = this,
+        message = message,
+    )
+    return this
+}
+
+fun <T> Collection<T>.assertSingle(message: String = "Expected a single value to exist within the collection"): T {
+    val value = this.singleOrNull()
+    kotlin.test.assertNotNull(
+        actual = value,
+        message = message,
+    )
+    return value
+}
+
+fun <T> Collection<T>.assertSingle(
+    message: String = "Expected a single value to match the predicate",
+    predicate: (T) -> Boolean,
+): T = this.filter(predicate).let { filteredCollection ->
+    filteredCollection.assertSingle(message = "$message. Actual amount: ${filteredCollection.size}")
 }

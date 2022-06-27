@@ -24,7 +24,7 @@ data class AskOrder(
         markerTrade: (markerTrade: MarkerTrade.Body) -> T,
         markerShareSale: (markerShareSale: MarkerShareSale.Body) -> T,
         scopeTrade: (scopeTrade: ScopeTrade.Body) -> T,
-    ): T = when(this.collateral) {
+    ): T = when (this.collateral) {
         is CoinTrade -> coinTrade(this.collateral.coinTrade)
         is MarkerTrade -> markerTrade(this.collateral.markerTrade)
         is MarkerShareSale -> markerShareSale(this.collateral.markerShareSale)

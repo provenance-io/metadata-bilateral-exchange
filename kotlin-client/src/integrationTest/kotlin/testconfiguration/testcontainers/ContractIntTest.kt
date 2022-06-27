@@ -6,11 +6,12 @@ import io.provenance.client.grpc.GasEstimationMethod
 import io.provenance.client.grpc.PbClient
 import mu.KLogging
 import org.testcontainers.containers.BindMode
-import java.net.URI
 import testconfiguration.accounts.BilateralAccounts
 import testconfiguration.util.BilateralSmartContractUtil
 import testconfiguration.util.CoinFundingUtil
 import testconfiguration.util.ContractInstantiationResult
+import testconfiguration.util.ScopeWriteUtil
+import java.net.URI
 import java.util.TimeZone
 import kotlin.system.exitProcess
 
@@ -66,6 +67,7 @@ abstract class ContractIntTest {
                 logger.info("Setting up the local bilateral exchange smart contract")
                 contractInfo = BilateralSmartContractUtil.instantiateSmartContract(pbClient, BilateralAccounts.adminAccount)
                 logger.info("Successfully established the contract with name [${contractInfo.contractBindingName}] at address [${contractInfo.contractAddress}]")
+                ScopeWriteUtil.writeInitialScopeSpecs(pbClient)
             } catch (e: Exception) {
                 logger.error("Failed to fund accounts and/or stand up the exchange smart contract", e)
                 exitProcess(1)

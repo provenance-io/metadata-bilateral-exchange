@@ -39,4 +39,3 @@ data class MnemonicSigner(
 
     override fun sign(data: ByteArray): ByteArray = BCECSigner().sign(keyPair.privateKey, data.sha256()).encodeAsBTC().toByteArray()
 }
-

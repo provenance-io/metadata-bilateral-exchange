@@ -1,10 +1,25 @@
 package testconfiguration.extensions
 
 import com.fasterxml.jackson.core.type.TypeReference
+import cosmos.bank.v1beta1.QueryOuterClass.QueryAllBalancesRequest
+import cosmos.bank.v1beta1.QueryOuterClass.QueryBalanceRequest
+import cosmos.bank.v1beta1.Tx.MsgSend
 import cosmos.base.abci.v1beta1.Abci.TxResponse
+import cosmos.base.v1beta1.CoinOuterClass.Coin
+import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastMode
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
+import io.provenance.client.grpc.BaseReqSigner
+import io.provenance.client.grpc.PbClient
+import io.provenance.client.grpc.Signer
+import io.provenance.client.protobuf.extensions.toAny
+import io.provenance.client.protobuf.extensions.toTxBody
+import io.provenance.marker.v1.MarkerAccount
+import io.provenance.marker.v1.QueryMarkerRequest
+import mu.KotlinLogging
 import testconfiguration.models.ProvenanceTxEvents
 import testconfiguration.util.ObjectMapperProvider.OBJECT_MAPPER
+
+private val logger = KotlinLogging.logger("ProvenanceExtensions")
 
 fun TxResponse.isError(): Boolean = this.code != 0
 fun TxResponse.isSuccess(): Boolean = !this.isError()
@@ -47,3 +62,37 @@ fun BroadcastTxResponse.getContractAddressOrNull(): String? = toProvenanceTxEven
 
 fun BroadcastTxResponse.getContractAddress(): String = getContractAddressOrNull()
     ?: throw IllegalStateException("Unable to retrieve contract address from response.  Received response log: ${this.txResponse.rawLog}")
+
+fun PbClient.sendCoin(coin: Coin, fromSigner: Signer, toAddress: String) {
+    val send = MsgSend.newBuilder().also { send ->
+        send.fromAddress = fromSigner.address()
+        send.toAddress = toAddress
+        send.addAmount(coin)
+    }.build().toAny()
+    logger.info("Sending [${coin.amount}${coin.denom}] from [${fromSigner.address()}] to [$toAddress]")
+    this.estimateAndBroadcastTx(
+        txBody = send.toTxBody(),
+        signers = listOf(BaseReqSigner(fromSigner)),
+        mode = BroadcastMode.BROADCAST_MODE_BLOCK,
+        gasAdjustment = 1.1,
+    ).checkIsSuccess().also {
+        logger.info("[$toAddress] successfully received [${coin.amount}${coin.denom}]")
+    }
+}
+
+fun PbClient.getBalanceMap(accountAddress: String): Map<String, Long> = bankClient
+    .allBalances(QueryAllBalancesRequest.newBuilder().setAddress(accountAddress).build())
+    .balancesList
+    .associate { coin -> coin.denom to coin.amount.toLong() }
+
+fun PbClient.getBalance(accountAddress: String, denom: String): Long = bankClient
+    .balance(QueryBalanceRequest.newBuilder().setDenom(denom).setAddress(accountAddress).build())
+    .balance
+    .amount
+    // A missing balance will show up as zero so this is safe
+    .toLong()
+
+fun PbClient.getMarkerAccount(markerDenom: String): MarkerAccount = markerClient
+    .marker(QueryMarkerRequest.newBuilder().setId(markerDenom).build())
+    .marker
+    .unpack(MarkerAccount::class.java)

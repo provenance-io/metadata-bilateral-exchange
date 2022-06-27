@@ -22,4 +22,3 @@ data class GetBid(val getBid: Body) : ContractQueryMsg {
         fun new(id: String): GetBid = GetBid(getBid = Body(id = id))
     }
 }
-

@@ -290,7 +290,6 @@ sealed interface Bid {
         )
     }
 
-
     companion object {
         fun newCoinTrade(id: String, quote: List<Coin>, base: List<Coin>): Bid = CoinTradeBid(
             coinTrade = CoinTradeBid.Body(id, quote, base)

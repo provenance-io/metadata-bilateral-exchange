@@ -9,8 +9,8 @@ import mu.KLogging
 import org.testcontainers.containers.ContainerLaunchException
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.wait.strategy.AbstractWaitStrategy
-import java.net.URI
 import testconfiguration.util.CoroutineUtil
+import java.net.URI
 
 class ProvenanceTestContainer : GenericContainer<ProvenanceTestContainer>("provenanceio/provenance:v1.10.0") {
     private companion object : KLogging()
