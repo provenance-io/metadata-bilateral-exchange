@@ -31,7 +31,7 @@ pub fn cancel_ask(
     }
     let ask_order = get_ask_order_by_id(deps.storage, &id)?;
     // Only the owner of the ask and the admin can cancel an ask
-    if info.sender != ask_order.owner && get_contract_info(deps.storage)?.admin != ask_order.owner {
+    if info.sender != ask_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
         return ContractError::Unauthorized.to_err();
     }
     let mut messages: Vec<CosmosMsg<ProvenanceMsg>> = vec![];

@@ -1,4 +1,5 @@
 use crate::test::type_helpers::decimal;
+use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
 use cosmwasm_std::{coins, Addr, Coin, Decimal};
 use provwasm_std::{AccessGrant, Marker, MarkerAccess, MarkerStatus, MarkerType};
 
@@ -28,7 +29,7 @@ impl Default for MockMarker {
             sequence: 0,
             manager: "".to_string(),
             permissions: vec![AccessGrant {
-                address: Addr::unchecked("cosmos2contract"),
+                address: Addr::unchecked(MOCK_CONTRACT_ADDR),
                 permissions: vec![
                     MarkerAccess::Admin,
                     MarkerAccess::Burn,

@@ -30,7 +30,7 @@ pub fn cancel_bid(
     }
     let bid_order = get_bid_order_by_id(deps.storage, &id)?;
     // Only the owner of the bid and the admin can cancel a bid
-    if info.sender != bid_order.owner && get_contract_info(deps.storage)?.admin != bid_order.owner {
+    if info.sender != bid_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
         return ContractError::Unauthorized.to_err();
     }
     let coin_to_send = match &bid_order.collateral {
