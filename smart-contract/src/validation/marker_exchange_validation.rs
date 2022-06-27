@@ -55,8 +55,8 @@ mod tests {
     use crate::types::core::error::ContractError;
     use crate::validation::marker_exchange_validation::validate_marker_for_ask;
     use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
-    use cosmwasm_std::Addr;
-    use provwasm_std::{AccessGrant, MarkerAccess};
+    use cosmwasm_std::{coin, Addr};
+    use provwasm_std::{AccessGrant, MarkerAccess, MarkerStatus};
 
     #[test]
     fn test_successful_validation() {
@@ -123,7 +123,50 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_marker() {}
+    fn test_inactive_marker() {
+        let marker = MockMarker {
+            status: MarkerStatus::Finalized,
+            ..MockMarker::new_owned_mock_marker("asker")
+        }
+        .to_marker();
+        let err = validate_marker_for_ask(
+            &marker,
+            &Addr::unchecked("asker"),
+            &Addr::unchecked(MOCK_CONTRACT_ADDR),
+            &[MarkerAccess::Admin, MarkerAccess::Withdraw],
+        )
+        .expect_err("an error should occur when the marker is not in active status");
+        assert_invalid_marker_error(
+            err,
+            format!(
+                "expected marker [{}] to be active, but was in status [Finalized]",
+                DEFAULT_MARKER_DENOM
+            ),
+        )
+    }
+
+    #[test]
+    fn test_zero_coin_holdings() {
+        let marker = MockMarker {
+            coins: vec![coin(0, DEFAULT_MARKER_DENOM)],
+            ..MockMarker::new_owned_mock_marker("asker")
+        }
+        .to_marker();
+        let err = validate_marker_for_ask(
+            &marker,
+            &Addr::unchecked("asker"),
+            &Addr::unchecked(MOCK_CONTRACT_ADDR),
+            &[MarkerAccess::Admin, MarkerAccess::Withdraw],
+        )
+        .expect_err("an error should occur when the marker has zero of its own coin");
+        assert_invalid_marker_error(
+            err,
+            format!(
+                "expected marker [{}] to hold at least one of its supply of denom, but it had [0]",
+                DEFAULT_MARKER_DENOM,
+            ),
+        );
+    }
 
     fn assert_invalid_marker_error<S: Into<String>>(error: ContractError, expected_message: S) {
         match error {

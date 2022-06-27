@@ -42,15 +42,12 @@ pub fn get_single_marker_coin_holding(marker: &Marker) -> Result<Coin, ContractE
         .filter(|coin| coin.denom == marker.denom)
         .collect::<Vec<Coin>>();
     if marker_denom_holdings.len() != 1 {
-        return ContractError::InvalidMarker {
-            message: format!(
-                "expected marker [{}] to have a single coin entry for denom [{}], but it did not. Holdings: [{}]",
-                marker.address.as_str(),
-                marker.denom,
-                format_coin_display(&marker.coins),
-            ),
-        }
-            .to_err();
+        return ContractError::invalid_marker(format!(
+            "expected marker [{}] to have a single coin entry for denom [{}], but it did not. Holdings: [{}]",
+            marker.address.as_str(),
+            marker.denom,
+            format_coin_display(&marker.coins),
+        )).to_err();
     }
     marker_denom_holdings.first().unwrap().to_owned().to_ok()
 }
@@ -104,9 +101,9 @@ pub fn check_scope_owners(
         .collect::<Vec<&Party>>();
     // if more than one owner is specified, removing all of them can potentially cause data loss
     if owners.len() != 1 {
-        return ContractError::InvalidScopeOwner {
-            scope_address: scope.scope_id.clone(),
-            explanation: format!(
+        return ContractError::invalid_scope_owner(
+            &scope.scope_id,
+            format!(
                 "the scope should only include a single owner, but found: [{}]",
                 owners
                     .iter()
@@ -114,33 +111,33 @@ pub fn check_scope_owners(
                     .collect::<Vec<&str>>()
                     .join(", "),
             ),
-        }
+        )
         .to_err();
     }
     if let Some(expected) = expected_owner {
         let owner = owners.first().unwrap();
         if &owner.address != expected {
-            return ContractError::InvalidScopeOwner {
-                scope_address: scope.scope_id.clone(),
-                explanation: format!(
+            return ContractError::invalid_scope_owner(
+                &scope.scope_id,
+                format!(
                     "the scope owner was expected to be [{}], not [{}]",
                     expected,
                     owner.address.as_str(),
                 ),
-            }
+            )
             .to_err();
         }
     }
     if let Some(expected) = expected_value_owner {
         if &scope.value_owner_address != expected {
-            return ContractError::InvalidScopeOwner {
-                scope_address: scope.scope_id.clone(),
-                explanation: format!(
+            return ContractError::invalid_scope_owner(
+                &scope.scope_id,
+                format!(
                     "the scope's value owner was expected to be [{}], not [{}]",
                     expected,
                     scope.value_owner_address.as_str(),
                 ),
-            }
+            )
             .to_err();
         }
     }

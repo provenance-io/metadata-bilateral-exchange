@@ -33,13 +33,13 @@ pub fn execute_match(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     // only the admin may execute matches
     if info.sender != get_contract_info(deps.storage)?.admin {
-        return Err(ContractError::Unauthorized);
+        return ContractError::unauthorized().to_err();
     }
     // return error if funds sent
     if !info.funds.is_empty() {
-        return ContractError::InvalidFundsProvided {
-            message: "funds should not be provided during match execution".to_string(),
-        }
+        return ContractError::invalid_funds_provided(
+            "funds should not be provided during match execution",
+        )
         .to_err();
     }
     let mut invalid_fields: Vec<String> = vec![];
@@ -51,10 +51,7 @@ pub fn execute_match(
     }
     // return error if either ids are badly formed
     if !invalid_fields.is_empty() {
-        return ContractError::ValidationError {
-            messages: invalid_fields,
-        }
-        .to_err();
+        return ContractError::validation_error(&invalid_fields).to_err();
     }
 
     let ask_order = get_ask_order_by_id(deps.storage, ask_id)?;
@@ -265,4 +262,28 @@ fn execute_scope_trade(
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::execute::execute_match::execute_match;
+    use crate::test::mock_instantiate::default_instantiate;
+    use crate::types::core::error::ContractError;
+    use cosmwasm_std::testing::{mock_env, mock_info};
+    use provwasm_mocks::mock_dependencies;
+
+    #[test]
+    fn test_execute_match_with_wrong_sender() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        let err = execute_match(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("not-admin", &[]),
+            "ask".to_string(),
+            "bid".to_string(),
+        )
+        .expect_err("an error should occur due to the admin not being the sender");
+        assert!(
+            matches!(err, ContractError::Unauthorized),
+            "an unauthorized error should be returned when the admin is not used as the sender",
+        );
+    }
+}

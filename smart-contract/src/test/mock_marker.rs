@@ -52,7 +52,7 @@ impl MockMarker {
         Self::default().to_marker()
     }
 
-    pub fn new_owned_marker<S: Into<String>>(owner_address: S) -> Marker {
+    pub fn new_owned_mock_marker<S: Into<String>>(owner_address: S) -> Self {
         Self {
             permissions: vec![
                 AccessGrant {
@@ -73,7 +73,10 @@ impl MockMarker {
             ],
             ..Self::default()
         }
-        .to_marker()
+    }
+
+    pub fn new_owned_marker<S: Into<String>>(owner_address: S) -> Marker {
+        Self::new_owned_mock_marker(owner_address).to_marker()
     }
 
     pub fn to_marker(self) -> Marker {

@@ -15,23 +15,21 @@ pub fn cancel_bid(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     // return error if id is empty
     if id.is_empty() {
-        return ContractError::ValidationError {
-            messages: vec!["an id must be provided when cancelling a bid".to_string()],
-        }
-        .to_err();
+        return ContractError::validation_error(&["an id must be provided when cancelling a bid"])
+            .to_err();
     }
 
     // return error if funds sent
     if !info.funds.is_empty() {
-        return ContractError::InvalidFundsProvided {
-            message: "funds should not be provided when cancelling a bid".to_string(),
-        }
+        return ContractError::invalid_funds_provided(
+            "funds should not be provided when cancelling a bid",
+        )
         .to_err();
     }
     let bid_order = get_bid_order_by_id(deps.storage, &id)?;
     // Only the owner of the bid and the admin can cancel a bid
     if info.sender != bid_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
-        return ContractError::Unauthorized.to_err();
+        return ContractError::unauthorized().to_err();
     }
     let coin_to_send = match &bid_order.collateral {
         BidCollateral::CoinTrade(collateral) => collateral.quote.to_owned(),

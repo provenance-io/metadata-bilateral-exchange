@@ -25,11 +25,7 @@ pub fn create_ask(
     // If loading an ask by the target id returns an Ok response, then the requested id already
     // exists in storage and should not be overwritten
     if get_ask_order_by_id(deps.storage, ask.get_id()).is_ok() {
-        return ContractError::ExistingId {
-            id_type: "ask".to_string(),
-            id: ask.get_id().to_string(),
-        }
-        .to_err();
+        return ContractError::existing_id("ask", ask.get_id()).to_err();
     }
     let ask_creation_data = match &ask {
         Ask::CoinTrade(coin_ask) => create_coin_trade_ask_collateral(&info, coin_ask),
@@ -68,19 +64,16 @@ fn create_coin_trade_ask_collateral(
     coin_trade: &CoinTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
     if info.funds.is_empty() {
-        return ContractError::InvalidFundsProvided {
-            message: "coin trade ask requests should include funds".to_string(),
-        }
+        return ContractError::invalid_funds_provided(
+            "coin trade ask requests should include funds",
+        )
         .to_err();
     }
     if coin_trade.id.is_empty() {
-        return ContractError::MissingField { field: "id".into() }.to_err();
+        return ContractError::missing_field("id").to_err();
     }
     if coin_trade.quote.is_empty() {
-        return ContractError::MissingField {
-            field: "quote".into(),
-        }
-        .to_err();
+        return ContractError::missing_field("quote").to_err();
     }
 
     AskCreationData {
@@ -97,9 +90,9 @@ fn create_marker_trade_ask_collateral(
     marker_trade: &MarkerTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
     if !info.funds.is_empty() {
-        return ContractError::InvalidFundsProvided {
-            message: "marker trade ask requests should not include funds".to_string(),
-        }
+        return ContractError::invalid_funds_provided(
+            "marker trade ask requests should not include funds",
+        )
         .to_err();
     }
     let marker = ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.denom)?;
@@ -144,9 +137,9 @@ fn create_marker_share_sale_ask_collateral(
     marker_share_sale: &MarkerShareSaleAsk,
 ) -> Result<AskCreationData, ContractError> {
     if !info.funds.is_empty() {
-        return ContractError::InvalidFundsProvided {
-            message: "marker share sale ask requests should not include funds".to_string(),
-        }
+        return ContractError::invalid_funds_provided(
+            "marker share sale ask requests should not include funds",
+        )
         .to_err();
     }
     let marker =
@@ -193,9 +186,9 @@ fn create_scope_trade_ask_collateral(
     scope_trade: &ScopeTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
     if !info.funds.is_empty() {
-        return ContractError::InvalidFundsProvided {
-            message: "scope trade ask requests should not include funds".to_string(),
-        }
+        return ContractError::invalid_funds_provided(
+            "scope trade ask requests should not include funds",
+        )
         .to_err();
     }
     check_scope_owners(

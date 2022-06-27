@@ -3,9 +3,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ContractError {
-    #[error("Cannot send funds when canceling order")]
-    CancelWithFunds,
-
     #[error("Cannot create [{id_type}] with id [{id}]. One with that id already exists")]
     ExistingId { id_type: String, id: String },
 
@@ -46,10 +43,6 @@ pub enum ContractError {
     Unauthorized,
 }
 impl ContractError {
-    pub fn cancel_with_funds() -> ContractError {
-        ContractError::CancelWithFunds
-    }
-
     pub fn existing_id<S1: Into<String>, S2: Into<String>>(id_type: S1, id: S2) -> ContractError {
         ContractError::ExistingId {
             id_type: id_type.into(),
@@ -57,9 +50,12 @@ impl ContractError {
         }
     }
 
-    pub fn validation_error(messages: &[String]) -> ContractError {
+    pub fn validation_error<S: Into<String>>(messages: &[S]) -> ContractError
+    where
+        S: Clone,
+    {
         ContractError::ValidationError {
-            messages: messages.to_owned(),
+            messages: messages.iter().cloned().map(|s| s.into()).collect(),
         }
     }
 

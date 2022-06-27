@@ -34,7 +34,7 @@ mod tests {
 
     #[test]
     fn test_to_err() {
-        let result: Result<(), ContractError> = ContractError::Unauthorized.to_err();
+        let result: Result<(), ContractError> = ContractError::unauthorized().to_err();
         let error = result.unwrap_err();
         assert!(
             matches!(error, ContractError::Unauthorized),

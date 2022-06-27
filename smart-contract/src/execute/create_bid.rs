@@ -19,11 +19,7 @@ pub fn create_bid(
     descriptor: Option<RequestDescriptor>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     if get_bid_order_by_id(deps.storage, bid.get_id()).is_ok() {
-        return ContractError::ExistingId {
-            id_type: "bid".to_string(),
-            id: bid.get_id().to_string(),
-        }
-        .to_err();
+        return ContractError::existing_id("bid", bid.get_id()).to_err();
     }
     let collateral = match &bid {
         Bid::CoinTrade(coin_trade) => create_coin_trade_collateral(&info, coin_trade),
@@ -48,21 +44,15 @@ fn create_coin_trade_collateral(
     coin_trade: &CoinTradeBid,
 ) -> Result<BidCollateral, ContractError> {
     if coin_trade.id.is_empty() {
-        return ContractError::MissingField {
-            field: "id".to_string(),
-        }
-        .to_err();
+        return ContractError::missing_field("id").to_err();
     }
     if coin_trade.base.is_empty() {
-        return ContractError::MissingField {
-            field: "base".to_string(),
-        }
-        .to_err();
+        return ContractError::missing_field("base").to_err();
     }
     if info.funds.is_empty() {
-        return ContractError::InvalidFundsProvided {
-            message: "coin trade bid requests should include funds".to_string(),
-        }
+        return ContractError::invalid_funds_provided(
+            "coin trade bid requests should include funds",
+        )
         .to_err();
     }
     BidCollateral::coin_trade(&coin_trade.base, &info.funds).to_ok()
@@ -74,22 +64,15 @@ fn create_marker_trade_collateral(
     marker_trade: &MarkerTradeBid,
 ) -> Result<BidCollateral, ContractError> {
     if marker_trade.id.is_empty() {
-        return ContractError::MissingField {
-            field: "id".to_string(),
-        }
-        .to_err();
+        return ContractError::missing_field("id").to_err();
     }
     if marker_trade.denom.is_empty() {
-        return ContractError::MissingField {
-            field: "denom".to_string(),
-        }
-        .to_err();
+        return ContractError::missing_field("denom").to_err();
     }
     if info.funds.is_empty() {
-        return ContractError::InvalidFundsProvided {
-            message: "funds must be provided during a marker trade bid to establish a quote"
-                .to_string(),
-        }
+        return ContractError::invalid_funds_provided(
+            "funds must be provided during a marker trade bid to establish a quote",
+        )
         .to_err();
     }
     // This grants us access to the marker address, as well as ensuring that the marker is real
@@ -103,44 +86,34 @@ fn create_marker_share_sale_collateral(
     marker_share_sale: &MarkerShareSaleBid,
 ) -> Result<BidCollateral, ContractError> {
     if marker_share_sale.id.is_empty() {
-        return ContractError::MissingField {
-            field: "id".to_string(),
-        }
-        .to_err();
+        return ContractError::missing_field("id").to_err();
     }
     if marker_share_sale.denom.is_empty() {
-        return ContractError::MissingField {
-            field: "denom".to_string(),
-        }
-        .to_err();
+        return ContractError::missing_field("denom").to_err();
     }
     if marker_share_sale.share_count.is_zero() {
-        return ContractError::ValidationError {
-            messages: vec!["share count must be at least one for a marker share sale".to_string()],
-        }
+        return ContractError::validation_error(&[
+            "share count must be at least one for a marker share sale",
+        ])
         .to_err();
     }
     if info.funds.is_empty() {
-        return ContractError::InvalidFundsProvided {
-            message: "funds must be provided during a marker share trade bid to establish a quote"
-                .to_string(),
-        }
+        return ContractError::invalid_funds_provided(
+            "funds must be provided during a marker share trade bid to establish a quote",
+        )
         .to_err();
     }
     let marker =
         ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_share_sale.denom)?;
     let marker_shares_available = get_single_marker_coin_holding(&marker)?.amount.u128();
     if marker_share_sale.share_count.u128() > marker_shares_available {
-        return ContractError::ValidationError {
-            messages: vec![
-                format!(
-                    "share count [{}] must be less than or equal to remaining [{}] shares available [{}]",
-                    marker_share_sale.share_count.u128(),
-                    marker_share_sale.denom,
-                    marker_shares_available,
-                )
-            ]
-        }.to_err();
+        return ContractError::validation_error(&[format!(
+            "share count [{}] must be less than or equal to remaining [{}] shares available [{}]",
+            marker_share_sale.share_count.u128(),
+            marker_share_sale.denom,
+            marker_shares_available,
+        )])
+        .to_err();
     }
     BidCollateral::marker_share_sale(
         marker.address,
@@ -156,22 +129,15 @@ fn create_scope_trade_collateral(
     scope_trade: &ScopeTradeBid,
 ) -> Result<BidCollateral, ContractError> {
     if scope_trade.id.is_empty() {
-        return ContractError::MissingField {
-            field: "id".to_string(),
-        }
-        .to_err();
+        return ContractError::missing_field("id").to_err();
     }
     if scope_trade.scope_address.is_empty() {
-        return ContractError::MissingField {
-            field: "scope_address".to_string(),
-        }
-        .to_err();
+        return ContractError::missing_field("scope_address").to_err();
     }
     if info.funds.is_empty() {
-        return ContractError::InvalidFundsProvided {
-            message: "funds must be provided during a scope trade bid to establish a quote"
-                .to_string(),
-        }
+        return ContractError::invalid_funds_provided(
+            "funds must be provided during a scope trade bid to establish a quote",
+        )
         .to_err();
     }
     BidCollateral::scope_trade(&scope_trade.scope_address, &info.funds).to_ok()
