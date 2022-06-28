@@ -57,14 +57,7 @@ impl MockMarker {
             permissions: vec![
                 AccessGrant {
                     address: Addr::unchecked(owner_address),
-                    permissions: vec![
-                        MarkerAccess::Admin,
-                        MarkerAccess::Burn,
-                        MarkerAccess::Delete,
-                        MarkerAccess::Deposit,
-                        MarkerAccess::Mint,
-                        MarkerAccess::Withdraw,
-                    ],
+                    permissions: Self::get_default_owner_permissions(),
                 },
                 AccessGrant {
                     address: Addr::unchecked("cosmos2contract"),
@@ -93,5 +86,16 @@ impl MockMarker {
             marker_type: self.marker_type,
             supply_fixed: self.supply_fixed,
         }
+    }
+
+    pub fn get_default_owner_permissions() -> Vec<MarkerAccess> {
+        vec![
+            MarkerAccess::Admin,
+            MarkerAccess::Burn,
+            MarkerAccess::Delete,
+            MarkerAccess::Deposit,
+            MarkerAccess::Mint,
+            MarkerAccess::Withdraw,
+        ]
     }
 }

@@ -65,6 +65,7 @@ pub fn cancel_ask(
     Response::new()
         .add_messages(messages)
         .add_attribute("action", "cancel_ask")
+        .add_attribute("ask_id", &ask_order.id)
         .set_data(to_binary(&ask_order)?)
         .to_ok()
 }
@@ -76,6 +77,7 @@ mod tests {
     use crate::contract::execute;
     use crate::execute::create_ask::create_ask;
     use crate::storage::ask_order_storage::insert_ask_order;
+    use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::mock_instantiate::default_instantiate;
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_DENOM};
     use crate::types::core::msg::ExecuteMsg;
@@ -122,10 +124,15 @@ mod tests {
 
         match cancel_ask_response {
             Ok(cancel_ask_response) => {
-                assert_eq!(cancel_ask_response.attributes.len(), 1);
+                assert_eq!(cancel_ask_response.attributes.len(), 2);
+
                 assert_eq!(
-                    cancel_ask_response.attributes[0],
-                    attr("action", "cancel_ask")
+                    "cancel_ask",
+                    single_attribute_for_key(&cancel_ask_response, "action")
+                );
+                assert_eq!(
+                    "ask_id",
+                    single_attribute_for_key(&cancel_ask_response, "ask_id"),
                 );
                 assert_eq!(cancel_ask_response.messages.len(), 1);
                 assert_eq!(
@@ -315,13 +322,12 @@ mod tests {
             msg => panic!("unexpected message produced when cancelling a marker ask: {:?}", msg),
         });
         assert_eq!(
-            1,
+            2,
             response.attributes.len(),
-            "the response should have a single attribute",
+            "the response should have the correct number of attributes",
         );
-        let attribute = response.attributes.first().unwrap();
-        assert_eq!("action", attribute.key);
-        assert_eq!("cancel_ask", attribute.value);
+        assert_eq!("cancel_ask", single_attribute_for_key(&response, "action"),);
+        assert_eq!("ask_id", single_attribute_for_key(&response, "ask_id"),);
         let response_data_ask_order = from_binary::<AskOrder>(
             &response.data.expect("response data should be set"),
         )

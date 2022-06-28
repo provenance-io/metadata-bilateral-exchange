@@ -35,6 +35,7 @@ pub fn create_bid(
     insert_bid_order(deps.storage, &bid_order)?;
     Response::new()
         .add_attribute("action", "create_bid")
+        .add_attribute("bid_id", bid.get_id())
         .set_data(to_binary(&bid_order)?)
         .to_ok()
 }
@@ -148,6 +149,7 @@ mod tests {
     use super::*;
     use crate::contract::execute;
     use crate::storage::contract_info::{set_contract_info, ContractInfo};
+    use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::types::core::msg::ExecuteMsg;
     use crate::types::request::request_type::RequestType;
     use cosmwasm_std::testing::{mock_env, mock_info};
@@ -187,8 +189,9 @@ mod tests {
         // verify execute create bid response
         match create_bid_response {
             Ok(response) => {
-                assert_eq!(response.attributes.len(), 1);
-                assert_eq!(response.attributes[0], attr("action", "create_bid"));
+                assert_eq!(response.attributes.len(), 2);
+                assert_eq!("create_bid", single_attribute_for_key(&response, "action"));
+                assert_eq!("bid_id", single_attribute_for_key(&response, "bid_id"));
             }
             Err(error) => {
                 panic!("failed to create bid: {:?}", error)

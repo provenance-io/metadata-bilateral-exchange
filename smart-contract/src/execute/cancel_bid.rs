@@ -45,6 +45,7 @@ pub fn cancel_bid(
             amount: coin_to_send,
         })
         .add_attribute("action", "cancel_bid")
+        .add_attribute("bid_id", &bid_order.id)
         .set_data(to_binary(&bid_order)?)
         .to_ok()
 }
@@ -54,6 +55,7 @@ mod tests {
     use crate::contract::execute;
     use crate::storage::bid_order_storage::get_bid_order_by_id;
     use crate::storage::contract_info::{set_contract_info, ContractInfo};
+    use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::types::core::msg::ExecuteMsg;
     use crate::types::request::bid_types::bid::Bid;
     use cosmwasm_std::testing::{mock_env, mock_info};
@@ -61,7 +63,7 @@ mod tests {
     use provwasm_mocks::mock_dependencies;
 
     #[test]
-    fn cancel_with_valid_data() {
+    fn cancel_coin_trade_with_valid_data() {
         let mut deps = mock_dependencies(&[]);
         if let Err(error) = set_contract_info(
             &mut deps.storage,
@@ -105,10 +107,14 @@ mod tests {
 
         match cancel_bid_response {
             Ok(cancel_bid_response) => {
-                assert_eq!(cancel_bid_response.attributes.len(), 1);
+                assert_eq!(cancel_bid_response.attributes.len(), 2);
                 assert_eq!(
-                    cancel_bid_response.attributes[0],
-                    attr("action", "cancel_bid")
+                    "cancel_bid",
+                    single_attribute_for_key(&cancel_bid_response, "action"),
+                );
+                assert_eq!(
+                    "bid_id",
+                    single_attribute_for_key(&cancel_bid_response, "bid_id"),
                 );
                 assert_eq!(cancel_bid_response.messages.len(), 1);
                 assert_eq!(
