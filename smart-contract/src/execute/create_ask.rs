@@ -215,11 +215,12 @@ mod tests {
     use crate::test::mock_marker::{
         MockMarker, DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM, DEFAULT_MARKER_HOLDINGS,
     };
+    use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ID};
     use crate::types::core::msg::ExecuteMsg;
     use crate::types::request::request_descriptor::AttributeRequirement;
     use crate::types::request::request_type::RequestType;
     use crate::types::request::share_sale_type::ShareSaleType;
-    use cosmwasm_std::testing::{mock_env, mock_info};
+    use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{coin, coins, from_binary, Addr, Storage};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::{MarkerMsgParams, ProvenanceMsgParams};
@@ -624,12 +625,202 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn test_marker_share_sale_ask_with_invalid_data() {
-    //     let mut deps = mock_dependencies(&[]);
-    //     default_instantiate(deps.as_mut().storage);
-    //     let error =
-    // }
+    #[test]
+    fn test_marker_share_sale_ask_with_invalid_data() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        let mut ask = Ask::new_marker_share_sale(
+            "ask_id",
+            DEFAULT_MARKER_DENOM,
+            &coins(100, "nhash"),
+            ShareSaleType::single(100),
+        );
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &coins(100, "nhash")),
+            ask.clone(),
+            None,
+        )
+        .expect_err("an error should be returned when funds are provided for a share sale");
+        assert!(
+            matches!(err, ContractError::InvalidFundsProvided { .. }),
+            "an invalid funds error should be produced when funds are included for a share sale",
+        );
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            ask.clone(),
+            None,
+        )
+        .expect_err("an error should be returned when no marker is found for the denom");
+        assert!(
+            matches!(err, ContractError::Std(_)),
+            "an std error should be produced when a marker cannot be found",
+        );
+        // Put a marker owned by the contract but not be the asker
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            ask.clone(),
+            None,
+        )
+        .expect_err("an error should be returned when the marker is badly-formed for the ask");
+        assert!(
+            matches!(err, ContractError::InvalidMarker { .. }),
+            "an invalid marker error should be returned because the marker is not administered by the asker",
+        );
+        // Set up the ask to be badly-formed
+        match ask {
+            Ask::MarkerShareSale(ref mut sale) => {
+                sale.quote_per_share = vec![];
+            }
+            _ => panic!("unexpected ask type: {:?}", ask),
+        };
+        // Put a well-formed marker into the mix
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            ask.clone(),
+            None,
+        )
+        .expect_err(
+            "an error should be returned because the ask was badly-formed with no quote-per-share",
+        );
+        assert!(
+            matches!(err, ContractError::ValidationError { .. }),
+            "a validation error should be returned because the ask had no quote-per-share",
+        );
+    }
+
+    #[test]
+    fn test_scope_trade_with_valid_data() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        deps.querier
+            .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::any(&["something.pio"]),
+        );
+        let response = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(100, "nhash")),
+            Some(descriptor.clone()),
+        )
+        .expect("expected the ask to be created successfully");
+        assert!(
+            response.messages.is_empty(),
+            "no messages need to be sent for a scope trade",
+        );
+        let ask_order = assert_valid_response(deps.as_ref().storage, &response);
+        assert_eq!(
+            "ask_id", ask_order.id,
+            "the proper ask id should be set in the ask order",
+        );
+        assert_eq!(
+            RequestType::ScopeTrade,
+            ask_order.ask_type,
+            "the proper ask type should be set in the ask order",
+        );
+        assert_eq!(
+            "asker",
+            ask_order.owner.as_str(),
+            "the proper owner address should be set in the ask order",
+        );
+        assert_eq!(
+            descriptor,
+            ask_order
+                .descriptor
+                .expect("the descriptor should be set in the ask order"),
+            "the proper descriptor should be set in the ask order",
+        );
+        let collateral = ask_order.collateral.unwrap_scope_trade();
+        assert_eq!(
+            DEFAULT_SCOPE_ID, collateral.scope_address,
+            "the proper scope address should be set in the ask order's collateral",
+        );
+        assert_eq!(
+            coins(100, "nhash"),
+            collateral.quote,
+            "the quote should be properly copied into the ask order's collateral",
+        );
+    }
+
+    #[test]
+    fn test_scope_trade_with_invalid_data() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        let mut ask = Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(100, "nhash"));
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &coins(55, "something")),
+            ask.clone(),
+            None,
+        )
+        .expect_err("an error should occur when funds are added to the create ask");
+        assert!(
+            matches!(err, ContractError::InvalidFundsProvided { .. }),
+            "an invalid funds provided error should occur when funds are added to a scope trade",
+        );
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            ask.clone(),
+            None,
+        )
+        .expect_err("an error should occur when no scope is found");
+        assert!(
+            matches!(err, ContractError::Std(_)),
+            "an std error should occur when the scope referenced in the request cannot be found",
+        );
+        // Mock out the scope but with the wrong owner - it should be the contract
+        deps.querier.with_scope(MockScope::new_with_owner("asker"));
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            ask.clone(),
+            None,
+        )
+        .expect_err("an error should occur when the referenced scope is not owned by the contract");
+        assert!(
+            matches!(err, ContractError::InvalidScopeOwner { .. }),
+            "an invalid scope owner error should occur when the contract does not own the scope",
+        );
+        deps.querier
+            .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
+        // Provide an invalid quote to trigger a validation failure downstream after scope verification
+        // has been run
+        match ask {
+            Ask::ScopeTrade(ref mut scope_trade) => {
+                scope_trade.quote = vec![];
+            }
+            _ => panic!("unexpected ask type: {:?}", ask),
+        };
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            ask,
+            None,
+        )
+        .expect_err("an error should occur when the ask request is improperly formed");
+        assert!(
+            matches!(err, ContractError::ValidationError { .. }),
+            "a validation error should occur when the ask request is improperly formed",
+        );
+    }
 
     fn assert_valid_response(
         storage: &dyn Storage,
@@ -640,7 +831,6 @@ mod tests {
             response.attributes.len(),
             "expected the correct number of attributes",
         );
-        let attribute = response.attributes.first().unwrap();
         assert_eq!(
             "create_ask",
             single_attribute_for_key(&response, "action"),

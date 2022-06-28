@@ -84,7 +84,7 @@ mod tests {
     use crate::types::request::ask_types::ask::Ask;
     use crate::types::request::ask_types::ask_order::AskOrder;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{attr, coins, from_binary, Addr, CosmosMsg};
+    use cosmwasm_std::{coins, from_binary, Addr, CosmosMsg};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::{MarkerMsgParams, ProvenanceMsgParams};
 

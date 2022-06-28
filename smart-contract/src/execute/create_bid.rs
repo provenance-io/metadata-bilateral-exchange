@@ -153,7 +153,7 @@ mod tests {
     use crate::types::core::msg::ExecuteMsg;
     use crate::types::request::request_type::RequestType;
     use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{attr, coins, Addr};
+    use cosmwasm_std::{coins, Addr};
     use provwasm_mocks::mock_dependencies;
 
     #[test]
