@@ -50,10 +50,12 @@ class SearchIntTest : ContractIntTest() {
             mode = BroadcastMode.BROADCAST_MODE_BLOCK,
             gasAdjustment = 1.2,
         ).checkIsSuccess()
-        val searchResult = bilateralClient.searchAsks(ContractSearchRequest.newSearchAsks(
-            searchType = ContractSearchType.byOwner(BilateralAccounts.askerAccount.address()),
-            pageSize = 11,
-        ))
+        val searchResult = bilateralClient.searchAsks(
+            ContractSearchRequest.newSearchAsks(
+                searchType = ContractSearchType.byOwner(BilateralAccounts.askerAccount.address()),
+                pageSize = 11,
+            )
+        )
         assertEquals(
             expected = 10,
             actual = searchResult.results.size,
@@ -107,10 +109,12 @@ class SearchIntTest : ContractIntTest() {
             mode = BroadcastMode.BROADCAST_MODE_BLOCK,
             gasAdjustment = 1.2,
         ).checkIsSuccess()
-        val searchResult = bilateralClient.searchBids(ContractSearchRequest.newSearchBids(
-            searchType = ContractSearchType.byOwner(BilateralAccounts.bidderAccount.address()),
-            pageSize = 11,
-        ))
+        val searchResult = bilateralClient.searchBids(
+            ContractSearchRequest.newSearchBids(
+                searchType = ContractSearchType.byOwner(BilateralAccounts.bidderAccount.address()),
+                pageSize = 11,
+            )
+        )
         assertEquals(
             expected = 10,
             actual = searchResult.results.size,

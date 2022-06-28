@@ -177,7 +177,7 @@ class BilateralContractClient private constructor(
         }
     }
 
-    private fun <T: ContractQueryMsg> getQueryResponseBytes(query: T): ByteArray = pbClient.wasmClient.queryWasm(
+    private fun <T : ContractQueryMsg> getQueryResponseBytes(query: T): ByteArray = pbClient.wasmClient.queryWasm(
         QueryOuterClass.QuerySmartContractStateRequest.newBuilder().also { req ->
             req.address = contractAddress
             req.queryData = query.toJsonByteString(objectMapper)
@@ -191,8 +191,8 @@ class BilateralContractClient private constructor(
      * Allows a type reference to be passed in, ensuring that generic types within response values can be properly
      * deserialized by Jackson using simple byte input.
      */
-    private fun <T: ContractQueryMsg, U : Any> queryContractWithReference(
+    private fun <T : ContractQueryMsg, U : Any> queryContractWithReference(
         query: T,
         typeReference: TypeReference<U>,
-    ): U = getQueryResponseBytes(query).let { bytes  -> objectMapper.readValue(bytes, typeReference) }
+    ): U = getQueryResponseBytes(query).let { bytes -> objectMapper.readValue(bytes, typeReference) }
 }
