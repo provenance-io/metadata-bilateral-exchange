@@ -11,11 +11,11 @@ pub enum Bid {
     ScopeTrade(ScopeTradeBid),
 }
 impl Bid {
-    pub fn new_coin<S: Into<String>>(id: S, base: &[Coin]) -> Self {
+    pub fn new_coin_trade<S: Into<String>>(id: S, base: &[Coin]) -> Self {
         Self::CoinTrade(CoinTradeBid::new(id, base))
     }
 
-    pub fn new_marker<S1: Into<String>, S2: Into<String>>(id: S1, denom: S2) -> Self {
+    pub fn new_marker_trade<S1: Into<String>, S2: Into<String>>(id: S1, denom: S2) -> Self {
         Self::MarkerTrade(MarkerTradeBid::new(id, denom))
     }
 
@@ -25,6 +25,10 @@ impl Bid {
         share_count: u128,
     ) -> Self {
         Self::MarkerShareSale(MarkerShareSaleBid::new(id, denom, share_count))
+    }
+
+    pub fn new_scope_trade<S1: Into<String>, S2: Into<String>>(id: S1, scope_address: S2) -> Self {
+        Self::ScopeTrade(ScopeTradeBid::new(id, scope_address))
     }
 
     pub fn get_id(&self) -> &str {

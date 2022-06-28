@@ -107,7 +107,7 @@ pub fn mock_ask_scope_trade<S: Into<String>>(scope_address: S, quote: &[Coin]) -
     AskCollateral::scope_trade(scope_address, quote)
 }
 
-pub fn mock_bid(collateral: BidCollateral) -> BidOrder {
+pub fn mock_bid_order(collateral: BidCollateral) -> BidOrder {
     BidOrder::new_unchecked("bid_id", Addr::unchecked("bidder"), collateral, None)
 }
 
