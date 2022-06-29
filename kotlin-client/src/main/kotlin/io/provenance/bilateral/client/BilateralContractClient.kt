@@ -1,5 +1,6 @@
 package io.provenance.bilateral.client
 
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
@@ -58,11 +59,17 @@ class BilateralContractClient private constructor(
 
     fun getBidOrNull(id: String): BidOrder? = tryOrNull { getBid(id) }
 
-    fun searchAsks(searchAsks: SearchAsks): ContractSearchResult<AskOrder> = queryContract(searchAsks)
+    fun searchAsks(searchAsks: SearchAsks): ContractSearchResult<AskOrder> = queryContractWithReference(
+        query = searchAsks,
+        typeReference = object : TypeReference<ContractSearchResult<AskOrder>>() {},
+    )
 
     fun searchAsksOrNull(searchAsks: SearchAsks): ContractSearchResult<AskOrder>? = tryOrNull { searchAsks(searchAsks) }
 
-    fun searchBids(searchBids: SearchBids): ContractSearchResult<BidOrder> = queryContract(searchBids)
+    fun searchBids(searchBids: SearchBids): ContractSearchResult<BidOrder> = queryContractWithReference(
+        query = searchBids,
+        typeReference = object : TypeReference<ContractSearchResult<BidOrder>>() {},
+    )
 
     fun searchBidsOrNull(searchBids: SearchBids): ContractSearchResult<BidOrder>? = tryOrNull { searchBids(searchBids) }
 
@@ -170,11 +177,22 @@ class BilateralContractClient private constructor(
         }
     }
 
+    private fun <T : ContractQueryMsg> getQueryResponseBytes(query: T): ByteArray = pbClient.wasmClient.queryWasm(
+        QueryOuterClass.QuerySmartContractStateRequest.newBuilder().also { req ->
+            req.address = contractAddress
+            req.queryData = query.toJsonByteString(objectMapper)
+        }.build()
+    ).data.toByteArray()
+
     private inline fun <T : ContractQueryMsg, reified U : Any> queryContract(query: T): U =
-        pbClient.wasmClient.queryWasm(
-            QueryOuterClass.QuerySmartContractStateRequest.newBuilder().also { req ->
-                req.address = contractAddress
-                req.queryData = query.toJsonByteString(objectMapper)
-            }.build()
-        ).data.toByteArray().let { bytes -> objectMapper.readValue(bytes, U::class.java) }
+        getQueryResponseBytes(query).let { bytes -> objectMapper.readValue(bytes, U::class.java) }
+
+    /**
+     * Allows a type reference to be passed in, ensuring that generic types within response values can be properly
+     * deserialized by Jackson using simple byte input.
+     */
+    private fun <T : ContractQueryMsg, U : Any> queryContractWithReference(
+        query: T,
+        typeReference: TypeReference<U>,
+    ): U = getQueryResponseBytes(query).let { bytes -> objectMapper.readValue(bytes, typeReference) }
 }
