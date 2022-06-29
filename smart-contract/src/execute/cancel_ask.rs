@@ -207,8 +207,8 @@ mod tests {
             response.attributes.len(),
             "the response should have the correct number of attributes",
         );
-        assert_eq!("cancel_ask", single_attribute_for_key(&response, "action"),);
-        assert_eq!("ask_id", single_attribute_for_key(&response, "ask_id"),);
+        assert_eq!("cancel_ask", single_attribute_for_key(response, "action"),);
+        assert_eq!("ask_id", single_attribute_for_key(response, "ask_id"),);
         let response_data_ask_order = if let Some(ref binary) = response.data {
             from_binary::<AskOrder>(binary).expect("response data deserialize correctly")
         } else {
