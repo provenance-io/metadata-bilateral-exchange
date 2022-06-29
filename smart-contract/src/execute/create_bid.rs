@@ -151,6 +151,7 @@ mod tests {
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::mock_instantiate::default_instantiate;
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM};
+    use crate::test::mock_scope::DEFAULT_SCOPE_ID;
     use crate::test::request_helpers::mock_bid_order;
     use crate::types::core::msg::ExecuteMsg;
     use crate::types::request::request_descriptor::AttributeRequirement;
@@ -614,6 +615,106 @@ mod tests {
             deps.as_mut(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
+            Some(RequestDescriptor::new_populated_attributes(
+                "description",
+                AttributeRequirement::all::<String>(&[]),
+            )),
+        )
+        .expect_err("a missing attribute requirement attributes values should produce an error");
+        match err {
+            ContractError::ValidationError { messages } => {
+                assert_eq!(1, messages.len(), "only one error should occur",);
+                assert_eq!(
+                    "BidOrder [bid_id] specified RequiredAttributes, but the value included no attributes to check",
+                    messages.first().unwrap(),
+                    "the correct error message should be produced",
+                );
+            }
+            e => panic!("unexpected error: {:?}", e),
+        };
+    }
+
+    #[test]
+    fn test_create_scope_trade_with_valid_data() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::any(&["attr.pb", "other.pio"]),
+        );
+        let response = create_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(150, "nhash")),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Some(descriptor.clone()),
+        )
+        .expect("expected the scope trade to successfully execute");
+        let bid_order = assert_valid_response(
+            deps.as_ref().storage,
+            &response,
+            RequestType::ScopeTrade,
+            &descriptor,
+        );
+        let collateral = bid_order.collateral.unwrap_scope_trade();
+        assert_eq!(
+            DEFAULT_SCOPE_ID, collateral.scope_address,
+            "the correct scope address should be set in the bid collateral",
+        );
+        assert_eq!(
+            coins(150, "nhash"),
+            collateral.quote,
+            "the correct quote should be set in the bid collateral",
+        );
+    }
+
+    #[test]
+    fn test_scope_trade_with_invalid_data() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        let err = create_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(100, "nhash")),
+            Bid::new_scope_trade("", DEFAULT_SCOPE_ID),
+            None,
+        )
+        .expect_err("an error should occur when the bid id is missing");
+        match err {
+            ContractError::MissingField { field } => {
+                assert_eq!("id", field, "the id field should be missing",);
+            }
+            e => panic!("unexpected error: {:?}", e),
+        }
+        let err = create_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(100, "nhash")),
+            Bid::new_scope_trade("bid_id", ""),
+            None,
+        )
+        .expect_err("an error should occur when the scope address is missing");
+        match err {
+            ContractError::MissingField { field } => {
+                assert_eq!(
+                    "scope_address", field,
+                    "the scope_address field should be missing",
+                );
+            }
+            e => panic!("unexpected error: {:?}", e),
+        };
+        let err = create_bid(
+            deps.as_mut(),
+            mock_info("bidder", &[]),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            None,
+        )
+        .expect_err("an error should occur when no quote funds are provided");
+        assert!(
+            matches!(err, ContractError::InvalidFundsProvided { .. }),
+            "an invalid funds error should be produced when no quote funds are sent for the bid",
+        );
+        let err = create_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(100, "nhash")),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
             Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::all::<String>(&[]),
