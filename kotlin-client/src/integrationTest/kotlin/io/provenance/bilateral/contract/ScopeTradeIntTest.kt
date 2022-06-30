@@ -1,7 +1,5 @@
 package io.provenance.bilateral.contract
 
-import io.provenance.bilateral.execute.CancelAsk
-import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -113,8 +111,7 @@ class ScopeTradeIntTest : ContractIntTest() {
         )
         bilateralClient.createAsk(createAsk, BilateralAccounts.askerAccount)
         bilateralClient.assertAskExists(askUuid.toString())
-        val cancelAsk = CancelAsk.new(askUuid.toString())
-        bilateralClient.cancelAsk(cancelAsk, BilateralAccounts.askerAccount)
+        bilateralClient.cancelAsk(askUuid.toString(), BilateralAccounts.askerAccount)
         val scopeInfo = pbClient.metadataClient.scope(ScopeRequest.newBuilder().setScopeId(scopeUuid.toString()).build())
         assertEquals(
             expected = BilateralAccounts.askerAccount.address(),
@@ -151,8 +148,7 @@ class ScopeTradeIntTest : ContractIntTest() {
             actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
             message = "Expected the bidder's [$bidderDenom] coin to be held in escrow when the bid is created",
         )
-        val cancelBid = CancelBid.new(bidUuid.toString())
-        bilateralClient.cancelBid(cancelBid, BilateralAccounts.bidderAccount)
+        bilateralClient.cancelBid(bidUuid.toString(), BilateralAccounts.bidderAccount)
         bilateralClient.assertBidIsDeleted(bidUuid.toString())
         assertEquals(
             expected = 10000L,

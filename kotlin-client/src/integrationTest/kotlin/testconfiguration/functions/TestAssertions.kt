@@ -48,6 +48,13 @@ fun <T> T?.assertNotNull(message: String = "Expected value to not be null"): T {
     return this
 }
 
+fun <T> T?.assertNull(message: String = "Expected value to be null") {
+    kotlin.test.assertNull(
+        actual = this,
+        message = message,
+    )
+}
+
 fun <T> Collection<T>.assertSingle(message: String = "Expected a single value to exist within the collection"): T {
     val value = this.singleOrNull()
     kotlin.test.assertNotNull(

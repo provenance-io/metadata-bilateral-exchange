@@ -19,6 +19,7 @@ import io.provenance.bilateral.models.BidOrder
 import io.provenance.bilateral.models.ContractInfo
 import io.provenance.bilateral.query.ContractSearchResult
 import io.provenance.bilateral.query.GetAsk
+import io.provenance.bilateral.query.GetAskByCollateralId
 import io.provenance.bilateral.query.GetBid
 import io.provenance.bilateral.query.GetContractInfo
 import io.provenance.bilateral.query.SearchAsks
@@ -55,6 +56,10 @@ class BilateralContractClient private constructor(
 
     fun getAskOrNull(id: String): AskOrder? = tryOrNull { getAsk(id) }
 
+    fun getAskByCollateralId(collateralId: String): AskOrder = queryContract(GetAskByCollateralId.new(collateralId))
+
+    fun getAskByCollateralIdOrNull(collateralId: String): AskOrder? = tryOrNull { getAskByCollateralId(collateralId) }
+
     fun getBid(id: String): BidOrder = queryContract(GetBid.new(id))
 
     fun getBidOrNull(id: String): BidOrder? = tryOrNull { getBid(id) }
@@ -90,16 +95,16 @@ class BilateralContractClient private constructor(
     ): BroadcastTxResponse = executeContract(createBid, signer, options, funds = createBid.getFunds())
 
     fun cancelAsk(
-        cancelAsk: CancelAsk,
+        askId: String,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(cancelAsk, signer, options, funds = emptyList())
+    ): BroadcastTxResponse = executeContract(CancelAsk.new(askId), signer, options, funds = emptyList())
 
     fun cancelBid(
-        cancelBid: CancelBid,
+        bidId: String,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(cancelBid, signer, options, funds = emptyList())
+    ): BroadcastTxResponse = executeContract(CancelBid.new(bidId), signer, options, funds = emptyList())
 
     // IMPORTANT: The Signer used in this function must be the contract's admin account.  This value can be found by
     // running getContractInfo()

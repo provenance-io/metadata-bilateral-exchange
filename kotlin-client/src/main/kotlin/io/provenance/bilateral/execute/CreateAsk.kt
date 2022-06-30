@@ -250,7 +250,15 @@ data class CreateAsk(
     }
 
     @JsonIgnore
-    internal fun getFunds(): List<Coin> = mapAsk(
+    fun getId(): String = mapAsk(
+        coinTrade = { coinTrade -> coinTrade.id },
+        markerTrade = { markerTrade -> markerTrade.id },
+        markerShareSale = { markerShareSale -> markerShareSale.id },
+        scopeTrade = { scopeTrade -> scopeTrade.id },
+    )
+
+    @JsonIgnore
+    fun getFunds(): List<Coin> = mapAsk(
         coinTrade = { coinTrade -> coinTrade.base },
         markerTrade = { emptyList() },
         markerShareSale = { emptyList() },

@@ -1,7 +1,5 @@
 package io.provenance.bilateral.contract
 
-import io.provenance.bilateral.execute.CancelAsk
-import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -307,8 +305,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
                 signer = BilateralAccounts.askerAccount,
             )
         }
-        val cancelAsk = CancelAsk.new(askUuid.toString())
-        bilateralClient.cancelAsk(cancelAsk, BilateralAccounts.askerAccount)
+        bilateralClient.cancelAsk(askUuid.toString(), BilateralAccounts.askerAccount)
         bilateralClient.assertAskIsDeleted(askUuid.toString())
         val afterCancelGrant = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Only a single permission should exist on the marker after cancelling the ask")
         assertEquals(
@@ -346,8 +343,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
             message = "All bidder denom [$bidderDenom] should be held in contract escrow after creating the bid",
         )
-        val cancelBid = CancelBid.new(bidUuid.toString())
-        bilateralClient.cancelBid(cancelBid, BilateralAccounts.bidderAccount)
+        bilateralClient.cancelBid(bidUuid.toString(), BilateralAccounts.bidderAccount)
         bilateralClient.assertBidIsDeleted(bidUuid.toString())
         assertEquals(
             expected = 100L,

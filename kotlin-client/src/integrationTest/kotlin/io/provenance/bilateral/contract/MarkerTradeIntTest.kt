@@ -1,7 +1,5 @@
 package io.provenance.bilateral.contract
 
-import io.provenance.bilateral.execute.CancelAsk
-import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -159,8 +157,7 @@ class MarkerTradeIntTest : ContractIntTest() {
                 .none { accessGrant -> accessGrant.address == BilateralAccounts.askerAccount.address() },
             message = "The contract should remove access for the asker from the marker after receiving it",
         )
-        val cancelAsk = CancelAsk.new(askUuid.toString())
-        bilateralClient.cancelAsk(cancelAsk, BilateralAccounts.askerAccount)
+        bilateralClient.cancelAsk(askUuid.toString(), BilateralAccounts.askerAccount)
         bilateralClient.assertAskIsDeleted(askUuid.toString())
         val grant = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Only a single access control should exist on the marker after cancelling the ask")
         assertEquals(
@@ -196,8 +193,7 @@ class MarkerTradeIntTest : ContractIntTest() {
             actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
             message = "Expected all the required bidder denom [$bidderDenom] to be held in contract escrow",
         )
-        val cancelBid = CancelBid.new(bidUuid.toString())
-        bilateralClient.cancelBid(cancelBid, BilateralAccounts.bidderAccount)
+        bilateralClient.cancelBid(bidUuid.toString(), BilateralAccounts.bidderAccount)
         bilateralClient.assertBidIsDeleted(bidUuid.toString())
         assertEquals(
             expected = 100L,

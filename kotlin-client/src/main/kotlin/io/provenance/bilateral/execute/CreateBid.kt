@@ -232,7 +232,15 @@ data class CreateBid(val createBid: Body) : ContractExecuteMsg {
     }
 
     @JsonIgnore
-    internal fun getFunds(): List<Coin> = mapBid(
+    fun getId(): String = mapBid(
+        coinTrade = { coinTrade -> coinTrade.id },
+        markerTrade = { markerTrade -> markerTrade.id },
+        markerShareSale = { markerShareSale -> markerShareSale.id },
+        scopeTrade = { scopeTrade -> scopeTrade.id },
+    )
+
+    @JsonIgnore
+    fun getFunds(): List<Coin> = mapBid(
         coinTrade = { coinTrade -> coinTrade.quote },
         markerTrade = { markerTrade -> markerTrade.quote },
         markerShareSale = { markerShareSale -> markerShareSale.quote },
