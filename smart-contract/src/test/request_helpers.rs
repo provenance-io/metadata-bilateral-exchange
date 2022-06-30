@@ -29,11 +29,11 @@ pub fn replace_bid_quote(bid_order: &mut BidOrder, quote: &[Coin]) {
     };
 }
 
-pub fn mock_ask(collateral: AskCollateral) -> AskOrder {
+pub fn mock_ask_order(collateral: AskCollateral) -> AskOrder {
     AskOrder::new_unchecked("ask_id", Addr::unchecked("asker"), collateral, None)
 }
 
-pub fn mock_ask_with_descriptor(
+pub fn mock_ask_order_with_descriptor(
     collateral: AskCollateral,
     descriptor: RequestDescriptor,
 ) -> AskOrder {
@@ -107,7 +107,7 @@ pub fn mock_ask_scope_trade<S: Into<String>>(scope_address: S, quote: &[Coin]) -
     AskCollateral::scope_trade(scope_address, quote)
 }
 
-pub fn mock_bid(collateral: BidCollateral) -> BidOrder {
+pub fn mock_bid_order(collateral: BidCollateral) -> BidOrder {
     BidOrder::new_unchecked("bid_id", Addr::unchecked("bidder"), collateral, None)
 }
 

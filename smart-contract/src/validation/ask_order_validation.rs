@@ -240,10 +240,7 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
     if invalid_field_messages.is_empty() {
         ().to_ok()
     } else {
-        ContractError::ValidationError {
-            messages: invalid_field_messages,
-        }
-        .to_err()
+        ContractError::validation_error(&invalid_field_messages).to_err()
     }
 }
 
@@ -251,8 +248,8 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
 #[cfg(feature = "enable-test-utils")]
 mod tests {
     use crate::test::request_helpers::{
-        mock_ask, mock_ask_marker_share_multi, mock_ask_marker_share_single, mock_ask_marker_trade,
-        mock_ask_scope_trade, mock_ask_with_descriptor,
+        mock_ask_marker_share_multi, mock_ask_marker_share_single, mock_ask_marker_trade,
+        mock_ask_order, mock_ask_order_with_descriptor, mock_ask_scope_trade,
     };
     use crate::types::core::error::ContractError;
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
@@ -296,7 +293,7 @@ mod tests {
     fn test_attribute_requirement_provided_with_empty_attributes_list() {
         assert_validation_failure(
             "ask order provided an empty attributes list for RequiredAttributes",
-            &mock_ask_with_descriptor(
+            &mock_ask_order_with_descriptor(
                 AskCollateral::coin_trade(&[], &[]),
                 RequestDescriptor::new_populated_attributes(
                     "hello",
@@ -346,7 +343,7 @@ mod tests {
     fn test_coin_trade_empty_base() {
         assert_validation_failure(
             "ask order is missing coin trade base funds",
-            &mock_ask(AskCollateral::coin_trade(&[], &coins(100, "nhash"))),
+            &mock_ask_order(AskCollateral::coin_trade(&[], &coins(100, "nhash"))),
             coin_trade_error("must include base funds"),
         );
     }
@@ -355,12 +352,12 @@ mod tests {
     fn test_coin_trade_base_funds_include_invalid_coins() {
         assert_validation_failure(
             "ask order includes base coin with zero amount",
-            &mock_ask(AskCollateral::coin_trade(&coins(0, "nhash"), &[])),
+            &mock_ask_order(AskCollateral::coin_trade(&coins(0, "nhash"), &[])),
             zero_coin_error("nhash", "AskCollateral Base Coin"),
         );
         assert_validation_failure(
             "ask order includes base coin with invalid denom",
-            &mock_ask(AskCollateral::coin_trade(&coins(100, ""), &[])),
+            &mock_ask_order(AskCollateral::coin_trade(&coins(100, ""), &[])),
             blank_denom_error(100, "AskCollateral Base Coin"),
         );
     }
@@ -369,7 +366,7 @@ mod tests {
     fn test_coin_trade_empty_quote() {
         assert_validation_failure(
             "ask order is missing coin trade quote funds",
-            &mock_ask(AskCollateral::coin_trade(&coins(100, "nhash"), &[])),
+            &mock_ask_order(AskCollateral::coin_trade(&coins(100, "nhash"), &[])),
             coin_trade_error("must include quote funds"),
         );
     }
@@ -378,12 +375,12 @@ mod tests {
     fn test_coin_trade_quote_funds_include_invalid_coins() {
         assert_validation_failure(
             "ask order includes quote coin with zero amount",
-            &mock_ask(AskCollateral::coin_trade(&[], &coins(0, "nhash"))),
+            &mock_ask_order(AskCollateral::coin_trade(&[], &coins(0, "nhash"))),
             zero_coin_error("nhash", "AskCollateral Quote Coin"),
         );
         assert_validation_failure(
             "ask order includes base coin with invalid denom",
-            &mock_ask(AskCollateral::coin_trade(&[], &coins(100, ""))),
+            &mock_ask_order(AskCollateral::coin_trade(&[], &coins(100, ""))),
             blank_denom_error(100, "AskCollateral Quote Coin"),
         );
     }
@@ -392,7 +389,7 @@ mod tests {
     fn test_marker_trade_empty_marker_address() {
         assert_validation_failure(
             "ask order does not include a valid marker address",
-            &mock_ask(mock_ask_marker_trade(
+            &mock_ask_order(mock_ask_marker_trade(
                 "",
                 "denom",
                 100,
@@ -406,7 +403,7 @@ mod tests {
     fn test_marker_trade_empty_marker_denom() {
         assert_validation_failure(
             "ask order does not include a valid marker denom",
-            &mock_ask(mock_ask_marker_trade(
+            &mock_ask_order(mock_ask_marker_trade(
                 "marker_addr",
                 "",
                 100,
@@ -420,7 +417,7 @@ mod tests {
     fn test_marker_trade_zero_share_count() {
         assert_validation_failure(
             "ask order specifies that the marker has zero of its own coin in holdings",
-            &mock_ask(mock_ask_marker_trade(
+            &mock_ask_order(mock_ask_marker_trade(
                 "marker_addr",
                 "denom",
                 0,
@@ -434,7 +431,7 @@ mod tests {
     fn test_marker_trade_empty_quote() {
         assert_validation_failure(
             "ask order did not specify a quote per share for its marker",
-            &mock_ask(mock_ask_marker_trade("marker_addr", "denom", 100, &[])),
+            &mock_ask_order(mock_ask_marker_trade("marker_addr", "denom", 100, &[])),
             marker_trade_error("must have a quote per share"),
         );
     }
@@ -443,7 +440,7 @@ mod tests {
     fn test_marker_trade_quote_funds_include_invalid_coins() {
         assert_validation_failure(
             "ask order includes quote coin with zero amount",
-            &mock_ask(mock_ask_marker_trade(
+            &mock_ask_order(mock_ask_marker_trade(
                 "marker_addr",
                 "denom",
                 100,
@@ -453,7 +450,7 @@ mod tests {
         );
         assert_validation_failure(
             "ask order includes quote coin with invalid denom",
-            &mock_ask(mock_ask_marker_trade(
+            &mock_ask_order(mock_ask_marker_trade(
                 "marker_addr",
                 "denom",
                 100,
@@ -467,7 +464,7 @@ mod tests {
     fn test_marker_trade_removed_permissions_do_not_include_owner_address() {
         assert_validation_failure(
             "ask order does not specify that it removed the owner's permissions",
-            &mock_ask(AskCollateral::marker_trade(
+            &mock_ask_order(AskCollateral::marker_trade(
                 Addr::unchecked("marker_address"),
                 "denom",
                 100,
@@ -485,7 +482,7 @@ mod tests {
     fn test_marker_share_sale_invalid_marker_address() {
         assert_validation_failure(
             "ask order does not include a valid marker address",
-            &mock_ask(mock_ask_marker_share_single("", "denom", 10, &[], 10)),
+            &mock_ask_order(mock_ask_marker_share_single("", "denom", 10, &[], 10)),
             marker_share_sale_error("must have a valid marker address"),
         );
     }
@@ -494,7 +491,7 @@ mod tests {
     fn test_marker_share_sale_invalid_marker_denom() {
         assert_validation_failure(
             "ask order does not include a valid marker denom",
-            &mock_ask(mock_ask_marker_share_single("marker", "", 10, &[], 10)),
+            &mock_ask_order(mock_ask_marker_share_single("marker", "", 10, &[], 10)),
             marker_share_sale_error("must have a specified denom"),
         );
     }
@@ -503,7 +500,7 @@ mod tests {
     fn test_marker_share_sale_zero_remaining_shares() {
         assert_validation_failure(
             "ask order indicates that referenced marker has no remaining held shares",
-            &mock_ask(mock_ask_marker_share_single("marker", "denom", 0, &[], 10)),
+            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 0, &[], 10)),
             marker_share_sale_error("must refer to a marker with at least one of its coins held"),
         );
     }
@@ -512,7 +509,7 @@ mod tests {
     fn test_marker_share_sale_empty_quote_per_share() {
         assert_validation_failure(
             "ask order includes an empty quote per share",
-            &mock_ask(mock_ask_marker_share_single("marker", "denom", 10, &[], 10)),
+            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 10, &[], 10)),
             marker_share_sale_error("must have a quote per share"),
         );
     }
@@ -521,7 +518,7 @@ mod tests {
     fn test_marker_share_sale_quote_per_share_includes_invalid_coins() {
         assert_validation_failure(
             "ask order includes quote per share with zero amount in coin",
-            &mock_ask(mock_ask_marker_share_single(
+            &mock_ask_order(mock_ask_marker_share_single(
                 "marker",
                 "denom",
                 10,
@@ -532,7 +529,7 @@ mod tests {
         );
         assert_validation_failure(
             "ask order includes quote per share with invalid denom in coin",
-            &mock_ask(mock_ask_marker_share_single(
+            &mock_ask_order(mock_ask_marker_share_single(
                 "marker",
                 "denom",
                 10,
@@ -547,7 +544,7 @@ mod tests {
     fn test_marker_share_sale_removed_permissions_do_not_include_owner_address() {
         assert_validation_failure(
             "ask order does not specify that it removed the owner's permissions",
-            &mock_ask(AskCollateral::marker_share_sale(
+            &mock_ask_order(AskCollateral::marker_share_sale(
                 Addr::unchecked("marker_address"),
                 "denom",
                 100,
@@ -566,7 +563,7 @@ mod tests {
     fn test_marker_share_sale_single_tx_share_count_is_zero() {
         assert_validation_failure(
             "ask order specifies a single transaction sale but it wants to sell zero shares",
-            &mock_ask(mock_ask_marker_share_single("marker", "denom", 100, &[], 0)),
+            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 100, &[], 0)),
             marker_share_sale_error(
                 "specified share count for single transaction must be greater than zero",
             ),
@@ -577,7 +574,7 @@ mod tests {
     fn test_marker_share_sale_single_tx_share_count_greater_than_remaining_shares() {
         assert_validation_failure(
             "ask order specifies a single transaction that wants to sell more shares than the marker has",
-            &mock_ask(mock_ask_marker_share_single("marker", "denom", 100, &[], 101)),
+            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 100, &[], 101)),
             marker_share_sale_error("specified share count [101] cannot be greater than marker remaining shares [100]"),
         );
     }
@@ -586,7 +583,7 @@ mod tests {
     fn test_marker_share_sale_multi_tx_threshold_greater_than_remaining_shares() {
         assert_validation_failure(
             "ask order specifies a multiple transaction with a removal threshold greater than remaining shares",
-            &mock_ask(mock_ask_marker_share_multi("marker", "denom", 100, &[], Some(101))),
+            &mock_ask_order(mock_ask_marker_share_multi("marker", "denom", 100, &[], Some(101))),
             marker_share_sale_error("specified ask removal threshold [101] cannot be greater than marker remaining shares [100]"),
         );
     }
@@ -595,7 +592,7 @@ mod tests {
     fn test_scope_trade_missing_scope_address() {
         assert_validation_failure(
             "ask order does not include a valid scope address",
-            &mock_ask(mock_ask_scope_trade("", &coins(100, "nhash"))),
+            &mock_ask_order(mock_ask_scope_trade("", &coins(100, "nhash"))),
             scope_trade_error("must have a valid scope address"),
         );
     }
@@ -604,7 +601,7 @@ mod tests {
     fn test_scope_trade_empty_quote() {
         assert_validation_failure(
             "ask order does not include any quote coins",
-            &mock_ask(mock_ask_scope_trade("scope", &[])),
+            &mock_ask_order(mock_ask_scope_trade("scope", &[])),
             scope_trade_error("must have a valid quote specified"),
         );
     }
@@ -613,12 +610,12 @@ mod tests {
     fn test_scope_trade_quote_includes_invalid_coins() {
         assert_validation_failure(
             "ask order includes quote with zero amount in coin",
-            &mock_ask(mock_ask_scope_trade("scope", &coins(0, "nhash"))),
+            &mock_ask_order(mock_ask_scope_trade("scope", &coins(0, "nhash"))),
             zero_coin_error("nhash", "AskCollateral Quote"),
         );
         assert_validation_failure(
             "ask order includes quote with invalid denom in coin",
-            &mock_ask(mock_ask_scope_trade("scope", &coins(100, ""))),
+            &mock_ask_order(mock_ask_scope_trade("scope", &coins(100, ""))),
             blank_denom_error(100, "AskCollateral Quote"),
         );
     }

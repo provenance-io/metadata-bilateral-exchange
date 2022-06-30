@@ -1,4 +1,6 @@
+use crate::types::core::error::ContractError;
 use crate::types::request::share_sale_type::ShareSaleType;
+use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{Addr, Coin, Uint128};
 use provwasm_std::AccessGrant;
 use schemars::JsonSchema;
@@ -53,6 +55,34 @@ impl AskCollateral {
 
     pub fn scope_trade<S: Into<String>>(scope_address: S, quote: &[Coin]) -> Self {
         Self::ScopeTrade(ScopeTradeAskCollateral::new(scope_address, quote))
+    }
+
+    pub fn get_coin_trade(&self) -> Result<&CoinTradeAskCollateral, ContractError> {
+        match self {
+            AskCollateral::CoinTrade(collateral) => collateral.to_ok(),
+            _ => ContractError::invalid_type("expected coin trade ask collateral").to_err(),
+        }
+    }
+
+    pub fn get_marker_trade(&self) -> Result<&MarkerTradeAskCollateral, ContractError> {
+        match self {
+            AskCollateral::MarkerTrade(collateral) => collateral.to_ok(),
+            _ => ContractError::invalid_type("expected marker trade ask collateral").to_err(),
+        }
+    }
+
+    pub fn get_marker_share_sale(&self) -> Result<&MarkerShareSaleAskCollateral, ContractError> {
+        match self {
+            AskCollateral::MarkerShareSale(collateral) => collateral.to_ok(),
+            _ => ContractError::invalid_type("expected marker share sale ask collateral").to_err(),
+        }
+    }
+
+    pub fn get_scope_trade(&self) -> Result<&ScopeTradeAskCollateral, ContractError> {
+        match self {
+            AskCollateral::ScopeTrade(collateral) => collateral.to_ok(),
+            _ => ContractError::invalid_type("expected scope trade ask collateral").to_err(),
+        }
     }
 }
 

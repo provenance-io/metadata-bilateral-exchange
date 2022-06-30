@@ -29,10 +29,7 @@ pub fn validate_match(
     if validation_messages.is_empty() {
         ().to_ok()
     } else {
-        ContractError::ValidationError {
-            messages: validation_messages,
-        }
-        .to_err()
+        ContractError::validation_error(&validation_messages).to_err()
     }
 }
 
@@ -467,10 +464,10 @@ fn coin_sorter(first: &Coin, second: &Coin) -> Ordering {
 mod tests {
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_ADDRESS};
     use crate::test::request_helpers::{
-        mock_ask, mock_ask_marker_share_multi, mock_ask_marker_share_single, mock_ask_marker_trade,
-        mock_ask_scope_trade, mock_ask_with_descriptor, mock_bid, mock_bid_marker_share,
-        mock_bid_marker_trade, mock_bid_scope_trade, mock_bid_with_descriptor, replace_ask_quote,
-        replace_bid_quote,
+        mock_ask_marker_share_multi, mock_ask_marker_share_single, mock_ask_marker_trade,
+        mock_ask_order, mock_ask_order_with_descriptor, mock_ask_scope_trade,
+        mock_bid_marker_share, mock_bid_marker_trade, mock_bid_order, mock_bid_scope_trade,
+        mock_bid_with_descriptor, replace_ask_quote, replace_bid_quote,
     };
     use crate::types::core::error::ContractError;
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
@@ -825,7 +822,7 @@ mod tests {
         assert_validation_failure(
             "Ask order is required to have an attribute but it has no attributes",
             &deps.as_mut(),
-            &mock_ask(AskCollateral::coin_trade(&[], &[])),
+            &mock_ask_order(AskCollateral::coin_trade(&[], &[])),
             &mock_bid_with_descriptor(
                 BidCollateral::coin_trade(&[], &[]),
                 RequestDescriptor::new_populated_attributes("description", AttributeRequirement::all(&["myattribute.pb"])),
@@ -840,11 +837,11 @@ mod tests {
         assert_validation_failure(
             "Bid order is required to have an attribute but it has no attributes",
             &deps.as_mut(),
-            &mock_ask_with_descriptor(
+            &mock_ask_order_with_descriptor(
                 AskCollateral::coin_trade(&[], &[]),
                 RequestDescriptor::new_populated_attributes("description", AttributeRequirement::all(&["attr.pb"])),
             ),
-            &mock_bid(BidCollateral::coin_trade(&[], &[])),
+            &mock_bid_order(BidCollateral::coin_trade(&[], &[])),
             "the [bidder account] is required to have all of the following attributes: [\"attr.pb\"]",
         );
     }
@@ -1038,8 +1035,8 @@ mod tests {
         assert_validation_failure(
             "Ask collateral coin_trade and bid collateral marker_trade mismatch",
             &deps.as_mut(),
-            &mock_ask(AskCollateral::coin_trade(&[], &[])),
-            &mock_bid(mock_bid_marker_trade("marker", "somecoin", &[])),
+            &mock_ask_order(AskCollateral::coin_trade(&[], &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker", "somecoin", &[])),
             expected_error(
                 "Ask collateral was of type coin trade, which did not match bid collateral",
             ),
@@ -1047,8 +1044,8 @@ mod tests {
         assert_validation_failure(
             "Ask collateral marker_trade and bid collateral coin_trade mismatch",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_trade("marker", "somecoin", 400, &[])),
-            &mock_bid(BidCollateral::coin_trade(&[], &[])),
+            &mock_ask_order(mock_ask_marker_trade("marker", "somecoin", 400, &[])),
+            &mock_bid_order(BidCollateral::coin_trade(&[], &[])),
             expected_error(
                 "Ask collateral was of type marker trade, which did not match bid collateral",
             ),
@@ -1058,8 +1055,8 @@ mod tests {
     #[test]
     fn test_mismatched_coin_trade_bases() {
         let mut deps = mock_dependencies(&[]);
-        let mut ask_order = mock_ask(AskCollateral::coin_trade(&coins(150, "nhash"), &[]));
-        let mut bid_order = mock_bid(BidCollateral::coin_trade(&coins(100, "nhash"), &[]));
+        let mut ask_order = mock_ask_order(AskCollateral::coin_trade(&coins(150, "nhash"), &[]));
+        let mut bid_order = mock_bid_order(BidCollateral::coin_trade(&coins(100, "nhash"), &[]));
         assert_validation_failure(
             "Ask base denoms match but amounts do not match",
             &deps.as_mut(),
@@ -1099,8 +1096,8 @@ mod tests {
     #[test]
     fn test_mismatched_coin_trade_quotes() {
         let mut deps = mock_dependencies(&[]);
-        let mut ask_order = mock_ask(AskCollateral::coin_trade(&[], &coins(1, "nhash")));
-        let mut bid_order = mock_bid(BidCollateral::coin_trade(&[], &coins(2, "nhash")));
+        let mut ask_order = mock_ask_order(AskCollateral::coin_trade(&[], &coins(1, "nhash")));
+        let mut bid_order = mock_bid_order(BidCollateral::coin_trade(&[], &coins(2, "nhash")));
         assert_validation_failure(
             "Ask quote denoms match but amounts do not match",
             &deps.as_mut(),
@@ -1145,8 +1142,8 @@ mod tests {
         assert_validation_failure(
             "Ask marker denom does not match bid marker denom",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_trade("marker", "firstmarkerdenom", 10, &[])),
-            &mock_bid(mock_bid_marker_trade("marker", "secondmarkerdenom", &[])),
+            &mock_ask_order(mock_ask_marker_trade("marker", "firstmarkerdenom", 10, &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker", "secondmarkerdenom", &[])),
             marker_trade_error("Ask marker denom [firstmarkerdenom] does not match bid marker denom [secondmarkerdenom]"),
         );
     }
@@ -1157,8 +1154,8 @@ mod tests {
         assert_validation_failure(
             "Ask marker address does not match bid marker address",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_trade("marker1", "test", 10, &[])),
-            &mock_bid(mock_bid_marker_trade("marker2", "test", &[])),
+            &mock_ask_order(mock_ask_marker_trade("marker1", "test", 10, &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker2", "test", &[])),
             marker_trade_error(
                 "Ask marker address [marker1] does not match bid marker address [marker2]",
             ),
@@ -1171,8 +1168,8 @@ mod tests {
         assert_validation_failure(
             "No marker was mocked for target marker address",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_trade("marker", "test", 10, &[])),
-            &mock_bid(mock_bid_marker_trade("marker", "test", &[])),
+            &mock_ask_order(mock_ask_marker_trade("marker", "test", 10, &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker", "test", &[])),
             marker_trade_error("Failed to find marker for denom [test]"),
         );
     }
@@ -1187,8 +1184,8 @@ mod tests {
         }
         .to_marker();
         deps.querier.with_markers(vec![marker.clone()]);
-        let ask = mock_ask(mock_ask_marker_trade("marker", "targetcoin", 10, &[]));
-        let bid = mock_bid(mock_bid_marker_trade("marker", "targetcoin", &[]));
+        let ask = mock_ask_order(mock_ask_marker_trade("marker", "targetcoin", 10, &[]));
+        let bid = mock_bid_order(mock_bid_marker_trade("marker", "targetcoin", &[]));
         assert_validation_failure(
             "Marker contained none of its own denom",
             &deps.as_mut(),
@@ -1229,8 +1226,8 @@ mod tests {
         assert_validation_failure(
             "Marker contained a coin count that did not match the value recorded when the ask was made",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_trade("marker", "targetcoin", 49, &[])),
-            &mock_bid(mock_bid_marker_trade("marker", "targetcoin", &[])),
+            &mock_ask_order(mock_ask_marker_trade("marker", "targetcoin", 49, &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker", "targetcoin", &[])),
             marker_trade_error("Marker share count was [50] but the original value when added to the contract was [49]"),
         );
     }
@@ -1248,13 +1245,13 @@ mod tests {
         assert_validation_failure(
             "Marker bid had a bad value to match the calculated marker quote",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_trade(
+            &mock_ask_order(mock_ask_marker_trade(
                 "marker",
                 "targetcoin",
                 10,
                 &coins(50, "nhash"),
             )),
-            &mock_bid(mock_bid_marker_trade(
+            &mock_bid_order(mock_bid_marker_trade(
                 "marker",
                 "targetcoin",
                 &coins(200, "nhash"),
@@ -1269,14 +1266,14 @@ mod tests {
         assert_validation_failure(
             "Marker ask and bid collaterals refer to different marker denoms",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_share_single(
+            &mock_ask_order(mock_ask_marker_share_single(
                 "marker",
                 "denom1",
                 10,
                 &[],
                 10,
             )),
-            &mock_bid(mock_bid_marker_share("marker", "denom2", 10, &[])),
+            &mock_bid_order(mock_bid_marker_share("marker", "denom2", 10, &[])),
             marker_share_sale_error(
                 "Ask marker denom [denom1] does not match bid marker denom [denom2]",
             ),
@@ -1289,14 +1286,14 @@ mod tests {
         assert_validation_failure(
             "Marker ask and bid addresses refer to different markers",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_share_single(
+            &mock_ask_order(mock_ask_marker_share_single(
                 "marker1",
                 "denom",
                 10,
                 &[],
                 10,
             )),
-            &mock_bid(mock_bid_marker_share("marker2", "denom", 10, &[])),
+            &mock_bid_order(mock_bid_marker_share("marker2", "denom", 10, &[])),
             marker_share_sale_error(
                 "Ask marker address [marker1] does not match bid marker address [marker2]",
             ),
@@ -1309,8 +1306,8 @@ mod tests {
         assert_validation_failure(
             "Marker ask requires 10 shares to be purchased, but bidder wants 5",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_share_single("marker", "denom", 10, &[], 10)),
-            &mock_bid(mock_bid_marker_share("marker", "denom", 5, &[])),
+            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 10, &[], 10)),
+            &mock_bid_order(mock_bid_marker_share("marker", "denom", 5, &[])),
             marker_share_sale_error(
                 "Ask requested that [10] shares be purchased, but bid wanted [5]",
             ),
@@ -1323,14 +1320,14 @@ mod tests {
         assert_validation_failure(
             "Marker bid attempts to purchase more shares than the marker has",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_share_multi(
+            &mock_ask_order(mock_ask_marker_share_multi(
                 "marker",
                 "denom",
                 10,
                 &[],
                 None,
             )),
-            &mock_bid(mock_bid_marker_share("marker", "denom", 11, &[])),
+            &mock_bid_order(mock_bid_marker_share("marker", "denom", 11, &[])),
             marker_share_sale_error(
                 "Bid requested [11] shares but the remaining share count is [10]",
             ),
@@ -1343,14 +1340,14 @@ mod tests {
         assert_validation_failure(
             "Marker bid attempts to purchase more shares than the share threshold allows",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_share_multi(
+            &mock_ask_order(mock_ask_marker_share_multi(
                 "marker",
                 "denom",
                 10,
                 &[],
                 Some(5),
             )),
-            &mock_bid(mock_bid_marker_share("marker", "denom", 6, &[])),
+            &mock_bid_order(mock_bid_marker_share("marker", "denom", 6, &[])),
             marker_share_sale_error(
                 "Bid requested [6] shares, which would reduce the remaining share count to [4], which is lower than the specified threshold of [5] shares",
             ),
@@ -1363,8 +1360,8 @@ mod tests {
         assert_validation_failure(
             "Marker for ask and bid does not appear to exist",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_share_single("marker", "denom", 10, &[], 10)),
-            &mock_bid(mock_bid_marker_share("marker", "denom", 10, &[])),
+            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 10, &[], 10)),
+            &mock_bid_order(mock_bid_marker_share("marker", "denom", 10, &[])),
             marker_share_sale_error("Failed to find marker for denom [denom]"),
         );
     }
@@ -1383,8 +1380,8 @@ mod tests {
         assert_validation_failure(
             "Marker on chain does not match share count in ask - this would be a security bug if we ever see it",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_share_single("marker", "fakecoin", 15, &[], 15)),
-            &mock_bid(mock_bid_marker_share("marker", "fakecoin", 15, &[])),
+            &mock_ask_order(mock_ask_marker_share_single("marker", "fakecoin", 15, &[], 15)),
+            &mock_bid_order(mock_bid_marker_share("marker", "fakecoin", 15, &[])),
             marker_share_sale_error("Marker had [10] shares remaining, which does not match the recorded amount of [15]"),
         );
     }
@@ -1403,8 +1400,8 @@ mod tests {
         assert_validation_failure(
             "Marker on chain does not hold any of its own denom anymore somehow - this would be a security bug if we ever see it",
             &deps.as_mut(),
-            &mock_ask(mock_ask_marker_share_single("marker", "fakecoin", 10, &[], 10)),
-            &mock_bid(mock_bid_marker_share("marker", "fakecoin", 10, &[])),
+            &mock_ask_order(mock_ask_marker_share_single("marker", "fakecoin", 10, &[], 10)),
+            &mock_bid_order(mock_bid_marker_share("marker", "fakecoin", 10, &[])),
             marker_share_sale_error("Marker had invalid coin holdings for match: [10lessfakecoin]. Expected a single instance of coin [fakecoin]"),
         );
     }
@@ -1420,14 +1417,14 @@ mod tests {
         }
         .to_marker();
         deps.querier.with_markers(vec![marker]);
-        let mut ask_order = mock_ask(mock_ask_marker_share_single(
+        let mut ask_order = mock_ask_order(mock_ask_marker_share_single(
             "marker",
             "fakecoin",
             10,
             &coins(100, "nhash"),
             10,
         ));
-        let mut bid_order = mock_bid(mock_bid_marker_share(
+        let mut bid_order = mock_bid_order(mock_bid_marker_share(
             "marker",
             "fakecoin",
             10,
@@ -1457,8 +1454,8 @@ mod tests {
         assert_validation_failure(
             "Ask scope address does not match bid scope address",
             &deps.as_mut(),
-            &mock_ask(mock_ask_scope_trade("scope1", &[])),
-            &mock_bid(mock_bid_scope_trade("scope2", &[])),
+            &mock_ask_order(mock_ask_scope_trade("scope1", &[])),
+            &mock_bid_order(mock_bid_scope_trade("scope2", &[])),
             scope_trade_error(
                 "Ask scope address [scope1] does not match bid scope address [scope2]",
             ),
@@ -1468,8 +1465,8 @@ mod tests {
     #[test]
     fn test_scope_trade_quote_mismatch() {
         let mut deps = mock_dependencies(&[]);
-        let mut ask_order = mock_ask(mock_ask_scope_trade("scope", &coins(100, "nhash")));
-        let mut bid_order = mock_bid(mock_bid_scope_trade("scope", &coins(99, "nhash")));
+        let mut ask_order = mock_ask_order(mock_ask_scope_trade("scope", &coins(100, "nhash")));
+        let mut bid_order = mock_bid_order(mock_bid_scope_trade("scope", &coins(99, "nhash")));
         assert_validation_failure(
             "Ask wants 100nhash but bid offers 99nhash",
             &deps.as_mut(),

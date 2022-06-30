@@ -52,19 +52,12 @@ impl MockMarker {
         Self::default().to_marker()
     }
 
-    pub fn new_owned_marker<S: Into<String>>(owner_address: S) -> Marker {
+    pub fn new_owned_mock_marker<S: Into<String>>(owner_address: S) -> Self {
         Self {
             permissions: vec![
                 AccessGrant {
                     address: Addr::unchecked(owner_address),
-                    permissions: vec![
-                        MarkerAccess::Admin,
-                        MarkerAccess::Burn,
-                        MarkerAccess::Delete,
-                        MarkerAccess::Deposit,
-                        MarkerAccess::Mint,
-                        MarkerAccess::Withdraw,
-                    ],
+                    permissions: Self::get_default_owner_permissions(),
                 },
                 AccessGrant {
                     address: Addr::unchecked("cosmos2contract"),
@@ -73,7 +66,10 @@ impl MockMarker {
             ],
             ..Self::default()
         }
-        .to_marker()
+    }
+
+    pub fn new_owned_marker<S: Into<String>>(owner_address: S) -> Marker {
+        Self::new_owned_mock_marker(owner_address).to_marker()
     }
 
     pub fn to_marker(self) -> Marker {
@@ -90,5 +86,16 @@ impl MockMarker {
             marker_type: self.marker_type,
             supply_fixed: self.supply_fixed,
         }
+    }
+
+    pub fn get_default_owner_permissions() -> Vec<MarkerAccess> {
+        vec![
+            MarkerAccess::Admin,
+            MarkerAccess::Burn,
+            MarkerAccess::Delete,
+            MarkerAccess::Deposit,
+            MarkerAccess::Mint,
+            MarkerAccess::Withdraw,
+        ]
     }
 }

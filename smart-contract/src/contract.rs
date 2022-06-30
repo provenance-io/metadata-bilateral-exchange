@@ -38,7 +38,7 @@ pub fn execute(
         ExecuteMsg::CreateAsk { ask, descriptor } => create_ask(deps, env, info, ask, descriptor),
         ExecuteMsg::CreateBid { bid, descriptor } => create_bid(deps, info, bid, descriptor),
         ExecuteMsg::CancelAsk { id } => cancel_ask(deps, env, info, id),
-        ExecuteMsg::CancelBid { id } => cancel_bid(deps, env, info, id),
+        ExecuteMsg::CancelBid { id } => cancel_bid(deps, info, id),
         ExecuteMsg::ExecuteMatch { ask_id, bid_id } => {
             execute_match(deps, env, info, ask_id, bid_id)
         }

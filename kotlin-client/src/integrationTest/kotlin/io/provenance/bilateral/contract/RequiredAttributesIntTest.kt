@@ -4,6 +4,8 @@ import cosmos.base.v1beta1.CoinOuterClass.Coin
 import cosmos.tx.v1beta1.ServiceOuterClass
 import io.provenance.attribute.v1.AttributeType
 import io.provenance.attribute.v1.MsgAddAttributeRequest
+import io.provenance.bilateral.execute.CancelAsk
+import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -194,6 +196,10 @@ class RequiredAttributesIntTest : ContractIntTest() {
         }
         bilateralClient.assertAskExists(secondAskUuid.toString(), "Expected the ask to exist because a match was never made")
         bilateralClient.assertBidExists(secondBidUuid.toString(), "Expected the bid to exist because a match was never made")
+        bilateralClient.cancelAsk(CancelAsk.new(secondAskUuid.toString()), BilateralAccounts.askerAccount)
+        bilateralClient.assertAskIsDeleted(secondAskUuid.toString())
+        bilateralClient.cancelBid(CancelBid.new(secondBidUuid.toString()), BilateralAccounts.bidderAccount)
+        bilateralClient.assertBidIsDeleted(secondBidUuid.toString())
     }
 
     private fun addDummyAttributesToAddress(

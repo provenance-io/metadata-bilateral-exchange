@@ -12,14 +12,10 @@ pub fn instantiate_contract(
     msg: InstantiateMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     if msg.bind_name.is_empty() {
-        return Err(ContractError::MissingField {
-            field: "bind_name".into(),
-        });
+        return ContractError::missing_field("bind_name").to_err();
     }
     if msg.contract_name.is_empty() {
-        return Err(ContractError::MissingField {
-            field: "contract_name".into(),
-        });
+        return ContractError::missing_field("contract_name").to_err();
     }
 
     // set contract info
