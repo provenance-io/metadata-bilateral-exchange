@@ -6,6 +6,7 @@ use crate::execute::execute_match::execute_match;
 use crate::instantiate::instantiate_contract::instantiate_contract;
 use crate::migrate::migrate_contract::migrate_contract;
 use crate::query::get_ask::query_ask;
+use crate::query::get_ask_by_collateral_id::query_ask_by_collateral_id;
 use crate::query::get_bid::query_bid;
 use crate::query::get_contract_info::query_contract_info;
 use crate::query::search_asks::search_asks;
@@ -54,6 +55,9 @@ pub fn query(
 ) -> Result<Binary, ContractError> {
     match msg {
         QueryMsg::GetAsk { id } => query_ask(deps, id),
+        QueryMsg::GetAskByCollateralId { collateral_id } => {
+            query_ask_by_collateral_id(deps, collateral_id)
+        }
         QueryMsg::GetBid { id } => query_bid(deps, id),
         QueryMsg::GetContractInfo {} => query_contract_info(deps),
         QueryMsg::SearchAsks { search } => search_asks(deps, search),
