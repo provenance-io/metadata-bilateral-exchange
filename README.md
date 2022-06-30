@@ -8,7 +8,7 @@ interaction with it from a Kotlin application.  This project is based on the [Bi
 The Metadata Bilateral Exchange smart contract is written in Rust, leveraging the [Cosmwasm SDK](https://crates.io/crates/cosmwasm-std)
 and [Provwasm SDK](https://crates.io/crates/provwasm-std) to produce a WASM file compatible with the [Provenance Blockchain](https://github.com/provenance-io/provenance).
 This contract is designed to allow the bilateral exchange of [Provenance Blockchain Metadata Module](https://docs.provenance.io/modules/metadata-module) 
-and [Provenance Blockchain Marker Module](https://docs.provenance.io/modules/marker-module) goods for [coin](https://docs.provenance.io/blockchain/basics/stablecoin.
+and [Provenance Blockchain Marker Module](https://docs.provenance.io/modules/marker-module) goods for [coin](https://docs.provenance.io/blockchain/basics/stablecoin).
 
 ## [Kotlin Client](./kotlin-client)
 
