@@ -9,9 +9,32 @@ Provenance Blockchain instance of the [Metadata Bilateral Exchange smart contrac
 [![Maven Central][maven-badge]][maven-url]
 [![Apache 2.0 License][license-badge]][license-url]
 
+[maven-badge]: https://maven-badges.herokuapp.com/maven-central/io.provenance.bilateral/bilateral-client/badge.svg
+[maven-url]: https://maven-badges.herokuapp.com/maven-central/io.provenance.bilateral/bilateral-client
+[release-badge]: https://img.shields.io/github/tag/provenance-io/metadata-bilateral-exchange.svg
+[release-latest]: https://github.com/provenance-io/metadata-bilateral-exchange/releases/latest
 [license-badge]: https://img.shields.io/github/license/provenance-io/metadata-bilateral-exchange.svg
 [license-url]: https://github.com/provenance-io/metadata-bilateral-exchange/blob/main/LICENSE
-[maven-badge]: https://maven-badges.herokuapp.com/maven-central/io.provenance.classification.asset/ac-client/badge.svg
-[maven-url]: https://maven-badges.herokuapp.com/maven-central/io.provenance.classification.asset/ac-client
-[release-badge]: https://img.shields.io/github/tag/provenance-io/asset-classification-libs.svg
-[release-latest]: https://github.com/provenance-io/asset-classification-libs/releases/latest
+
+## Usage
+The `BilateralContractClient` includes functions that allow communication with an instance of the Metadata Bilateral
+Exchange smart contract.  It parallels all functionality, and it exposes data classes that translate to the request
+JSON required by the contract.
+
+Creating a new instance of the client:
+```kotlin
+import io.provenance.bilateral.client.BilateralContractClient
+import io.provenance.bilateral.util.ContractAddressResolver
+import io.provenance.client.grpc.GasEstimationMethod
+import io.provenance.client.grpc.PbClient
+import java.net.URI
+
+fun makeClient(): BilateralContractClient = BilateralContractClient.new(
+    pbClient = PbClient(
+        chainId = "chain-local",
+        channelUri = URI.create("http://localhost:9090"),
+        gasEstimationMethod = GasEstimationMethod.MSG_FEE_CALCULATION
+    ),
+    addressResolver = ContractAddressResolver.FromName("mycontractname.pb"),
+)
+```

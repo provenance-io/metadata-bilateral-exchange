@@ -1,7 +1,5 @@
 package io.provenance.bilateral.contract
 
-import io.provenance.bilateral.execute.CancelAsk
-import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -148,7 +146,7 @@ class CoinTradeIntTest : ContractIntTest() {
             message = "The base should be withdrawn from the asker's account",
         )
         bilateralClient.cancelAsk(
-            cancelAsk = CancelAsk.new(askUuid.toString()),
+            askId = askUuid.toString(),
             signer = BilateralAccounts.askerAccount,
         )
         bilateralClient.assertAskIsDeleted(askUuid.toString())
@@ -183,7 +181,7 @@ class CoinTradeIntTest : ContractIntTest() {
             message = "The quote should be withdrawn from the bidder's account",
         )
         bilateralClient.cancelBid(
-            cancelBid = CancelBid.new(bidUuid.toString()),
+            bidId = bidUuid.toString(),
             signer = BilateralAccounts.bidderAccount,
         )
         bilateralClient.assertBidIsDeleted(bidUuid.toString())

@@ -4,6 +4,15 @@ This a [CosmWasm](https://crates.io/crates/cosmwasm-std) smart contract that pro
 [Provenance Blockchain](https://docs.provenance.io) [markers](https://docs.provenance.io/modules/marker-module),
 [coin](https://docs.provenance.io/blockchain/basics/stablecoin) and [scopes](https://docs.provenance.io/modules/metadata-module#scope-data-structures).
 
+## Status
+[![Latest Release][release-badge]][release-latest]
+[![Apache 2.0 License][license-badge]][license-url]
+
+[release-badge]: https://img.shields.io/github/tag/provenance-io/metadata-bilateral-exchange.svg
+[release-latest]: https://github.com/provenance-io/metadata-bilateral-exchange/releases/latest
+[license-badge]: https://img.shields.io/github/license/provenance-io/metadata-bilateral-exchange.svg
+[license-url]: https://github.com/provenance-io/metadata-bilateral-exchange/blob/main/LICENSE
+
 ## Functions and Terminology
 
 The contract functions by allowing two parties to exchange owned goods on the blockchain with a three step process:
