@@ -1,6 +1,8 @@
 package io.provenance.bilateral.contract
 
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastMode
+import io.provenance.bilateral.execute.CancelAsk
+import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.models.AttributeRequirement
@@ -80,6 +82,17 @@ class SearchIntTest : ContractIntTest() {
             actual = searchResult.pageSize,
             message = "The page size of the search result should reflect the input",
         )
+        // Clean up outstanding asks
+        pbClient.estimateAndBroadcastTx(
+            txBody = askUuids.map { askUuid ->
+                bilateralClient.generateCancelAskMsg(
+                    cancelAsk = CancelAsk.new(askUuid.toString()),
+                    senderAddress = BilateralAccounts.askerAccount.address(),
+                ).toAny()
+            }.toTxBody(),
+            signers = BaseReqSigner(BilateralAccounts.askerAccount).let(::listOf),
+            mode = BroadcastMode.BROADCAST_MODE_BLOCK,
+        ).checkIsSuccess()
     }
 
     @Test
@@ -139,5 +152,16 @@ class SearchIntTest : ContractIntTest() {
             actual = searchResult.pageSize,
             message = "The page size of the search result should reflect the input",
         )
+        // Clean up outstanding bids
+        pbClient.estimateAndBroadcastTx(
+            txBody = bidUuids.map { bidUuid ->
+                bilateralClient.generateCancelBidMsg(
+                    cancelBid = CancelBid.new(bidUuid.toString()),
+                    senderAddress = BilateralAccounts.bidderAccount.address(),
+                ).toAny()
+            }.toTxBody(),
+            signers = BaseReqSigner(BilateralAccounts.bidderAccount).let(::listOf),
+            mode = BroadcastMode.BROADCAST_MODE_BLOCK,
+        ).checkIsSuccess()
     }
 }
