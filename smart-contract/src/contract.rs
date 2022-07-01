@@ -9,6 +9,7 @@ use crate::query::get_ask::query_ask;
 use crate::query::get_ask_by_collateral_id::query_ask_by_collateral_id;
 use crate::query::get_bid::query_bid;
 use crate::query::get_contract_info::query_contract_info;
+use crate::query::get_match_report::get_match_report;
 use crate::query::search_asks::search_asks;
 use crate::query::search_bids::search_bids;
 use crate::types::core::error::ContractError;
@@ -40,9 +41,11 @@ pub fn execute(
         ExecuteMsg::CreateBid { bid, descriptor } => create_bid(deps, info, bid, descriptor),
         ExecuteMsg::CancelAsk { id } => cancel_ask(deps, env, info, id),
         ExecuteMsg::CancelBid { id } => cancel_bid(deps, info, id),
-        ExecuteMsg::ExecuteMatch { ask_id, bid_id } => {
-            execute_match(deps, env, info, ask_id, bid_id)
-        }
+        ExecuteMsg::ExecuteMatch {
+            ask_id,
+            bid_id,
+            accept_mismatched_bids,
+        } => execute_match(deps, env, info, ask_id, bid_id, accept_mismatched_bids),
     }
 }
 
@@ -59,6 +62,7 @@ pub fn query(
             query_ask_by_collateral_id(deps, collateral_id)
         }
         QueryMsg::GetBid { id } => query_bid(deps, id),
+        QueryMsg::GetMatchReport { ask_id, bid_id } => get_match_report(deps, ask_id, bid_id),
         QueryMsg::GetContractInfo {} => query_contract_info(deps),
         QueryMsg::SearchAsks { search } => search_asks(deps, search),
         QueryMsg::SearchBids { search } => search_bids(deps, search),

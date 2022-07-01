@@ -32,6 +32,7 @@ pub enum ExecuteMsg {
     ExecuteMatch {
         ask_id: String,
         bid_id: String,
+        accept_mismatched_bids: Option<bool>,
     },
 }
 
@@ -41,6 +42,7 @@ pub enum QueryMsg {
     GetAsk { id: String },
     GetAskByCollateralId { collateral_id: String },
     GetBid { id: String },
+    GetMatchReport { ask_id: String, bid_id: String },
     GetContractInfo {},
     SearchAsks { search: Search },
     SearchBids { search: Search },

@@ -1,4 +1,9 @@
-use cosmwasm_std::Response;
+use cosmwasm_std::testing::{MockApi, MockStorage};
+use cosmwasm_std::{OwnedDeps, Response};
+use provwasm_mocks::ProvenanceMockQuerier;
+use provwasm_std::ProvenanceQuery;
+
+pub type MockOwnedDeps = OwnedDeps<MockStorage, MockApi, ProvenanceMockQuerier, ProvenanceQuery>;
 
 pub fn single_attribute_for_key<'a, T>(response: &'a Response<T>, key: &'a str) -> &'a str {
     response

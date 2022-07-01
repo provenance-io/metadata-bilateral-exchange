@@ -245,7 +245,6 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
 }
 
 #[cfg(test)]
-#[cfg(feature = "enable-test-utils")]
 mod tests {
     use crate::test::request_helpers::{
         mock_ask_marker_share_multi, mock_ask_marker_share_single, mock_ask_marker_trade,

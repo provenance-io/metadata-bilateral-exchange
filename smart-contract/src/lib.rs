@@ -8,5 +8,5 @@ pub mod types;
 pub mod util;
 pub mod validation;
 
-#[cfg(feature = "enable-test-utils")]
+#[cfg(test)]
 pub mod test;

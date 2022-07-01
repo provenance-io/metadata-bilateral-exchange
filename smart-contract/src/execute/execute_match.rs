@@ -30,18 +30,8 @@ pub fn execute_match(
     info: MessageInfo,
     ask_id: String,
     bid_id: String,
+    accept_mismatched_bids: Option<bool>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
-    // only the admin may execute matches
-    if info.sender != get_contract_info(deps.storage)?.admin {
-        return ContractError::unauthorized().to_err();
-    }
-    // return error if funds sent
-    if !info.funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds should not be provided during match execution",
-        )
-        .to_err();
-    }
     let mut invalid_fields: Vec<String> = vec![];
     if ask_id.is_empty() {
         invalid_fields.push("ask id must not be empty".to_string());
@@ -53,12 +43,28 @@ pub fn execute_match(
     if !invalid_fields.is_empty() {
         return ContractError::validation_error(&invalid_fields).to_err();
     }
-
-    let ask_order = get_ask_order_by_id(deps.storage, ask_id)?;
-    let bid_order = get_bid_order_by_id(deps.storage, bid_id)?;
-
-    validate_match(&deps, &ask_order, &bid_order)?;
-
+    // return error if funds sent
+    if !info.funds.is_empty() {
+        return ContractError::invalid_funds_provided(
+            "funds should not be provided during match execution",
+        )
+        .to_err();
+    }
+    let ask_order = get_ask_order_by_id(deps.storage, &ask_id)?;
+    let bid_order = get_bid_order_by_id(deps.storage, &bid_id)?;
+    // Default to false for accepting mismatched bids if the user does not provide a value.  This
+    // prevents unwanted matches from occurring by accident.
+    let accept_mismatched_bids = accept_mismatched_bids.unwrap_or(false);
+    // only the admin or the asker may execute matches
+    if info.sender != ask_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
+        return ContractError::unauthorized().to_err();
+    }
+    validate_match(
+        &deps.as_ref(),
+        &ask_order,
+        &bid_order,
+        accept_mismatched_bids,
+    )?;
     let execute_result = match &ask_order.collateral {
         AskCollateral::CoinTrade(collateral) => execute_coin_trade(
             deps,
@@ -92,7 +98,6 @@ pub fn execute_match(
             bid_order.collateral.get_scope_trade()?,
         )?,
     };
-
     Response::new()
         .add_messages(execute_result.messages)
         .add_attribute("action", "execute")
@@ -123,11 +128,11 @@ fn execute_coin_trade(
     ExecuteResults::new(vec![
         CosmosMsg::Bank(BankMsg::Send {
             to_address: ask_order.owner.to_string(),
-            amount: ask_collateral.quote.to_owned(),
+            amount: bid_collateral.quote.to_owned(),
         }),
         CosmosMsg::Bank(BankMsg::Send {
             to_address: bid_order.owner.to_string(),
-            amount: bid_collateral.base.to_owned(),
+            amount: ask_collateral.base.to_owned(),
         }),
     ])
     .to_ok()
@@ -247,9 +252,9 @@ fn execute_scope_trade(
     // Asker gets the quote that the bidder provided from escrow
     let mut messages = vec![CosmosMsg::Bank(BankMsg::Send {
         to_address: ask_order.owner.to_string(),
-        amount: ask_collateral.quote.to_owned(),
+        amount: bid_collateral.quote.to_owned(),
     })];
-    let scope = ProvenanceQuerier::new(&deps.querier).get_scope(&bid_collateral.scope_address)?;
+    let scope = ProvenanceQuerier::new(&deps.querier).get_scope(&ask_collateral.scope_address)?;
     // Bidder gets the scope transferred to them
     messages.push(write_scope(
         replace_scope_owner(scope, bid_order.owner.to_owned()),
@@ -268,7 +273,7 @@ mod tests {
     use crate::execute::execute_match::execute_match;
     use crate::storage::ask_order_storage::{get_ask_order_by_id, insert_ask_order};
     use crate::storage::bid_order_storage::{get_bid_order_by_id, insert_bid_order};
-    use crate::test::cosmos_type_helpers::single_attribute_for_key;
+    use crate::test::cosmos_type_helpers::{single_attribute_for_key, MockOwnedDeps};
     use crate::test::error_helpers::assert_validation_error_message;
     use crate::test::mock_instantiate::{default_instantiate, DEFAULT_ADMIN_ADDRESS};
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_DENOM, DEFAULT_MARKER_HOLDINGS};
@@ -293,22 +298,30 @@ mod tests {
         let err = execute_match(
             deps.as_mut(),
             mock_env(),
-            mock_info("not-admin", &[]),
-            "ask".to_string(),
-            "bid".to_string(),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            String::new(),
+            "bid_id".to_string(),
+            None,
         )
-        .expect_err("an error should occur due to the admin not being the sender");
-        assert!(
-            matches!(err, ContractError::Unauthorized),
-            "an unauthorized error should be returned when the admin is not used as the sender, but got: {:?}",
-            err,
-        );
+        .expect_err("an error should occur when the ask id is empty");
+        assert_validation_error_message(err, "ask id must not be empty");
+        let err = execute_match(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            "ask_id".to_string(),
+            String::new(),
+            None,
+        )
+        .expect_err("an error should occur when the bid id is empty");
+        assert_validation_error_message(err, "bid id must not be empty");
         let err = execute_match(
             deps.as_mut(),
             mock_env(),
             mock_info(DEFAULT_ADMIN_ADDRESS, &coins(100, "nhash")),
             "ask_id".to_string(),
             "bid_id".to_string(),
+            None,
         )
         .expect_err("an error should occur due to funds being provided");
         assert!(
@@ -320,26 +333,9 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
-            String::new(),
-            "bid_id".to_string(),
-        )
-        .expect_err("an error should occur when the ask id is empty");
-        assert_validation_error_message(err, "ask id must not be empty");
-        let err = execute_match(
-            deps.as_mut(),
-            mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
-            "ask_id".to_string(),
-            String::new(),
-        )
-        .expect_err("an error should occur when the bid id is empty");
-        assert_validation_error_message(err, "bid id must not be empty");
-        let err = execute_match(
-            deps.as_mut(),
-            mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
+            None,
         )
         .expect_err("an error should occur when the ask is missing");
         match err {
@@ -361,6 +357,7 @@ mod tests {
             mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
+            None,
         )
         .expect_err("an error should occur when the bid is missing");
         match err {
@@ -379,9 +376,24 @@ mod tests {
         let err = execute_match(
             deps.as_mut(),
             mock_env(),
+            mock_info("not-admin", &[]),
+            "ask_id".to_string(),
+            "bid_id".to_string(),
+            None,
+        )
+        .expect_err("an error should occur due to the admin not being the sender");
+        assert!(
+            matches!(err, ContractError::Unauthorized),
+            "an unauthorized error should be returned when the admin is not used as the sender, but got: {:?}",
+            err,
+        );
+        let err = execute_match(
+            deps.as_mut(),
+            mock_env(),
             mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
+            None,
         )
         .expect_err("an error should occur when the ask and bid don't match");
         match err {
@@ -403,7 +415,165 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_coin_trade_with_valid_data() {
+    fn test_execute_coin_trade_from_admin_matching_quote() {
+        do_coin_trade_test(DEFAULT_ADMIN_ADDRESS, false);
+    }
+
+    #[test]
+    fn test_execute_coin_trade_from_admin_mismatched_quote() {
+        do_coin_trade_test(DEFAULT_ADMIN_ADDRESS, true);
+    }
+
+    #[test]
+    fn test_execute_coin_trade_from_asker_matching_quote() {
+        do_coin_trade_test("asker", false);
+    }
+
+    #[test]
+    fn test_execute_coin_trade_from_asker_mismatched_quote() {
+        do_coin_trade_test("asker", true);
+    }
+
+    #[test]
+    fn test_execute_marker_trade_from_admin_matching_quote() {
+        do_marker_trade_test(DEFAULT_ADMIN_ADDRESS, false);
+    }
+
+    #[test]
+    fn test_execute_marker_trade_from_admin_mismatched_quote() {
+        do_marker_trade_test(DEFAULT_ADMIN_ADDRESS, true);
+    }
+
+    #[test]
+    fn test_execute_marker_trade_from_asker_matching_quote() {
+        do_marker_trade_test("asker", false);
+    }
+
+    #[test]
+    fn test_execute_marker_trade_from_asker_mismatched_quote() {
+        do_marker_trade_test("asker", true);
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_single_tx_from_admin_with_matching_quote() {
+        do_marker_share_sale_single_tx_test(DEFAULT_ADMIN_ADDRESS, false);
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_single_tx_from_admin_with_mismatched_quote() {
+        do_marker_share_sale_single_tx_test(DEFAULT_ADMIN_ADDRESS, true);
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_single_tx_from_asker_with_matching_quote() {
+        do_marker_share_sale_single_tx_test("asker", false);
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_single_tx_from_asker_with_mismatched_quote() {
+        do_marker_share_sale_single_tx_test("asker", true);
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_multi_tx_from_admin_with_matching_quote() {
+        do_marker_share_sale_multi_tx_test(DEFAULT_ADMIN_ADDRESS, false);
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_multi_tx_from_admin_with_mismatched_quote() {
+        do_marker_share_sale_multi_tx_test(DEFAULT_ADMIN_ADDRESS, true);
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_multi_tx_from_asker_with_matching_quote() {
+        do_marker_share_sale_multi_tx_test("asker", false);
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_multi_tx_from_asker_with_mismatched_quote() {
+        do_marker_share_sale_multi_tx_test("asker", true);
+    }
+
+    #[test]
+    fn test_execute_scope_trade_from_admin_with_matching_quote() {
+        do_scope_trade_test(DEFAULT_ADMIN_ADDRESS, false);
+    }
+
+    #[test]
+    fn test_execute_scope_trade_from_admin_with_mismatched_quote() {
+        do_scope_trade_test(DEFAULT_ADMIN_ADDRESS, true);
+    }
+
+    #[test]
+    fn test_execute_scope_trade_from_asker_with_matching_quote() {
+        do_scope_trade_test(DEFAULT_ADMIN_ADDRESS, false);
+    }
+
+    #[test]
+    fn test_execute_scope_trade_from_asker_with_mismatched_quote() {
+        do_scope_trade_test(DEFAULT_ADMIN_ADDRESS, true);
+    }
+
+    fn assert_match_produced_correct_results(
+        storage: &dyn Storage,
+        response: &Response<ProvenanceMsg>,
+    ) {
+        assert_eq!(
+            3,
+            response.attributes.len(),
+            "the correct number of attributes should be produced in the response",
+        );
+        assert_eq!(
+            "execute",
+            single_attribute_for_key(response, "action"),
+            "the correct action attribute value should be produced",
+        );
+        assert_eq!(
+            "ask_id",
+            single_attribute_for_key(response, "ask_id"),
+            "the correct ask_id attribute value should be produced",
+        );
+        assert_eq!(
+            "bid_id",
+            single_attribute_for_key(response, "bid_id"),
+            "the correct bid_id attribute value should be produced",
+        );
+        get_ask_order_by_id(storage, "ask_id").expect_err("ask should be missing from storage");
+        get_bid_order_by_id(storage, "bid_id").expect_err("bid should be missing from storage");
+    }
+
+    fn test_quote_mismatch_errors<S: Into<String>, A: Into<String>, B: Into<String>>(
+        deps: &mut MockOwnedDeps,
+        sender: S,
+        ask_id: A,
+        bid_id: B,
+    ) {
+        let sender_address = sender.into();
+        let ask_id = ask_id.into();
+        let bid_id = bid_id.into();
+        execute_match(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(&sender_address, &[]),
+            ask_id.to_owned(),
+            bid_id.to_owned(),
+            Some(false),
+        )
+        .expect_err("an error should be returned when the bid quote does not match the ask quote");
+        execute_match(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(&sender_address, &[]),
+            ask_id,
+            bid_id,
+            None,
+        )
+            .expect_err(
+                "an error should be returned when the bid quote does not match the ask quote and no value is provided in the mismatch flag",
+            );
+    }
+
+    fn do_coin_trade_test<S: Into<String>>(match_sender_address: S, mismatched_quotes: bool) {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         create_ask(
@@ -415,20 +585,34 @@ mod tests {
         )
         .expect("the ask should be created successfully");
         get_ask_order_by_id(deps.as_ref().storage, "ask_id").expect("ask order should exist");
+        let bid_quote = coins(
+            100,
+            if mismatched_quotes {
+                "notquote"
+            } else {
+                "quote"
+            },
+        );
         create_bid(
             deps.as_mut(),
-            mock_info("bidder", &coins(100, "quote")),
+            mock_info("bidder", &bid_quote),
             Bid::new_coin_trade("bid_id", &coins(100, "base")),
             None,
         )
         .expect("the bid should be created successfully");
         get_bid_order_by_id(deps.as_ref().storage, "bid_id").expect("bid order should exist");
+        let sender_address = match_sender_address.into();
+        if mismatched_quotes {
+            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id");
+        }
         let response = execute_match(
             deps.as_mut(),
             mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
+            // Only allow invalid matches when the quotes are supposed to have a mismatch
+            Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response);
@@ -441,9 +625,14 @@ mod tests {
             CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => match to_address.as_str() {
                 "asker" => {
                     assert_eq!(
-                        &coins(100, "quote"),
+                        &bid_quote,
                         amount,
-                        "the asker should get the quote funds",
+                        "{}",
+                        if mismatched_quotes {
+                            "the asker should get the correct mismatched quote funds"
+                        } else {
+                            "the asker should get the correct quote funds"
+                        },
                     );
                 }
                 "bidder" => {
@@ -459,8 +648,7 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_execute_marker_trade_with_valid_data() {
+    fn do_marker_trade_test<S: Into<String>>(match_sender_address: S, mismatched_quotes: bool) {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         deps.querier
@@ -474,20 +662,30 @@ mod tests {
         )
         .expect("the ask should be created successfully");
         get_ask_order_by_id(deps.as_ref().storage, "ask_id").expect("ask order should exist");
+        let bid_quote = if mismatched_quotes {
+            coins(1500, "fakecoin")
+        } else {
+            coins(DEFAULT_MARKER_HOLDINGS, "quote")
+        };
         create_bid(
             deps.as_mut(),
-            mock_info("bidder", &coins(DEFAULT_MARKER_HOLDINGS, "quote")),
+            mock_info("bidder", &bid_quote),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
             None,
         )
         .expect("the bid should be created successfully");
         get_bid_order_by_id(deps.as_ref().storage, "bid_id").expect("bid order should exist");
+        let sender_address = match_sender_address.into();
+        if mismatched_quotes {
+            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id");
+        }
         let response = execute_match(
             deps.as_mut(),
             mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
+            Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response);
@@ -504,9 +702,14 @@ mod tests {
                     "the asker should receive the funds in the trade",
                 );
                 assert_eq!(
-                    &coins(DEFAULT_MARKER_HOLDINGS, "quote"),
+                    &bid_quote,
                     amount,
-                    "the correct quote funds should be sent to the asker",
+                    "{}",
+                    if mismatched_quotes {
+                        "the asker should get the correct mismatched quote funds"
+                    } else {
+                        "the asker should get the correct quote funds"
+                    },
                 );
             },
             CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
@@ -542,8 +745,10 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_marker_share_sale_single_tx_with_valid_data() {
+    fn do_marker_share_sale_single_tx_test<S: Into<String>>(
+        match_sender_address: S,
+        mismatched_quotes: bool,
+    ) {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         deps.querier
@@ -562,20 +767,30 @@ mod tests {
         )
         .expect("the ask should be created successfully");
         get_ask_order_by_id(deps.as_ref().storage, "ask_id").expect("ask order should exist");
+        let bid_quote = if mismatched_quotes {
+            coins(1500, "widgets")
+        } else {
+            coins(15, "quote")
+        };
         create_bid(
             deps.as_mut(),
-            mock_info("bidder", &coins(15, "quote")),
+            mock_info("bidder", &bid_quote),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
             None,
         )
         .expect("the bid should be created successfully");
         get_bid_order_by_id(deps.as_ref().storage, "bid_id").expect("bid order should exist");
+        let sender_address = match_sender_address.into();
+        if mismatched_quotes {
+            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id");
+        }
         let response = execute_match(
             deps.as_mut(),
             mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
+            Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response);
@@ -592,9 +807,14 @@ mod tests {
                     "the asker should receive funds from the match",
                 );
                 assert_eq!(
-                    &coins(15, "quote"),
+                    &bid_quote,
                     amount,
-                    "the asker should receive the correct amount of quote funds",
+                    "{}",
+                    if mismatched_quotes {
+                        "the asker should get the correct mismatched quote funds"
+                    } else {
+                        "the asker should get the correct quote funds"
+                    },
                 );
             },
             CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
@@ -647,8 +867,10 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_marker_share_sale_multiple_tx_with_valid_data() {
+    fn do_marker_share_sale_multi_tx_test<S: Into<String>>(
+        match_sender_address: S,
+        mismatched_quotes: bool,
+    ) {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         deps.querier
@@ -667,21 +889,31 @@ mod tests {
         )
         .expect("the ask should be created successfully");
         get_ask_order_by_id(deps.as_ref().storage, "ask_id").expect("ask order should exist");
+        let first_bid_quote = if mismatched_quotes {
+            coins(2232, "whatevercoin")
+        } else {
+            coins(50, "quote")
+        };
         // Create the first bid that only buys half the shares for sale
         create_bid(
             deps.as_mut(),
-            mock_info("bidder", &coins(50, "quote")),
+            mock_info("bidder", &first_bid_quote),
             Bid::new_marker_share_sale("bid_id_1", DEFAULT_MARKER_DENOM, 50),
             None,
         )
         .expect("the bid should be created successfully");
         get_bid_order_by_id(deps.as_ref().storage, "bid_id_1").expect("bid order should exist");
+        let sender_address = match_sender_address.into();
+        if mismatched_quotes {
+            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id_1")
+        }
         let response = execute_match(
             deps.as_mut(),
             mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id_1".to_string(),
+            Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
         assert_eq!(
@@ -726,9 +958,14 @@ mod tests {
                     "the asker should receive funds from the match",
                 );
                 assert_eq!(
-                    &coins(50, "quote"),
+                    &first_bid_quote,
                     amount,
-                    "the asker should receive the correct amount of quote funds",
+                    "{}",
+                    if mismatched_quotes {
+                        "the asker should get the correct mismatched quote funds"
+                    } else {
+                        "the asker should get the correct quote funds"
+                    },
                 );
             }
             CosmosMsg::Custom(ProvenanceMsg {
@@ -765,20 +1002,29 @@ mod tests {
         }
         .to_marker();
         deps.querier.with_markers(vec![updated_marker]);
+        let second_bid_quote = if mismatched_quotes {
+            coins(111, "bidcoinlol")
+        } else {
+            coins(50, "quote")
+        };
         create_bid(
             deps.as_mut(),
-            mock_info("bidder", &coins(50, "quote")),
+            mock_info("bidder", &second_bid_quote),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 50),
             None,
         )
         .expect("the bid should be created successfully");
         get_bid_order_by_id(deps.as_ref().storage, "bid_id").expect("bid order should exist");
+        if mismatched_quotes {
+            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id");
+        }
         let response = execute_match(
             deps.as_mut(),
             mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
+            Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response);
@@ -795,9 +1041,14 @@ mod tests {
                     "the asker should receive funds from the match",
                 );
                 assert_eq!(
-                    &coins(50, "quote"),
+                    &second_bid_quote,
                     amount,
-                    "the asker should receive the correct amount of quote funds",
+                    "{}",
+                    if mismatched_quotes {
+                        "the asker should get the correct mismatched quote funds"
+                    } else {
+                        "the asker should get the correct quote funds"
+                    },
                 );
             },
             CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
@@ -850,8 +1101,7 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_scope_trade_with_valid_data() {
+    fn do_scope_trade_test<S: Into<String>>(match_sender_address: S, mismatched_quotes: bool) {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         deps.querier
@@ -865,20 +1115,30 @@ mod tests {
         )
         .expect("the ask should be created successfully");
         get_ask_order_by_id(deps.as_ref().storage, "ask_id").expect("ask order should exist");
+        let bid_quote = if mismatched_quotes {
+            coins(12345, "countcoin")
+        } else {
+            coins(420, "quote")
+        };
         create_bid(
             deps.as_mut(),
-            mock_info("bidder", &coins(420, "quote")),
+            mock_info("bidder", &bid_quote),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
             None,
         )
         .expect("the bid should be created successfully");
         get_bid_order_by_id(deps.as_ref().storage, "bid_id").expect("bid order should exist");
+        let sender_address = match_sender_address.into();
+        if mismatched_quotes {
+            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id");
+        }
         let response = execute_match(
             deps.as_mut(),
             mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
+            Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response);
@@ -895,9 +1155,14 @@ mod tests {
                     "the asker should receive funds after the match",
                 );
                 assert_eq!(
-                    &coins(420, "quote"),
+                    &bid_quote,
                     amount,
-                    "the asker should receive the correct number of funds",
+                    "{}",
+                    if mismatched_quotes {
+                        "the asker should get the correct mismatched quote funds"
+                    } else {
+                        "the asker should get the correct quote funds"
+                    },
                 );
             },
             CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Metadata(MetadataMsgParams::WriteScope { scope, signers }), .. }) => {
@@ -935,33 +1200,5 @@ mod tests {
             },
             msg => panic!("unexpected message: {:?}", msg),
         })
-    }
-
-    fn assert_match_produced_correct_results(
-        storage: &dyn Storage,
-        response: &Response<ProvenanceMsg>,
-    ) {
-        assert_eq!(
-            3,
-            response.attributes.len(),
-            "the correct number of attributes should be produced in the response",
-        );
-        assert_eq!(
-            "execute",
-            single_attribute_for_key(response, "action"),
-            "the correct action attribute value should be produced",
-        );
-        assert_eq!(
-            "ask_id",
-            single_attribute_for_key(response, "ask_id"),
-            "the correct ask_id attribute value should be produced",
-        );
-        assert_eq!(
-            "bid_id",
-            single_attribute_for_key(response, "bid_id"),
-            "the correct bid_id attribute value should be produced",
-        );
-        get_ask_order_by_id(storage, "ask_id").expect_err("ask should be missing from storage");
-        get_bid_order_by_id(storage, "bid_id").expect_err("bid should be missing from storage");
     }
 }
