@@ -5,7 +5,9 @@ import io.provenance.bilateral.execute.CreateBid
 import org.junit.jupiter.api.Test
 import testconfiguration.accounts.BilateralAccounts
 import testconfiguration.functions.assertAskExists
+import testconfiguration.functions.assertAskIsDeleted
 import testconfiguration.functions.assertBidExists
+import testconfiguration.functions.assertBidIsDeleted
 import testconfiguration.functions.newCoins
 import testconfiguration.testcontainers.ContractIntTest
 import java.util.UUID
@@ -66,5 +68,10 @@ class MatchReportIntTest : ContractIntTest() {
             actual = matchReport.errorMessages.isEmpty(),
             message = "The report should not include any error messages, but found: ${matchReport.errorMessages}",
         )
+        // Cleanup outstanding ask and bid
+        bilateralClient.cancelAsk(askId, BilateralAccounts.askerAccount)
+        bilateralClient.assertAskIsDeleted(askId)
+        bilateralClient.cancelBid(bidId, BilateralAccounts.bidderAccount)
+        bilateralClient.assertBidIsDeleted(bidId)
     }
 }
