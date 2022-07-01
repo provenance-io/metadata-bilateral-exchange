@@ -184,7 +184,6 @@ pub fn validate_bid_order(bid_order: &BidOrder) -> Result<(), ContractError> {
 }
 
 #[cfg(test)]
-#[cfg(feature = "enable-test-utils")]
 mod tests {
     use crate::test::request_helpers::{
         mock_bid_marker_share, mock_bid_marker_trade, mock_bid_order, mock_bid_scope_trade,

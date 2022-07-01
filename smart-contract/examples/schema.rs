@@ -9,6 +9,7 @@ use metadata_bilateral_exchange::types::core::msg::{
 };
 use metadata_bilateral_exchange::types::request::ask_types::ask_order::AskOrder;
 use metadata_bilateral_exchange::types::request::bid_types::bid_order::BidOrder;
+use metadata_bilateral_exchange::types::request::match_report::MatchReport;
 
 fn main() {
     let mut out_dir = current_dir().unwrap();
@@ -17,6 +18,7 @@ fn main() {
     remove_schemas(&out_dir).unwrap();
     export_schema(&schema_for!(AskOrder), &out_dir);
     export_schema(&schema_for!(BidOrder), &out_dir);
+    export_schema(&schema_for!(MatchReport), &out_dir);
     export_schema(&schema_for!(ContractInfo), &out_dir);
     export_schema(&schema_for!(ExecuteMsg), &out_dir);
     export_schema(&schema_for!(InstantiateMsg), &out_dir);

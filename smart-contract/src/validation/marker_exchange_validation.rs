@@ -49,7 +49,6 @@ pub fn validate_marker_for_ask(
 }
 
 #[cfg(test)]
-#[cfg(feature = "enable-test-utils")]
 mod tests {
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_DENOM};
     use crate::types::core::error::ContractError;

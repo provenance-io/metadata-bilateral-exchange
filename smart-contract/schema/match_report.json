@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MatchReport",
+  "type": "object",
+  "required": [
+    "ask_exists",
+    "ask_id",
+    "bid_exists",
+    "bid_id",
+    "error_messages",
+    "quote_mismatch_match_possible",
+    "standard_match_possible"
+  ],
+  "properties": {
+    "ask_exists": {
+      "type": "boolean"
+    },
+    "ask_id": {
+      "type": "string"
+    },
+    "bid_exists": {
+      "type": "boolean"
+    },
+    "bid_id": {
+      "type": "string"
+    },
+    "error_messages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "quote_mismatch_match_possible": {
+      "type": "boolean"
+    },
+    "standard_match_possible": {
+      "type": "boolean"
+    }
+  }
+}

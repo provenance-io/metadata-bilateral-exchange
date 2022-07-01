@@ -17,11 +17,13 @@ import io.provenance.bilateral.interfaces.ContractQueryMsg
 import io.provenance.bilateral.models.AskOrder
 import io.provenance.bilateral.models.BidOrder
 import io.provenance.bilateral.models.ContractInfo
+import io.provenance.bilateral.models.MatchReport
 import io.provenance.bilateral.query.ContractSearchResult
 import io.provenance.bilateral.query.GetAsk
 import io.provenance.bilateral.query.GetAskByCollateralId
 import io.provenance.bilateral.query.GetBid
 import io.provenance.bilateral.query.GetContractInfo
+import io.provenance.bilateral.query.GetMatchReport
 import io.provenance.bilateral.query.SearchAsks
 import io.provenance.bilateral.query.SearchBids
 import io.provenance.bilateral.util.ContractAddressResolver
@@ -63,6 +65,10 @@ class BilateralContractClient private constructor(
     fun getBid(id: String): BidOrder = queryContract(GetBid.new(id))
 
     fun getBidOrNull(id: String): BidOrder? = tryOrNull { getBid(id) }
+
+    fun getMatchReport(askId: String, bidId: String): MatchReport = queryContract(GetMatchReport.new(askId, bidId))
+
+    fun getMatchReportOrNull(askId: String, bidId: String): MatchReport? = tryOrNull { getMatchReport(askId, bidId) }
 
     fun searchAsks(searchAsks: SearchAsks): ContractSearchResult<AskOrder> = queryContractWithReference(
         query = searchAsks,

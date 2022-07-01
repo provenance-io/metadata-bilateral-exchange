@@ -205,7 +205,6 @@ fn create_scope_trade_ask_collateral(
 }
 
 #[cfg(test)]
-#[cfg(feature = "enable-test-utils")]
 mod tests {
     use super::*;
     use crate::contract::execute;

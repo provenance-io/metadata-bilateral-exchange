@@ -25,6 +25,26 @@
     {
       "type": "object",
       "required": [
+        "get_ask_by_collateral_id"
+      ],
+      "properties": {
+        "get_ask_by_collateral_id": {
+          "type": "object",
+          "required": [
+            "collateral_id"
+          ],
+          "properties": {
+            "collateral_id": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "get_bid"
       ],
       "properties": {
@@ -35,6 +55,30 @@
           ],
           "properties": {
             "id": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "get_match_report"
+      ],
+      "properties": {
+        "get_match_report": {
+          "type": "object",
+          "required": [
+            "ask_id",
+            "bid_id"
+          ],
+          "properties": {
+            "ask_id": {
+              "type": "string"
+            },
+            "bid_id": {
               "type": "string"
             }
           }
