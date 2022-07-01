@@ -152,7 +152,7 @@ to the standard provenance testnet environment will use `pio-testnet-1` here.
 With your stored contract's `code_id`, run the following command to instantiate this contract in the target environment:
 
 ```bash
-provenanced tx wasm instantiate 169 \ 
+provenanced tx wasm instantiate your_code_id_here \ 
   '{
    "bind_name": "mybindingname.pb",
    "contract_name": "Metadata Bilateral Exchange"
