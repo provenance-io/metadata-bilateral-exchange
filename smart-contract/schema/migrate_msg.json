@@ -9,35 +9,10 @@
       ],
       "properties": {
         "contract_upgrade": {
-          "type": "object",
-          "properties": {
-            "options": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/MigrationOptions"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          }
+          "type": "object"
         }
       },
       "additionalProperties": false
     }
-  ],
-  "definitions": {
-    "MigrationOptions": {
-      "type": "object",
-      "properties": {
-        "new_admin_address": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      }
-    }
-  }
+  ]
 }

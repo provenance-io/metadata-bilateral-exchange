@@ -80,7 +80,7 @@ class MarkerTradeIntTest : ContractIntTest() {
         )
         bilateralClient.assertBidExists(bidUuid.toString())
         bilateralClient.executeMatch(
-            executeMatch = ExecuteMatch.new(askUuid.toString(), bidUuid.toString()),
+            executeMatch = ExecuteMatch(askUuid.toString(), bidUuid.toString()),
             signer = BilateralAccounts.adminAccount,
         )
         bilateralClient.assertAskIsDeleted(askUuid.toString())

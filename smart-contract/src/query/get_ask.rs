@@ -13,7 +13,7 @@ mod tests {
     use super::*;
     use crate::contract::query;
     use crate::storage::ask_order_storage::insert_ask_order;
-    use crate::storage::contract_info::{set_contract_info, ContractInfo};
+    use crate::test::mock_instantiate::default_instantiate;
     use crate::types::core::msg::QueryMsg;
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::ask_types::ask_order::AskOrder;
@@ -27,16 +27,7 @@ mod tests {
     pub fn query_with_valid_data() {
         // setup
         let mut deps = mock_dependencies(&[]);
-        if let Err(error) = set_contract_info(
-            &mut deps.storage,
-            &ContractInfo::new(
-                Addr::unchecked("contract_admin"),
-                "contract_bind_name".into(),
-                "contract_name".into(),
-            ),
-        ) {
-            panic!("unexpected error: {:?}", error)
-        }
+        default_instantiate(deps.as_mut().storage);
 
         // store valid ask order
         let ask_order = AskOrder {

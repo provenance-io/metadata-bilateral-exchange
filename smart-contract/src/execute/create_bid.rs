@@ -1,4 +1,5 @@
 use crate::storage::bid_order_storage::{get_bid_order_by_id, insert_bid_order};
+use crate::storage::contract_info::get_contract_info;
 use crate::types::core::error::ContractError;
 use crate::types::request::bid_types::bid::{
     Bid, CoinTradeBid, MarkerShareSaleBid, MarkerTradeBid, ScopeTradeBid,
@@ -8,7 +9,7 @@ use crate::types::request::bid_types::bid_order::BidOrder;
 use crate::types::request::request_descriptor::RequestDescriptor;
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::get_single_marker_coin_holding;
-use cosmwasm_std::{to_binary, DepsMut, MessageInfo, Response};
+use cosmwasm_std::{to_binary, CosmosMsg, DepsMut, MessageInfo, Response};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuerier, ProvenanceQuery};
 
 // create bid entrypoint
@@ -33,7 +34,13 @@ pub fn create_bid(
     }?;
     let bid_order = BidOrder::new(bid.get_id(), info.sender, collateral, descriptor)?;
     insert_bid_order(deps.storage, &bid_order)?;
+    let mut messages: Vec<CosmosMsg<ProvenanceMsg>> = vec![];
+    let contract_info = get_contract_info(deps.storage)?;
+    if let Some(bid_fee) = contract_info.bid_fee {
+        // TODO: Push bid fee message once provwasm with fee module changes is released
+    }
     Response::new()
+        .add_messages(messages)
         .add_attribute("action", "create_bid")
         .add_attribute("bid_id", bid.get_id())
         .set_data(to_binary(&bid_order)?)

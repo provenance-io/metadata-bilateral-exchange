@@ -88,7 +88,7 @@ class CoinTradeIntTest : ContractIntTest() {
             actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
             message = "The bidder account's entire coin balance should be held in escrow after creating a bid",
         )
-        val executeMatch = ExecuteMatch.new(
+        val executeMatch = ExecuteMatch(
             askId = askUuid.toString(),
             bidId = bidUuid.toString(),
         )
@@ -185,7 +185,7 @@ class CoinTradeIntTest : ContractIntTest() {
             actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
             message = "The bidder account's entire coin balance should be held in escrow after creating a bid",
         )
-        val executeMatch = ExecuteMatch.new(askUuid.toString(), bidUuid.toString())
+        val executeMatch = ExecuteMatch(askUuid.toString(), bidUuid.toString())
         assertFails("Match should fail because the quotes don't match") {
             bilateralClient.executeMatch(
                 executeMatch = executeMatch,
@@ -196,9 +196,7 @@ class CoinTradeIntTest : ContractIntTest() {
         bilateralClient.assertBidExists(bidUuid.toString())
         assertSucceeds("Match should succeed because it was manually allowed") {
             bilateralClient.executeMatch(
-                executeMatch = executeMatch.copy(
-                    executeMatch = executeMatch.executeMatch.copy(acceptMismatchedBids = true)
-                ),
+                executeMatch = executeMatch.copy(acceptMismatchedBids = true),
                 signer = BilateralAccounts.adminAccount,
             )
         }

@@ -131,6 +131,26 @@
         }
       },
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "update_settings"
+      ],
+      "properties": {
+        "update_settings": {
+          "type": "object",
+          "required": [
+            "update"
+          ],
+          "properties": {
+            "update": {
+              "$ref": "#/definitions/SettingsUpdate"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
     }
   ],
   "definitions": {
@@ -462,6 +482,35 @@
         },
         "scope_address": {
           "type": "string"
+        }
+      }
+    },
+    "SettingsUpdate": {
+      "type": "object",
+      "properties": {
+        "new_admin_address": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "new_ask_fee": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Coin"
+          }
+        },
+        "new_bid_fee": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Coin"
+          }
         }
       }
     },

@@ -101,7 +101,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
             message = "The bidder's denom [$bidderDenom] should be held in escrow when the bid is created",
         )
-        val executeMatch = ExecuteMatch.new(askUuid.toString(), bidUuid.toString())
+        val executeMatch = ExecuteMatch(askUuid.toString(), bidUuid.toString())
         bilateralClient.executeMatch(executeMatch, BilateralAccounts.adminAccount)
         bilateralClient.assertAskIsDeleted(askUuid.toString())
         bilateralClient.assertBidIsDeleted(bidUuid.toString())
@@ -203,7 +203,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
                 actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
                 message = "Expected the proper amount of denom [$bidderDenom] to be taken from the bidder as the quote",
             )
-            val executeMatch = ExecuteMatch.new(askUuid.toString(), bidUuid.toString())
+            val executeMatch = ExecuteMatch(askUuid.toString(), bidUuid.toString())
             bilateralClient.executeMatch(executeMatch = executeMatch, signer = BilateralAccounts.adminAccount)
             bilateralClient.assertBidIsDeleted(bidUuid.toString())
             expectedBidderMarkerHoldings += sharePurchaseCount

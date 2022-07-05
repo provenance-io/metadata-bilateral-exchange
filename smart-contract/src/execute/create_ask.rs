@@ -1,4 +1,5 @@
 use crate::storage::ask_order_storage::{get_ask_order_by_id, insert_ask_order};
+use crate::storage::contract_info::get_contract_info;
 use crate::types::core::error::ContractError;
 use crate::types::request::ask_types::ask::{
     Ask, CoinTradeAsk, MarkerShareSaleAsk, MarkerTradeAsk, ScopeTradeAsk,
@@ -46,8 +47,13 @@ pub fn create_ask(
         descriptor,
     )?;
     insert_ask_order(deps.storage, &ask_order)?;
+    let mut messages = ask_creation_data.messages;
+    let contract_info = get_contract_info(deps.storage)?;
+    if let Some(ask_fee) = contract_info.ask_fee {
+        // TODO: Push ask fee message once provwasm with fee module changes is released
+    }
     Response::new()
-        .add_messages(ask_creation_data.messages)
+        .add_messages(messages)
         .add_attribute("action", "create_ask")
         .add_attribute("ask_id", ask.get_id())
         .set_data(to_binary(&ask_order)?)

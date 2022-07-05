@@ -54,7 +54,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         val bidUuid = UUID.randomUUID()
         logger.info("Creating bid with UUID: $bidUuid, requiring all attributes: $testAttributes")
         createAndSendBid(bidUuid, testAttributes, AttributeRequirementType.ALL)
-        val executeMatch = ExecuteMatch.new(
+        val executeMatch = ExecuteMatch(
             askId = askUuid.toString(),
             bidId = bidUuid.toString(),
         )
@@ -100,7 +100,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         val bidUuid = UUID.randomUUID()
         logger.info("Creating bid with UUID: $bidUuid, requiring any of attributes: $testAttributes")
         createAndSendBid(bidUuid, testAttributes, AttributeRequirementType.ANY)
-        val executeMatch = ExecuteMatch.new(
+        val executeMatch = ExecuteMatch(
             askId = askUuid.toString(),
             bidId = bidUuid.toString(),
         )
@@ -150,7 +150,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         val firstBidUuid = UUID.randomUUID()
         logger.info("Creating bid with UUID: $firstBidUuid, requiring none of attributes: $testAttributes")
         createAndSendBid(firstBidUuid, testAttributes, AttributeRequirementType.NONE)
-        val firstExecuteMatch = ExecuteMatch.new(
+        val firstExecuteMatch = ExecuteMatch(
             askId = firstAskUuid.toString(),
             bidId = firstBidUuid.toString(),
         )
@@ -166,7 +166,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         val secondBidUuid = UUID.randomUUID()
         logger.info("Creating bid with uuid: $secondBidUuid, requiring none of attributes: $testAttributes")
         createAndSendBid(secondBidUuid, testAttributes, AttributeRequirementType.NONE)
-        val secondExecuteMatch = ExecuteMatch.new(
+        val secondExecuteMatch = ExecuteMatch(
             askId = secondAskUuid.toString(),
             bidId = secondBidUuid.toString(),
         )
@@ -245,7 +245,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         )
         val askOrder = bilateralClient.assertAskExists(askUuid.toString())
         assertEquals(
-            expected = createAsk.createAsk.descriptor?.effectiveTime,
+            expected = createAsk.descriptor?.effectiveTime,
             actual = askOrder.descriptor?.effectiveTime,
             message = "Expected the effective time to correctly deserialize from the contract response",
         )
@@ -272,7 +272,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         )
         val bidOrder = bilateralClient.assertBidExists(bidUuid.toString())
         assertEquals(
-            expected = createBid.createBid.descriptor?.effectiveTime,
+            expected = createBid.descriptor?.effectiveTime,
             actual = bidOrder.descriptor?.effectiveTime,
             message = "Expected the effective time to correctly deserialize from the contract response",
         )

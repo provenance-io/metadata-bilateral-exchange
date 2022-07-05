@@ -65,7 +65,7 @@ class ScopeTradeIntTest : ContractIntTest() {
             signer = BilateralAccounts.bidderAccount,
         )
         bilateralClient.assertBidExists(bidUuid.toString())
-        val executeMatch = ExecuteMatch.new(askUuid.toString(), bidUuid.toString())
+        val executeMatch = ExecuteMatch(askUuid.toString(), bidUuid.toString())
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid]")
         bilateralClient.executeMatch(executeMatch, BilateralAccounts.adminAccount)
         bilateralClient.assertAskIsDeleted(askUuid.toString())

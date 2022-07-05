@@ -86,7 +86,7 @@ class SearchIntTest : ContractIntTest() {
         pbClient.estimateAndBroadcastTx(
             txBody = askUuids.map { askUuid ->
                 bilateralClient.generateCancelAskMsg(
-                    cancelAsk = CancelAsk.new(askUuid.toString()),
+                    askId = askUuid.toString(),
                     senderAddress = BilateralAccounts.askerAccount.address(),
                 ).toAny()
             }.toTxBody(),
@@ -156,7 +156,7 @@ class SearchIntTest : ContractIntTest() {
         pbClient.estimateAndBroadcastTx(
             txBody = bidUuids.map { bidUuid ->
                 bilateralClient.generateCancelBidMsg(
-                    cancelBid = CancelBid.new(bidUuid.toString()),
+                    bidId = bidUuid.toString(),
                     senderAddress = BilateralAccounts.bidderAccount.address(),
                 ).toAny()
             }.toTxBody(),

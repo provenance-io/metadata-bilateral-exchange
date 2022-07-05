@@ -1,8 +1,9 @@
-use crate::types::migrate::migration_options::MigrationOptions;
 use crate::types::request::ask_types::ask::Ask;
 use crate::types::request::bid_types::bid::Bid;
 use crate::types::request::request_descriptor::RequestDescriptor;
 use crate::types::request::search::Search;
+use crate::types::request::settings_update::SettingsUpdate;
+use cosmwasm_std::Coin;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +11,8 @@ use serde::{Deserialize, Serialize};
 pub struct InstantiateMsg {
     pub bind_name: String,
     pub contract_name: String,
+    pub ask_fee: Option<Vec<Coin>>,
+    pub bid_fee: Option<Vec<Coin>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -34,6 +37,9 @@ pub enum ExecuteMsg {
         bid_id: String,
         accept_mismatched_bids: Option<bool>,
     },
+    UpdateSettings {
+        update: SettingsUpdate,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -51,5 +57,5 @@ pub enum QueryMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MigrateMsg {
-    ContractUpgrade { options: Option<MigrationOptions> },
+    ContractUpgrade {},
 }
