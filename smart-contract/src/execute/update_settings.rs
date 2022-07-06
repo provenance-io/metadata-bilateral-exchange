@@ -28,20 +28,24 @@ pub fn update_settings(
         contract_info.admin = deps.api.addr_validate(new_admin)?;
         attributes.push(("new_admin_address".to_string(), new_admin.to_string()));
     }
-    if let Some(ref new_ask_fee) = &update.ask_fee {
-        contract_info.ask_fee = Some(new_ask_fee.to_vec());
-        attributes.push(("new_ask_fee".to_string(), format_coin_display(new_ask_fee)));
-    } else {
-        contract_info.ask_fee = None;
-        attributes.push(("new_ask_fee".to_string(), "none".to_string()));
-    }
-    if let Some(ref new_bid_fee) = &update.bid_fee {
-        contract_info.bid_fee = Some(new_bid_fee.to_vec());
-        attributes.push(("new_bid_fee".to_string(), format_coin_display(new_bid_fee)));
-    } else {
-        contract_info.bid_fee = None;
-        attributes.push(("new_bid_fee".to_string(), "none".to_string()));
-    }
+    attributes.push((
+        "new_ask_fee".to_string(),
+        update
+            .ask_fee
+            .as_ref()
+            .map(|ask_fee| format_coin_display(ask_fee))
+            .unwrap_or_else(|| "none".to_string()),
+    ));
+    contract_info.ask_fee = update.ask_fee;
+    attributes.push((
+        "new_bid_fee".to_string(),
+        update
+            .bid_fee
+            .as_ref()
+            .map(|bid_fee| format_coin_display(bid_fee))
+            .unwrap_or_else(|| "none".to_string()),
+    ));
+    contract_info.bid_fee = update.bid_fee;
     // Save changes to the contract information
     set_contract_info(deps.storage, &contract_info)?;
     Response::new().add_attributes(attributes).to_ok()
