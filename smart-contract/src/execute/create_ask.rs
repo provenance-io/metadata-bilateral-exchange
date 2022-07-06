@@ -1,5 +1,4 @@
 use crate::storage::ask_order_storage::{get_ask_order_by_id, insert_ask_order};
-use crate::storage::contract_info::get_contract_info;
 use crate::types::core::error::ContractError;
 use crate::types::request::ask_types::ask::{
     Ask, CoinTradeAsk, MarkerShareSaleAsk, MarkerTradeAsk, ScopeTradeAsk,
@@ -7,13 +6,14 @@ use crate::types::request::ask_types::ask::{
 use crate::types::request::ask_types::ask_collateral::AskCollateral;
 use crate::types::request::ask_types::ask_order::AskOrder;
 use crate::types::request::request_descriptor::RequestDescriptor;
-use crate::util::coin_utilities::get_coin_difference;
+use crate::util::cosmos_utilities::get_send_amount;
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::{
     check_scope_owners, format_coin_display, get_single_marker_coin_holding,
 };
+use crate::util::request_fee::{generate_request_fee, RequestFeeDetail};
 use crate::validation::marker_exchange_validation::validate_marker_for_ask;
-use cosmwasm_std::{to_binary, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Response};
+use cosmwasm_std::{to_binary, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{
     revoke_marker_access, AccessGrant, MarkerAccess, ProvenanceMsg, ProvenanceQuerier,
     ProvenanceQuery,
@@ -31,22 +31,11 @@ pub fn create_ask(
     if get_ask_order_by_id(deps.storage, ask.get_id()).is_ok() {
         return ContractError::existing_id("ask", ask.get_id()).to_err();
     }
-    let mut additional_messages = vec![];
-    let mut additional_attributes = vec![];
-    let contract_info = get_contract_info(deps.storage)?;
-    // TODO: Refactor this after provwasm ask fees are available.  That will deeply simplify the fee charge process
-    let funds_after_fee = if let Some(ref ask_fee) = &contract_info.ask_fee {
-        additional_messages.push(CosmosMsg::Bank(BankMsg::Send {
-            to_address: contract_info.admin.to_string(),
-            amount: ask_fee.to_vec(),
-        }));
-        additional_attributes.push(("ask_fee_paid".to_string(), format_coin_display(ask_fee)));
-        // This finds the remaining funds after paying the ask fee and errors out if the ask fee
-        // cannot be paid with the provided funds
-        get_coin_difference("ask fee payment calculation", &info.funds, ask_fee)?
-    } else {
-        info.funds.clone()
-    };
+    // TODO: Refactor this after provwasm fees are available. That will deeply simplify the fee charge process
+    let RequestFeeDetail {
+        fee_send_msg,
+        funds_after_fee,
+    } = generate_request_fee("ask fee", &deps.as_ref(), &info, |c| &c.ask_fee)?;
     let ask_creation_data = match &ask {
         Ask::CoinTrade(coin_ask) => create_coin_trade_ask_collateral(&funds_after_fee, coin_ask),
         Ask::MarkerTrade(marker_ask) => {
@@ -70,14 +59,22 @@ pub fn create_ask(
         descriptor,
     )?;
     insert_ask_order(deps.storage, &ask_order)?;
-    Response::new()
+    let response = Response::new()
         .add_messages(ask_creation_data.messages)
-        .add_messages(additional_messages)
         .add_attribute("action", "create_ask")
         .add_attribute("ask_id", ask.get_id())
-        .add_attributes(additional_attributes)
-        .set_data(to_binary(&ask_order)?)
-        .to_ok()
+        .set_data(to_binary(&ask_order)?);
+    if let Some(fee_send_msg) = fee_send_msg {
+        response
+            .add_attribute(
+                "ask_fee_paid",
+                format_coin_display(&get_send_amount(&fee_send_msg)?),
+            )
+            .add_message(fee_send_msg)
+    } else {
+        response
+    }
+    .to_ok()
 }
 
 struct AskCreationData {
@@ -251,9 +248,49 @@ mod tests {
     use crate::types::request::request_type::RequestType;
     use crate::types::request::share_sale_type::ShareSaleType;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{coin, coins, from_binary, Addr, Storage};
+    use cosmwasm_std::{coin, coins, from_binary, Addr, BankMsg, Storage};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::{MarkerMsgParams, ProvenanceMsgParams};
+
+    #[test]
+    fn test_coin_trade_with_valid_data() {
+        do_valid_coin_trade_ask(None);
+    }
+
+    #[test]
+    fn test_coin_trade_with_valid_data_and_ask_fee() {
+        do_valid_coin_trade_ask(Some(coins(10000, "askfee")));
+    }
+
+    #[test]
+    fn test_marker_trade_with_valid_data() {
+        do_valid_marker_trade_ask(None);
+    }
+
+    #[test]
+    fn test_marker_trade_with_valid_data_and_ask_fee() {
+        do_valid_marker_trade_ask(Some(coins(100, "askfee")));
+    }
+
+    #[test]
+    fn test_marker_share_sale_with_valid_data() {
+        do_valid_marker_share_sale_ask(None);
+    }
+
+    #[test]
+    fn test_marker_share_sale_with_valid_data_and_ask_fee() {
+        do_valid_marker_share_sale_ask(Some(vec![coin(10, "askfee1"), coin(20, "askfee2")]));
+    }
+
+    #[test]
+    fn test_scope_trade_with_valid_data() {
+        do_valid_scope_trade(None);
+    }
+
+    #[test]
+    fn test_scope_trade_with_valid_data_and_ask_fee() {
+        do_valid_scope_trade(Some(coins(10, "askfee")));
+    }
 
     #[test]
     fn test_new_ask_is_rejected_for_existing_id() {
@@ -308,7 +345,7 @@ mod tests {
         match err {
             ContractError::GenericError { message } => {
                 assert_eq!(
-                    "ask fee payment calculation: unable to find matching coin of denom [askfee] in minuend. Minuend: [100base_1], subtrahend: [1askfee]",
+                    "ask fee calculation: unable to find matching coin of denom [askfee] in minuend. Minuend: [100base_1], subtrahend: [1askfee]",
                     message,
                     "unexpected message when ask fee is missing",
                 );
@@ -318,108 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn create_coin_trade_ask_with_valid_data() {
-        let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
-
-        // create ask data
-        let create_ask_msg = ExecuteMsg::CreateAsk {
-            ask: Ask::new_coin_trade("ask_id", &coins(100, "quote_1")),
-            descriptor: None,
-        };
-
-        let asker_info = mock_info("asker", &coins(2, "base_1"));
-
-        // handle create ask
-        let create_ask_response = execute(
-            deps.as_mut(),
-            mock_env(),
-            asker_info.clone(),
-            create_ask_msg.clone(),
-        )
-        .expect("coin trade ask should properly respond");
-
-        assert!(
-            create_ask_response.messages.is_empty(),
-            "coin trades should not generate any messages, but got messages: {:?}",
-            create_ask_response.messages.to_owned(),
-        );
-
-        let ask_order = assert_valid_response(&deps.storage, &create_ask_response, None);
-        assert_eq!("ask_id", ask_order.id);
-        assert_eq!("asker", ask_order.owner.as_str());
-        assert_eq!(RequestType::CoinTrade, ask_order.ask_type);
-        assert_eq!(None, ask_order.descriptor);
-        let collateral = match &ask_order.collateral {
-            AskCollateral::CoinTrade(collateral) => collateral,
-            _ => panic!("unexpected collateral found for coin trade ask order"),
-        };
-        assert_eq!(coins(2, "base_1"), collateral.base);
-        assert_eq!(coins(100, "quote_1"), collateral.quote);
-    }
-
-    #[test]
-    fn test_create_coin_trade_ask_with_valid_data_and_ask_fee() {
-        let mut deps = mock_dependencies(&[]);
-        test_instantiate(
-            deps.as_mut().storage,
-            TestInstantiate {
-                ask_fee: Some(coins(10, "base_1")),
-                ..TestInstantiate::default()
-            },
-        );
-        // create ask data
-        let create_ask_msg = ExecuteMsg::CreateAsk {
-            ask: Ask::new_coin_trade("ask_id", &coins(100, "quote_1")),
-            descriptor: None,
-        };
-
-        // Send 12 base_1 coin, paying 10 into the ask fee, and using 2 as the base itself
-        let asker_info = mock_info("asker", &coins(12, "base_1"));
-
-        // handle create ask
-        let create_ask_response = execute(deps.as_mut(), mock_env(), asker_info, create_ask_msg)
-            .expect("coin trade ask should properly respond");
-
-        assert_eq!(
-            1,
-            create_ask_response.messages.len(),
-            "a single message should be sent for a coin trade when an ask fee is required",
-        );
-        match &create_ask_response.messages.first().unwrap().msg {
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
-                assert_eq!(
-                    DEFAULT_ADMIN_ADDRESS, to_address,
-                    "the admin should receive the ask fee",
-                );
-                assert_eq!(
-                    &coins(10, "base_1"),
-                    amount,
-                    "the ask fee should be charged in full",
-                );
-            }
-            msg => panic!("unexpected message sent with ask fee: {:?}", msg),
-        }
-
-        let ask_order = assert_valid_response(
-            &deps.storage,
-            &create_ask_response,
-            Some(coins(10, "base_1")),
-        );
-        assert_eq!("ask_id", ask_order.id);
-        assert_eq!("asker", ask_order.owner.as_str());
-        assert_eq!(RequestType::CoinTrade, ask_order.ask_type);
-        assert_eq!(None, ask_order.descriptor);
-        let collateral = match &ask_order.collateral {
-            AskCollateral::CoinTrade(collateral) => collateral,
-            _ => panic!("unexpected collateral found for coin trade ask order"),
-        };
-        assert_eq!(coins(2, "base_1"), collateral.base);
-        assert_eq!(coins(100, "quote_1"), collateral.quote);
-    }
-
-    #[test]
-    fn create_coin_trade_ask_with_invalid_data() {
+    fn test_coin_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         // create ask invalid data
@@ -530,189 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn create_marker_trade_ask_with_valid_data() {
-        let mut deps = mock_dependencies(&[]);
-        default_instantiate(&mut deps.storage);
-        deps.querier
-            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
-        let descriptor = RequestDescriptor::basic("a decent ask");
-        let response = create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &[]),
-            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &[coin(150, "nhash")]),
-            Some(descriptor.to_owned()),
-        )
-        .expect("expected the ask to be accepted");
-        assert_eq!(
-            1,
-            response.messages.len(),
-            "expected a single message to be emitted for the marker trade",
-        );
-        match &response.messages.first().unwrap().msg {
-            CosmosMsg::Custom(ProvenanceMsg {
-                params:
-                    ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }),
-                ..
-            }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM, denom,
-                    "the default marker denom should be referenced in the revocation",
-                );
-                assert_eq!(
-                    "asker",
-                    address.as_str(),
-                    "the asker address should be revoked its access from the marker on a successful ask",
-                );
-            }
-            msg => panic!("unexpected message in marker trade: {:?}", msg),
-        }
-        let ask_order = assert_valid_response(&deps.storage, &response, None);
-        assert_eq!(
-            "ask_id", ask_order.id,
-            "the proper ask id should be set in the ask order",
-        );
-        assert_eq!(
-            RequestType::MarkerTrade,
-            ask_order.ask_type,
-            "the proper request type should bet set in the ask order",
-        );
-        assert_eq!(
-            "asker",
-            ask_order.owner.as_str(),
-            "the proper owner address should be set in the ask order",
-        );
-        assert_eq!(
-            descriptor,
-            ask_order
-                .descriptor
-                .expect("the descriptor should be set in the ask order"),
-            "the proper descriptor should be set in the ask order",
-        );
-        let marker_trade_collateral = ask_order.collateral.unwrap_marker_trade();
-        assert_eq!(
-            DEFAULT_MARKER_ADDRESS,
-            marker_trade_collateral.address.as_str(),
-            "the correct marker address should be set in the marker trade collateral",
-        );
-        assert_eq!(
-            DEFAULT_MARKER_DENOM, marker_trade_collateral.denom,
-            "the correct marker denom should be set in the marker trade collateral",
-        );
-        assert_eq!(
-            DEFAULT_MARKER_HOLDINGS,
-            marker_trade_collateral.share_count.u128(),
-            "the correct marker share count should be set in the marker trade collateral",
-        );
-        assert_eq!(
-            coins(150, "nhash"),
-            marker_trade_collateral.quote_per_share,
-            "the correct quote per share should be set in the marker trade collateral",
-        );
-    }
-
-    #[test]
-    fn create_marker_trade_ask_with_valid_data_and_ask_fee() {
-        let mut deps = mock_dependencies(&[]);
-        test_instantiate(
-            &mut deps.storage,
-            TestInstantiate {
-                ask_fee: Some(coins(1, "askfee")),
-                ..TestInstantiate::default()
-            },
-        );
-        deps.querier
-            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
-        let descriptor = RequestDescriptor::basic("a decent ask");
-        let response = create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &coins(1, "askfee")),
-            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &[coin(150, "nhash")]),
-            Some(descriptor.to_owned()),
-        )
-        .expect("expected the ask to be accepted");
-        assert_eq!(
-            2,
-            response.messages.len(),
-            "expected the correct number of messages to be generated",
-        );
-        response.messages.iter().for_each(|msg| match &msg.msg {
-            CosmosMsg::Custom(ProvenanceMsg {
-                                  params:
-                                  ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }),
-                                  ..
-                              }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM, denom,
-                    "the default marker denom should be referenced in the revocation",
-                );
-                assert_eq!(
-                    "asker",
-                    address.as_str(),
-                    "the asker address should be revoked its access from the marker on a successful ask",
-                );
-            },
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
-                assert_eq!(
-                    DEFAULT_ADMIN_ADDRESS,
-                    to_address,
-                    "the ask fee should be sent to the admin address",
-                );
-                assert_eq!(
-                    &coins(1, "askfee"),
-                    amount,
-                    "the correct ask fee amount should be sent",
-                );
-            },
-            msg => panic!("unexpected message in marker trade: {:?}", msg),
-        });
-        let ask_order = assert_valid_response(&deps.storage, &response, Some(coins(1, "askfee")));
-        assert_eq!(
-            "ask_id", ask_order.id,
-            "the proper ask id should be set in the ask order",
-        );
-        assert_eq!(
-            RequestType::MarkerTrade,
-            ask_order.ask_type,
-            "the proper request type should bet set in the ask order",
-        );
-        assert_eq!(
-            "asker",
-            ask_order.owner.as_str(),
-            "the proper owner address should be set in the ask order",
-        );
-        assert_eq!(
-            descriptor,
-            ask_order
-                .descriptor
-                .expect("the descriptor should be set in the ask order"),
-            "the proper descriptor should be set in the ask order",
-        );
-        let marker_trade_collateral = ask_order.collateral.unwrap_marker_trade();
-        assert_eq!(
-            DEFAULT_MARKER_ADDRESS,
-            marker_trade_collateral.address.as_str(),
-            "the correct marker address should be set in the marker trade collateral",
-        );
-        assert_eq!(
-            DEFAULT_MARKER_DENOM, marker_trade_collateral.denom,
-            "the correct marker denom should be set in the marker trade collateral",
-        );
-        assert_eq!(
-            DEFAULT_MARKER_HOLDINGS,
-            marker_trade_collateral.share_count.u128(),
-            "the correct marker share count should be set in the marker trade collateral",
-        );
-        assert_eq!(
-            coins(150, "nhash"),
-            marker_trade_collateral.quote_per_share,
-            "the correct quote per share should be set in the marker trade collateral",
-        );
-    }
-
-    #[test]
-    fn test_create_marker_trade_ask_with_invalid_data() {
+    fn test_marker_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(&mut deps.storage);
         let error = create_ask(
@@ -760,268 +514,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_marker_share_sale_ask_with_valid_data() {
-        let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
-        deps.querier
-            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
-        let descriptor = RequestDescriptor::new_populated_attributes(
-            "description",
-            AttributeRequirement::all(&["attribute.pb"]),
-        );
-        let response = create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &[]),
-            Ask::new_marker_share_sale(
-                "ask_id",
-                DEFAULT_MARKER_DENOM,
-                &coins(100, "nhash"),
-                ShareSaleType::single(50),
-            ),
-            Some(descriptor.to_owned()),
-        )
-        .expect("expected ask creation to succeed");
-        assert_eq!(
-            1,
-            response.messages.len(),
-            "the correct number of response messages should be generated"
-        );
-        match &response.messages.first().unwrap().msg {
-            CosmosMsg::Custom(ProvenanceMsg {
-                params:
-                    ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }),
-                ..
-            }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM, denom,
-                    "the default marker denom should be referenced in the revocation",
-                );
-                assert_eq!(
-                    "asker",
-                    address.as_str(),
-                    "the asker address should be revoked its access from the marker on a successful ask",
-                );
-            }
-            msg => panic!("unexpected message in marker trade: {:?}", msg),
-        };
-        let ask_order = assert_valid_response(deps.as_ref().storage, &response, None);
-        assert_eq!(
-            "ask_id", ask_order.id,
-            "the proper ask id should be set in the ask order"
-        );
-        assert_eq!(
-            RequestType::MarkerShareSale,
-            ask_order.ask_type,
-            "the proper request type should be set in the ask order"
-        );
-        assert_eq!(
-            "asker",
-            ask_order.owner.as_str(),
-            "the proper owner address should be set in the ask order",
-        );
-        assert_eq!(
-            descriptor,
-            ask_order
-                .descriptor
-                .expect("the descriptor should be set in the ask order"),
-            "the proper descriptor should be set in the ask order",
-        );
-        let collateral = ask_order.collateral.unwrap_marker_share_sale();
-        assert_eq!(
-            DEFAULT_MARKER_ADDRESS,
-            collateral.address.as_str(),
-            "the correct marker address should be set in the collateral",
-        );
-        assert_eq!(
-            DEFAULT_MARKER_DENOM, collateral.denom,
-            "the correct marker denom should be set in the collateral",
-        );
-        assert_eq!(
-            DEFAULT_MARKER_HOLDINGS,
-            collateral.remaining_shares.u128(),
-            "the correct number of remaining shares should be set in the collateral",
-        );
-        assert_eq!(
-            coins(100, "nhash"),
-            collateral.quote_per_share,
-            "the correct quote should be returned in the ask",
-        );
-        assert_eq!(
-            1,
-            collateral.removed_permissions.len(),
-            "only one account should have had its permissions removed - the owner",
-        );
-        let access_grant = collateral.removed_permissions.first().unwrap();
-        assert_eq!(
-            "asker",
-            access_grant.address.as_str(),
-            "the asker's permissions should have been removed",
-        );
-        let expected_permissions = MockMarker::get_default_owner_permissions();
-        assert_eq!(
-            access_grant.permissions.len(),
-            expected_permissions.len(),
-            "the same number of permissions should be removed as the default permissions added",
-        );
-        assert!(
-            access_grant
-                .permissions
-                .iter()
-                .all(|p| expected_permissions.contains(p)),
-            "all the correct permissions should be revoked, but some were not",
-        );
-        assert!(
-            matches!(
-                collateral.sale_type,
-                ShareSaleType::SingleTransaction { .. }
-            ),
-            "the share sale type should be properly copied into the ask order from the request",
-        );
-    }
-
-    #[test]
-    fn test_create_marker_share_sale_ask_with_valid_data_and_ask_fee() {
-        let mut deps = mock_dependencies(&[]);
-        test_instantiate(
-            deps.as_mut().storage,
-            TestInstantiate {
-                ask_fee: Some(coins(1, "askfee")),
-                ..TestInstantiate::default()
-            },
-        );
-        deps.querier
-            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
-        let descriptor = RequestDescriptor::new_populated_attributes(
-            "description",
-            AttributeRequirement::all(&["attribute.pb"]),
-        );
-        let response = create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &coins(1, "askfee")),
-            Ask::new_marker_share_sale(
-                "ask_id",
-                DEFAULT_MARKER_DENOM,
-                &coins(100, "nhash"),
-                ShareSaleType::single(50),
-            ),
-            Some(descriptor.to_owned()),
-        )
-        .expect("expected ask creation to succeed");
-        assert_eq!(
-            2,
-            response.messages.len(),
-            "the correct number of response messages should be generated"
-        );
-        response.messages.iter().for_each(|msg| match &msg.msg {
-            CosmosMsg::Custom(ProvenanceMsg {
-                                  params:
-                                  ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }),
-                                  ..
-                              }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM, denom,
-                    "the default marker denom should be referenced in the revocation",
-                );
-                assert_eq!(
-                    "asker",
-                    address.as_str(),
-                    "the asker address should be revoked its access from the marker on a successful ask",
-                );
-            },
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
-                assert_eq!(
-                    DEFAULT_ADMIN_ADDRESS,
-                    to_address,
-                    "the admin should receive the ask fee",
-                );
-                assert_eq!(
-                    &coins(1, "askfee"),
-                    amount,
-                    "the correct fee amount should be sent to the admin",
-                );
-            },
-            msg => panic!("unexpected message in marker trade: {:?}", msg),
-        });
-        let ask_order =
-            assert_valid_response(deps.as_ref().storage, &response, Some(coins(1, "askfee")));
-        assert_eq!(
-            "ask_id", ask_order.id,
-            "the proper ask id should be set in the ask order"
-        );
-        assert_eq!(
-            RequestType::MarkerShareSale,
-            ask_order.ask_type,
-            "the proper request type should be set in the ask order"
-        );
-        assert_eq!(
-            "asker",
-            ask_order.owner.as_str(),
-            "the proper owner address should be set in the ask order",
-        );
-        assert_eq!(
-            descriptor,
-            ask_order
-                .descriptor
-                .expect("the descriptor should be set in the ask order"),
-            "the proper descriptor should be set in the ask order",
-        );
-        let collateral = ask_order.collateral.unwrap_marker_share_sale();
-        assert_eq!(
-            DEFAULT_MARKER_ADDRESS,
-            collateral.address.as_str(),
-            "the correct marker address should be set in the collateral",
-        );
-        assert_eq!(
-            DEFAULT_MARKER_DENOM, collateral.denom,
-            "the correct marker denom should be set in the collateral",
-        );
-        assert_eq!(
-            DEFAULT_MARKER_HOLDINGS,
-            collateral.remaining_shares.u128(),
-            "the correct number of remaining shares should be set in the collateral",
-        );
-        assert_eq!(
-            coins(100, "nhash"),
-            collateral.quote_per_share,
-            "the correct quote should be returned in the ask",
-        );
-        assert_eq!(
-            1,
-            collateral.removed_permissions.len(),
-            "only one account should have had its permissions removed - the owner",
-        );
-        let access_grant = collateral.removed_permissions.first().unwrap();
-        assert_eq!(
-            "asker",
-            access_grant.address.as_str(),
-            "the asker's permissions should have been removed",
-        );
-        let expected_permissions = MockMarker::get_default_owner_permissions();
-        assert_eq!(
-            access_grant.permissions.len(),
-            expected_permissions.len(),
-            "the same number of permissions should be removed as the default permissions added",
-        );
-        assert!(
-            access_grant
-                .permissions
-                .iter()
-                .all(|p| expected_permissions.contains(p)),
-            "all the correct permissions should be revoked, but some were not",
-        );
-        assert!(
-            matches!(
-                collateral.sale_type,
-                ShareSaleType::SingleTransaction { .. }
-            ),
-            "the share sale type should be properly copied into the ask order from the request",
-        );
-    }
-
-    #[test]
-    fn test_marker_share_sale_ask_with_invalid_data() {
+    fn test_marker_share_sale_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         let mut ask = Ask::new_marker_share_sale(
@@ -1114,140 +607,6 @@ mod tests {
             matches!(err, ContractError::InvalidFundsProvided { .. }),
             "an ask fee overpay should result in an invalid funds error, but got: {:?}",
             err,
-        );
-    }
-
-    #[test]
-    fn test_scope_trade_with_valid_data() {
-        let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
-        deps.querier
-            .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
-        let descriptor = RequestDescriptor::new_populated_attributes(
-            "description",
-            AttributeRequirement::any(&["something.pio"]),
-        );
-        let response = create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &[]),
-            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(100, "nhash")),
-            Some(descriptor.clone()),
-        )
-        .expect("expected the ask to be created successfully");
-        assert!(
-            response.messages.is_empty(),
-            "no messages need to be sent for a scope trade",
-        );
-        let ask_order = assert_valid_response(deps.as_ref().storage, &response, None);
-        assert_eq!(
-            "ask_id", ask_order.id,
-            "the proper ask id should be set in the ask order",
-        );
-        assert_eq!(
-            RequestType::ScopeTrade,
-            ask_order.ask_type,
-            "the proper ask type should be set in the ask order",
-        );
-        assert_eq!(
-            "asker",
-            ask_order.owner.as_str(),
-            "the proper owner address should be set in the ask order",
-        );
-        assert_eq!(
-            descriptor,
-            ask_order
-                .descriptor
-                .expect("the descriptor should be set in the ask order"),
-            "the proper descriptor should be set in the ask order",
-        );
-        let collateral = ask_order.collateral.unwrap_scope_trade();
-        assert_eq!(
-            DEFAULT_SCOPE_ID, collateral.scope_address,
-            "the proper scope address should be set in the ask order's collateral",
-        );
-        assert_eq!(
-            coins(100, "nhash"),
-            collateral.quote,
-            "the quote should be properly copied into the ask order's collateral",
-        );
-    }
-
-    #[test]
-    fn test_scope_trade_with_valid_data_and_ask_fee() {
-        let mut deps = mock_dependencies(&[]);
-        test_instantiate(
-            deps.as_mut().storage,
-            TestInstantiate {
-                ask_fee: Some(coins(1, "askfee")),
-                ..TestInstantiate::default()
-            },
-        );
-        deps.querier
-            .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
-        let descriptor = RequestDescriptor::new_populated_attributes(
-            "description",
-            AttributeRequirement::any(&["something.pio"]),
-        );
-        let response = create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &coins(1, "askfee")),
-            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(100, "nhash")),
-            Some(descriptor.clone()),
-        )
-        .expect("expected the ask to be created successfully");
-        assert_eq!(
-            1,
-            response.messages.len(),
-            "the correct number of messages should be sent",
-        );
-        match &response.messages.first().unwrap().msg {
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
-                assert_eq!(
-                    DEFAULT_ADMIN_ADDRESS, to_address,
-                    "the ask fee should be sent to the admin address",
-                );
-                assert_eq!(
-                    &coins(1, "askfee"),
-                    amount,
-                    "the correct fee amount should be sent to the admin",
-                );
-            }
-            msg => panic!("unexpected message sent: {:?}", msg),
-        };
-        let ask_order =
-            assert_valid_response(deps.as_ref().storage, &response, Some(coins(1, "askfee")));
-        assert_eq!(
-            "ask_id", ask_order.id,
-            "the proper ask id should be set in the ask order",
-        );
-        assert_eq!(
-            RequestType::ScopeTrade,
-            ask_order.ask_type,
-            "the proper ask type should be set in the ask order",
-        );
-        assert_eq!(
-            "asker",
-            ask_order.owner.as_str(),
-            "the proper owner address should be set in the ask order",
-        );
-        assert_eq!(
-            descriptor,
-            ask_order
-                .descriptor
-                .expect("the descriptor should be set in the ask order"),
-            "the proper descriptor should be set in the ask order",
-        );
-        let collateral = ask_order.collateral.unwrap_scope_trade();
-        assert_eq!(
-            DEFAULT_SCOPE_ID, collateral.scope_address,
-            "the proper scope address should be set in the ask order's collateral",
-        );
-        assert_eq!(
-            coins(100, "nhash"),
-            collateral.quote,
-            "the quote should be properly copied into the ask order's collateral",
         );
     }
 
@@ -1353,23 +712,23 @@ mod tests {
         );
         assert_eq!(
             "create_ask",
-            single_attribute_for_key(&response, "action"),
+            single_attribute_for_key(response, "action"),
             "the response attribute should have the proper value",
         );
         assert_eq!(
             "ask_id",
-            single_attribute_for_key(&response, "ask_id"),
+            single_attribute_for_key(response, "ask_id"),
             "expected the correct ask_id value"
         );
         if let Some(expected_ask_fee) = expected_ask_fee_charge {
             assert_eq!(
                 format_coin_display(&expected_ask_fee),
-                single_attribute_for_key(&response, "ask_fee_paid"),
-                "expected the correct ask_fee_paid value",
+                single_attribute_for_key(response, "ask_fee_paid"),
+                "expected the correct ask_fee_paid attribute value",
             );
         }
         let ask_order: AskOrder = if let Some(ask_order_binary) = &response.data {
-            from_binary(&ask_order_binary)
+            from_binary(ask_order_binary)
                 .expect("expected ask order to deserialize properly from response")
         } else {
             panic!("expected data to be properly set after a successful response")
@@ -1381,5 +740,415 @@ mod tests {
             "the ask order found in storage should equate to the ask order in the output data",
         );
         ask_order
+    }
+
+    fn do_valid_coin_trade_ask(ask_fee: Option<Vec<Coin>>) {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(
+            deps.as_mut().storage,
+            TestInstantiate {
+                ask_fee: ask_fee.clone(),
+                ..TestInstantiate::default()
+            },
+        );
+        // create ask data
+        let create_ask_msg = ExecuteMsg::CreateAsk {
+            ask: Ask::new_coin_trade("ask_id", &coins(100, "quote_1")),
+            descriptor: None,
+        };
+
+        // Send 12 base_1 coin, paying 10 into the ask fee, and using 2 as the base itself
+        let asker_info = mock_info(
+            "asker",
+            &if let Some(ref ask_fee) = &ask_fee {
+                let mut coins = ask_fee.to_vec();
+                coins.push(coin(2, "base_1"));
+                coins
+            } else {
+                coins(2, "base_1")
+            },
+        );
+
+        // handle create ask
+        let create_ask_response = execute(deps.as_mut(), mock_env(), asker_info, create_ask_msg)
+            .expect("coin trade ask should properly respond");
+        if let Some(ref ask_fee) = &ask_fee {
+            assert_eq!(
+                1,
+                create_ask_response.messages.len(),
+                "one message should be sent when an ask fee is requested",
+            );
+            match &create_ask_response.messages.first().unwrap().msg {
+                CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                    assert_eq!(
+                        DEFAULT_ADMIN_ADDRESS, to_address,
+                        "the admin should receive the ask fee",
+                    );
+                    assert_eq!(ask_fee, amount, "the ask fee should be charged in full",);
+                }
+                msg => panic!("unexpected message sent with ask fee: {:?}", msg),
+            }
+        } else {
+            assert!(
+                create_ask_response.messages.is_empty(),
+                "no messages should be sent when no ask fee is set",
+            );
+        }
+        let ask_order = assert_valid_response(&deps.storage, &create_ask_response, ask_fee);
+        assert_eq!("ask_id", ask_order.id);
+        assert_eq!("asker", ask_order.owner.as_str());
+        assert_eq!(RequestType::CoinTrade, ask_order.ask_type);
+        assert_eq!(None, ask_order.descriptor);
+        let collateral = ask_order.collateral.unwrap_coin_trade();
+        assert_eq!(coins(2, "base_1"), collateral.base);
+        assert_eq!(coins(100, "quote_1"), collateral.quote);
+    }
+
+    fn do_valid_marker_trade_ask(ask_fee: Option<Vec<Coin>>) {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(
+            &mut deps.storage,
+            TestInstantiate {
+                ask_fee: ask_fee.clone(),
+                ..TestInstantiate::default()
+            },
+        );
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        let descriptor = RequestDescriptor::basic("a decent ask");
+        let response = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(
+                "asker",
+                &if let Some(ref ask_fee) = &ask_fee {
+                    ask_fee.to_vec()
+                } else {
+                    vec![]
+                },
+            ),
+            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &[coin(150, "nhash")]),
+            Some(descriptor.to_owned()),
+        )
+        .expect("expected the ask to be accepted");
+        assert_eq!(
+            1 + if ask_fee.is_some() { 1 } else { 0 },
+            response.messages.len(),
+            "expected the correct amount of messages to be emitted for the marker trade",
+        );
+        response.messages.iter().for_each(|msg| match &msg.msg {
+            CosmosMsg::Custom(ProvenanceMsg {
+                                  params:
+                                  ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }),
+                                  ..
+                              }) => {
+                assert_eq!(
+                    DEFAULT_MARKER_DENOM, denom,
+                    "the default marker denom should be referenced in the revocation",
+                );
+                assert_eq!(
+                    "asker",
+                    address.as_str(),
+                    "the asker address should be revoked its access from the marker on a successful ask",
+                );
+            },
+            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                if let Some(ref ask_fee) = &ask_fee {
+                    assert_eq!(
+                        DEFAULT_ADMIN_ADDRESS,
+                        to_address,
+                        "the ask fee should be sent to the admin",
+                    );
+                    assert_eq!(
+                        ask_fee,
+                        amount,
+                        "the correct fee amount should be sent",
+                    );
+                } else {
+                    panic!("a send message should not be sent when no ask fee is required");
+                }
+            }
+            msg => panic!("unexpected message in marker trade: {:?}", msg),
+        });
+        let ask_order = assert_valid_response(&deps.storage, &response, ask_fee);
+        assert_eq!(
+            "ask_id", ask_order.id,
+            "the proper ask id should be set in the ask order",
+        );
+        assert_eq!(
+            RequestType::MarkerTrade,
+            ask_order.ask_type,
+            "the proper request type should bet set in the ask order",
+        );
+        assert_eq!(
+            "asker",
+            ask_order.owner.as_str(),
+            "the proper owner address should be set in the ask order",
+        );
+        assert_eq!(
+            descriptor,
+            ask_order
+                .descriptor
+                .expect("the descriptor should be set in the ask order"),
+            "the proper descriptor should be set in the ask order",
+        );
+        let marker_trade_collateral = ask_order.collateral.unwrap_marker_trade();
+        assert_eq!(
+            DEFAULT_MARKER_ADDRESS,
+            marker_trade_collateral.address.as_str(),
+            "the correct marker address should be set in the marker trade collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_DENOM, marker_trade_collateral.denom,
+            "the correct marker denom should be set in the marker trade collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_HOLDINGS,
+            marker_trade_collateral.share_count.u128(),
+            "the correct marker share count should be set in the marker trade collateral",
+        );
+        assert_eq!(
+            coins(150, "nhash"),
+            marker_trade_collateral.quote_per_share,
+            "the correct quote per share should be set in the marker trade collateral",
+        );
+    }
+
+    fn do_valid_marker_share_sale_ask(ask_fee: Option<Vec<Coin>>) {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(
+            deps.as_mut().storage,
+            TestInstantiate {
+                ask_fee: ask_fee.clone(),
+                ..TestInstantiate::default()
+            },
+        );
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::all(&["attribute.pb"]),
+        );
+        let response = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(
+                "asker",
+                &if let Some(ref ask_fee) = &ask_fee {
+                    ask_fee.to_vec()
+                } else {
+                    vec![]
+                },
+            ),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                &coins(100, "nhash"),
+                ShareSaleType::single(50),
+            ),
+            Some(descriptor.to_owned()),
+        )
+        .expect("expected ask creation to succeed");
+        assert_eq!(
+            1 + if ask_fee.is_some() { 1 } else { 0 },
+            response.messages.len(),
+            "the correct number of response messages should be generated"
+        );
+        response.messages.iter().for_each(|msg| match &msg.msg {
+            CosmosMsg::Custom(ProvenanceMsg {
+                                  params:
+                                  ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }),
+                                  ..
+                              }) => {
+                assert_eq!(
+                    DEFAULT_MARKER_DENOM, denom,
+                    "the default marker denom should be referenced in the revocation",
+                );
+                assert_eq!(
+                    "asker",
+                    address.as_str(),
+                    "the asker address should be revoked its access from the marker on a successful ask",
+                );
+            },
+            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                if let Some(ref ask_fee) = &ask_fee {
+                    assert_eq!(
+                        DEFAULT_ADMIN_ADDRESS,
+                        to_address,
+                        "the ask fee should be sent to the admin",
+                    );
+                    assert_eq!(
+                        ask_fee,
+                        amount,
+                        "the correct fee amount should be sent",
+                    );
+                } else {
+                    panic!("a send message should not be sent when no ask fee is required");
+                }
+            },
+            msg => panic!("unexpected message in marker trade: {:?}", msg),
+        });
+        let ask_order = assert_valid_response(deps.as_ref().storage, &response, ask_fee);
+        assert_eq!(
+            "ask_id", ask_order.id,
+            "the proper ask id should be set in the ask order"
+        );
+        assert_eq!(
+            RequestType::MarkerShareSale,
+            ask_order.ask_type,
+            "the proper request type should be set in the ask order"
+        );
+        assert_eq!(
+            "asker",
+            ask_order.owner.as_str(),
+            "the proper owner address should be set in the ask order",
+        );
+        assert_eq!(
+            descriptor,
+            ask_order
+                .descriptor
+                .expect("the descriptor should be set in the ask order"),
+            "the proper descriptor should be set in the ask order",
+        );
+        let collateral = ask_order.collateral.unwrap_marker_share_sale();
+        assert_eq!(
+            DEFAULT_MARKER_ADDRESS,
+            collateral.address.as_str(),
+            "the correct marker address should be set in the collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_DENOM, collateral.denom,
+            "the correct marker denom should be set in the collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_HOLDINGS,
+            collateral.remaining_shares.u128(),
+            "the correct number of remaining shares should be set in the collateral",
+        );
+        assert_eq!(
+            coins(100, "nhash"),
+            collateral.quote_per_share,
+            "the correct quote should be returned in the ask",
+        );
+        assert_eq!(
+            1,
+            collateral.removed_permissions.len(),
+            "only one account should have had its permissions removed - the owner",
+        );
+        let access_grant = collateral.removed_permissions.first().unwrap();
+        assert_eq!(
+            "asker",
+            access_grant.address.as_str(),
+            "the asker's permissions should have been removed",
+        );
+        let expected_permissions = MockMarker::get_default_owner_permissions();
+        assert_eq!(
+            access_grant.permissions.len(),
+            expected_permissions.len(),
+            "the same number of permissions should be removed as the default permissions added",
+        );
+        assert!(
+            access_grant
+                .permissions
+                .iter()
+                .all(|p| expected_permissions.contains(p)),
+            "all the correct permissions should be revoked, but some were not",
+        );
+        assert!(
+            matches!(
+                collateral.sale_type,
+                ShareSaleType::SingleTransaction { .. }
+            ),
+            "the share sale type should be properly copied into the ask order from the request",
+        );
+    }
+
+    fn do_valid_scope_trade(ask_fee: Option<Vec<Coin>>) {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(
+            deps.as_mut().storage,
+            TestInstantiate {
+                ask_fee: ask_fee.clone(),
+                ..TestInstantiate::default()
+            },
+        );
+        deps.querier
+            .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::any(&["something.pio"]),
+        );
+        let response = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(
+                "asker",
+                &if let Some(ref ask_fee) = &ask_fee {
+                    ask_fee.to_vec()
+                } else {
+                    vec![]
+                },
+            ),
+            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(100, "nhash")),
+            Some(descriptor.clone()),
+        )
+        .expect("expected the ask to be created successfully");
+        if let Some(ref ask_fee) = &ask_fee {
+            assert_eq!(
+                1,
+                response.messages.len(),
+                "the correct number of messages should be sent when an ask fee is requested",
+            );
+            match &response.messages.first().unwrap().msg {
+                CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                    assert_eq!(
+                        DEFAULT_ADMIN_ADDRESS, to_address,
+                        "the ask fee should be sent to the admin",
+                    );
+                    assert_eq!(
+                        ask_fee, amount,
+                        "the correct fee amount should be sent to the admin",
+                    );
+                }
+                msg => panic!("unexpected message: {:?}", msg),
+            }
+        } else {
+            assert!(
+                response.messages.is_empty(),
+                "no messages need to be sent for a scope trade",
+            );
+        }
+        let ask_order = assert_valid_response(deps.as_ref().storage, &response, ask_fee);
+        assert_eq!(
+            "ask_id", ask_order.id,
+            "the proper ask id should be set in the ask order",
+        );
+        assert_eq!(
+            RequestType::ScopeTrade,
+            ask_order.ask_type,
+            "the proper ask type should be set in the ask order",
+        );
+        assert_eq!(
+            "asker",
+            ask_order.owner.as_str(),
+            "the proper owner address should be set in the ask order",
+        );
+        assert_eq!(
+            descriptor,
+            ask_order
+                .descriptor
+                .expect("the descriptor should be set in the ask order"),
+            "the proper descriptor should be set in the ask order",
+        );
+        let collateral = ask_order.collateral.unwrap_scope_trade();
+        assert_eq!(
+            DEFAULT_SCOPE_ID, collateral.scope_address,
+            "the proper scope address should be set in the ask order's collateral",
+        );
+        assert_eq!(
+            coins(100, "nhash"),
+            collateral.quote,
+            "the quote should be properly copied into the ask order's collateral",
+        );
     }
 }

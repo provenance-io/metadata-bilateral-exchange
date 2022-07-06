@@ -488,29 +488,29 @@
     "SettingsUpdate": {
       "type": "object",
       "properties": {
+        "ask_fee": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Coin"
+          }
+        },
+        "bid_fee": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Coin"
+          }
+        },
         "new_admin_address": {
           "type": [
             "string",
             "null"
           ]
-        },
-        "new_ask_fee": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/Coin"
-          }
-        },
-        "new_bid_fee": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/Coin"
-          }
         }
       }
     },
