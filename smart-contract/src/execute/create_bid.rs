@@ -272,7 +272,7 @@ mod tests {
         match err {
             ContractError::GenericError { message } => {
                 assert_eq!(
-                    "bid fee calculation: unable to find matching coin of denom [bidfee] in minuend. Minuend: [100quote_1], subtrahend: [1bidfee]",
+                    "bid fee calculation: unable to find matching coin of denom [bidfee] in funds. funds: [100quote_1], fees: [1bidfee]",
                     message,
                     "unexpected message encountered",
                 );

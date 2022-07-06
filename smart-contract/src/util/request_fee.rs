@@ -1,6 +1,6 @@
 use crate::storage::contract_info::{get_contract_info, ContractInfo};
 use crate::types::core::error::ContractError;
-use crate::util::coin_utilities::get_coin_difference;
+use crate::util::coin_utilities::funds_minus_fees;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{BankMsg, Coin, CosmosMsg, Deps, MessageInfo};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
@@ -25,7 +25,7 @@ pub fn generate_request_fee<S: Into<String>, F: Fn(&ContractInfo) -> &Option<Vec
                 to_address: contract_info.admin.to_string(),
                 amount: fee.clone(),
             })),
-            funds_after_fee: get_coin_difference(
+            funds_after_fee: funds_minus_fees(
                 format!("{} calculation", fee_type.into()),
                 &message_info.funds,
                 fee,
@@ -70,7 +70,7 @@ mod tests {
         match err {
             ContractError::GenericError { message } => {
                 assert_eq!(
-                    "some fee calculation: expected at least [100nhash] to be provided in minuend. Minuend: [99nhash], subtrahend: [100nhash]",
+                    "some fee calculation: expected at least [100nhash] to be provided in funds. funds: [99nhash], fees: [100nhash]",
                     message,
                     "unexpected message produced",
                 );

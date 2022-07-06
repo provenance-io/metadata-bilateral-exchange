@@ -345,7 +345,7 @@ mod tests {
         match err {
             ContractError::GenericError { message } => {
                 assert_eq!(
-                    "ask fee calculation: unable to find matching coin of denom [askfee] in minuend. Minuend: [100base_1], subtrahend: [1askfee]",
+                    "ask fee calculation: unable to find matching coin of denom [askfee] in funds. funds: [100base_1], fees: [1askfee]",
                     message,
                     "unexpected message when ask fee is missing",
                 );
