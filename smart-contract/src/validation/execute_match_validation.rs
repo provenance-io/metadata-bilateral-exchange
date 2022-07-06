@@ -11,13 +11,13 @@ use crate::types::request::bid_types::bid_collateral::{
 use crate::types::request::bid_types::bid_order::BidOrder;
 use crate::types::request::request_descriptor::{AttributeRequirementType, RequestDescriptor};
 use crate::types::request::share_sale_type::ShareSaleType;
+use crate::util::coin_utilities::coin_sort;
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::{
     calculate_marker_quote, format_coin_display, get_single_marker_coin_holding,
 };
-use cosmwasm_std::{Addr, Coin, Deps};
+use cosmwasm_std::{Addr, Deps};
 use provwasm_std::{ProvenanceQuerier, ProvenanceQuery};
-use std::cmp::Ordering;
 use take_if::TakeIf;
 
 pub fn validate_match(
@@ -199,8 +199,8 @@ fn get_coin_trade_collateral_validation(
     );
     let mut ask_base = ask_collateral.base.to_owned();
     let mut bid_base = bid_collateral.base.to_owned();
-    ask_base.sort_by(coin_sorter);
-    bid_base.sort_by(coin_sorter);
+    ask_base.sort_by(coin_sort);
+    bid_base.sort_by(coin_sort);
     if ask_base != bid_base {
         validation_messages.push(format!(
             "{} Ask base [{}] does not match bid base [{}]",
@@ -212,8 +212,8 @@ fn get_coin_trade_collateral_validation(
     if !accept_mismatched_bids {
         let mut ask_quote = ask_collateral.quote.to_owned();
         let mut bid_quote = bid_collateral.quote.to_owned();
-        ask_quote.sort_by(coin_sorter);
-        bid_quote.sort_by(coin_sorter);
+        ask_quote.sort_by(coin_sort);
+        bid_quote.sort_by(coin_sort);
         if ask_quote != bid_quote {
             validation_messages.push(format!(
                 "{} Ask quote [{}] does not match bid quote [{}]",
@@ -296,8 +296,8 @@ fn get_marker_trade_collateral_validation(
         let mut ask_quote =
             calculate_marker_quote(marker_share_count, &ask_collateral.quote_per_share);
         let mut bid_quote = bid_collateral.quote.to_owned();
-        ask_quote.sort_by(coin_sorter);
-        bid_quote.sort_by(coin_sorter);
+        ask_quote.sort_by(coin_sort);
+        bid_quote.sort_by(coin_sort);
         if ask_quote != bid_quote {
             validation_messages.push(format!(
                 "{} Ask quote [{}] did not match bid quote [{}]",
@@ -418,8 +418,8 @@ fn get_marker_share_sale_collateral_validation(
             &ask_collateral.quote_per_share,
         );
         let mut bid_quote = bid_collateral.quote.to_owned();
-        ask_quote.sort_by(coin_sorter);
-        bid_quote.sort_by(coin_sorter);
+        ask_quote.sort_by(coin_sort);
+        bid_quote.sort_by(coin_sort);
         if ask_quote != bid_quote {
             validation_messages.push(format!(
                 "{} Ask share price did not result in the same quote [{}] as the bid quote [{}]",
@@ -453,8 +453,8 @@ fn get_scope_trade_collateral_validation(
     if !accept_mismatched_bids {
         let mut ask_quote = ask_collateral.quote.to_owned();
         let mut bid_quote = bid_collateral.quote.to_owned();
-        ask_quote.sort_by(coin_sorter);
-        bid_quote.sort_by(coin_sorter);
+        ask_quote.sort_by(coin_sort);
+        bid_quote.sort_by(coin_sort);
         if ask_quote != bid_quote {
             validation_messages.push(format!(
                 "{} Ask quote [{}] does not match bid quote [{}]",
@@ -465,13 +465,6 @@ fn get_scope_trade_collateral_validation(
         }
     }
     validation_messages
-}
-
-fn coin_sorter(first: &Coin, second: &Coin) -> Ordering {
-    first
-        .denom
-        .cmp(&second.denom)
-        .then_with(|| first.amount.cmp(&second.amount))
 }
 
 #[cfg(test)]

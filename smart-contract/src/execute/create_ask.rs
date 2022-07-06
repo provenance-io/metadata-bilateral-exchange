@@ -7,10 +7,13 @@ use crate::types::request::ask_types::ask::{
 use crate::types::request::ask_types::ask_collateral::AskCollateral;
 use crate::types::request::ask_types::ask_order::AskOrder;
 use crate::types::request::request_descriptor::RequestDescriptor;
+use crate::util::coin_utilities::get_coin_difference;
 use crate::util::extensions::ResultExtensions;
-use crate::util::provenance_utilities::{check_scope_owners, get_single_marker_coin_holding};
+use crate::util::provenance_utilities::{
+    check_scope_owners, format_coin_display, get_single_marker_coin_holding,
+};
 use crate::validation::marker_exchange_validation::validate_marker_for_ask;
-use cosmwasm_std::{to_binary, CosmosMsg, DepsMut, Env, MessageInfo, Response};
+use cosmwasm_std::{to_binary, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{
     revoke_marker_access, AccessGrant, MarkerAccess, ProvenanceMsg, ProvenanceQuerier,
     ProvenanceQuery,
@@ -28,16 +31,36 @@ pub fn create_ask(
     if get_ask_order_by_id(deps.storage, ask.get_id()).is_ok() {
         return ContractError::existing_id("ask", ask.get_id()).to_err();
     }
+    let mut additional_messages = vec![];
+    let mut additional_attributes = vec![];
+    let contract_info = get_contract_info(deps.storage)?;
+    // TODO: Refactor this after provwasm ask fees are available.  That will deeply simplify the fee charge process
+    let funds_after_fee = if let Some(ref ask_fee) = &contract_info.ask_fee {
+        additional_messages.push(CosmosMsg::Bank(BankMsg::Send {
+            to_address: contract_info.admin.to_string(),
+            amount: ask_fee.to_vec(),
+        }));
+        additional_attributes.push(("ask_fee_paid".to_string(), format_coin_display(ask_fee)));
+        // This finds the remaining funds after paying the ask fee and errors out if the ask fee
+        // cannot be paid with the provided funds
+        get_coin_difference("ask fee payment calculation", &info.funds, ask_fee)?
+    } else {
+        info.funds.clone()
+    };
     let ask_creation_data = match &ask {
-        Ask::CoinTrade(coin_ask) => create_coin_trade_ask_collateral(&info, coin_ask),
+        Ask::CoinTrade(coin_ask) => create_coin_trade_ask_collateral(&funds_after_fee, coin_ask),
         Ask::MarkerTrade(marker_ask) => {
-            create_marker_trade_ask_collateral(&deps, &info, &env, marker_ask)
+            create_marker_trade_ask_collateral(&deps, &info, &env, &funds_after_fee, marker_ask)
         }
-        Ask::MarkerShareSale(marker_share_sale) => {
-            create_marker_share_sale_ask_collateral(&deps, &info, &env, marker_share_sale)
-        }
+        Ask::MarkerShareSale(marker_share_sale) => create_marker_share_sale_ask_collateral(
+            &deps,
+            &info,
+            &env,
+            &funds_after_fee,
+            marker_share_sale,
+        ),
         Ask::ScopeTrade(scope_trade) => {
-            create_scope_trade_ask_collateral(&deps, &info, &env, scope_trade)
+            create_scope_trade_ask_collateral(&deps, &env, &funds_after_fee, scope_trade)
         }
     }?;
     let ask_order = AskOrder::new(
@@ -47,15 +70,12 @@ pub fn create_ask(
         descriptor,
     )?;
     insert_ask_order(deps.storage, &ask_order)?;
-    let mut messages = ask_creation_data.messages;
-    let contract_info = get_contract_info(deps.storage)?;
-    if let Some(ask_fee) = contract_info.ask_fee {
-        // TODO: Push ask fee message once provwasm with fee module changes is released
-    }
     Response::new()
-        .add_messages(messages)
+        .add_messages(ask_creation_data.messages)
+        .add_messages(additional_messages)
         .add_attribute("action", "create_ask")
         .add_attribute("ask_id", ask.get_id())
+        .add_attributes(additional_attributes)
         .set_data(to_binary(&ask_order)?)
         .to_ok()
 }
@@ -67,12 +87,12 @@ struct AskCreationData {
 
 // create ask entrypoint
 fn create_coin_trade_ask_collateral(
-    info: &MessageInfo,
+    base_funds: &[Coin],
     coin_trade: &CoinTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if info.funds.is_empty() {
+    if base_funds.is_empty() {
         return ContractError::invalid_funds_provided(
-            "coin trade ask requests should include funds",
+            "coin trade ask requests should include enough funds for ask fee + base",
         )
         .to_err();
     }
@@ -84,7 +104,7 @@ fn create_coin_trade_ask_collateral(
     }
 
     AskCreationData {
-        collateral: AskCollateral::coin_trade(&info.funds, &coin_trade.quote),
+        collateral: AskCollateral::coin_trade(base_funds, &coin_trade.quote),
         messages: vec![],
     }
     .to_ok()
@@ -94,11 +114,12 @@ fn create_marker_trade_ask_collateral(
     deps: &DepsMut<ProvenanceQuery>,
     info: &MessageInfo,
     env: &Env,
+    base_funds: &[Coin],
     marker_trade: &MarkerTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if !info.funds.is_empty() {
+    if !base_funds.is_empty() {
         return ContractError::invalid_funds_provided(
-            "marker trade ask requests should not include funds",
+            "marker trade ask requests should not include funds greater than the amount needed for ask fees",
         )
         .to_err();
     }
@@ -141,11 +162,12 @@ fn create_marker_share_sale_ask_collateral(
     deps: &DepsMut<ProvenanceQuery>,
     info: &MessageInfo,
     env: &Env,
+    base_funds: &[Coin],
     marker_share_sale: &MarkerShareSaleAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if !info.funds.is_empty() {
+    if !base_funds.is_empty() {
         return ContractError::invalid_funds_provided(
-            "marker share sale ask requests should not include funds",
+            "marker share sale ask requests should not include funds greater than the amount needed for ask fees",
         )
         .to_err();
     }
@@ -188,13 +210,13 @@ fn create_marker_share_sale_ask_collateral(
 
 fn create_scope_trade_ask_collateral(
     deps: &DepsMut<ProvenanceQuery>,
-    info: &MessageInfo,
     env: &Env,
+    base_funds: &[Coin],
     scope_trade: &ScopeTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if !info.funds.is_empty() {
+    if !base_funds.is_empty() {
         return ContractError::invalid_funds_provided(
-            "scope trade ask requests should not include funds",
+            "scope trade ask requests should not include funds greater than the amount needed for ask fees",
         )
         .to_err();
     }
@@ -216,11 +238,14 @@ mod tests {
     use crate::contract::execute;
     use crate::storage::ask_order_storage::get_ask_order_by_id;
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
-    use crate::test::mock_instantiate::default_instantiate;
+    use crate::test::mock_instantiate::{
+        default_instantiate, test_instantiate, TestInstantiate, DEFAULT_ADMIN_ADDRESS,
+    };
     use crate::test::mock_marker::{
         MockMarker, DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM, DEFAULT_MARKER_HOLDINGS,
     };
     use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ID};
+    use crate::test::request_helpers::set_ask_fee;
     use crate::types::core::msg::ExecuteMsg;
     use crate::types::request::request_descriptor::AttributeRequirement;
     use crate::types::request::request_type::RequestType;
@@ -262,6 +287,37 @@ mod tests {
     }
 
     #[test]
+    fn test_new_ask_is_rejected_for_inability_to_pay_ask_fee() {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(
+            deps.as_mut().storage,
+            TestInstantiate {
+                ask_fee: Some(coins(1, "askfee")),
+                ..TestInstantiate::default()
+            },
+        );
+        // Create a valid coin trade ask that is simply missing the ask fee entirely
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &coins(100, "base_1")),
+            Ask::new_coin_trade("ask_id", &coins(100, "quote_1")),
+            None,
+        )
+        .expect_err("an error should occur because the ask fee funds were not included");
+        match err {
+            ContractError::GenericError { message } => {
+                assert_eq!(
+                    "ask fee payment calculation: unable to find matching coin of denom [askfee] in minuend. Minuend: [100base_1], subtrahend: [1askfee]",
+                    message,
+                    "unexpected message when ask fee is missing",
+                );
+            }
+            e => panic!("unexpected error: {:?}", e),
+        };
+    }
+
+    #[test]
     fn create_coin_trade_ask_with_valid_data() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
@@ -289,7 +345,67 @@ mod tests {
             create_ask_response.messages.to_owned(),
         );
 
-        let ask_order = assert_valid_response(&deps.storage, &create_ask_response);
+        let ask_order = assert_valid_response(&deps.storage, &create_ask_response, None);
+        assert_eq!("ask_id", ask_order.id);
+        assert_eq!("asker", ask_order.owner.as_str());
+        assert_eq!(RequestType::CoinTrade, ask_order.ask_type);
+        assert_eq!(None, ask_order.descriptor);
+        let collateral = match &ask_order.collateral {
+            AskCollateral::CoinTrade(collateral) => collateral,
+            _ => panic!("unexpected collateral found for coin trade ask order"),
+        };
+        assert_eq!(coins(2, "base_1"), collateral.base);
+        assert_eq!(coins(100, "quote_1"), collateral.quote);
+    }
+
+    #[test]
+    fn test_create_coin_trade_ask_with_valid_data_and_ask_fee() {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(
+            deps.as_mut().storage,
+            TestInstantiate {
+                ask_fee: Some(coins(10, "base_1")),
+                ..TestInstantiate::default()
+            },
+        );
+        // create ask data
+        let create_ask_msg = ExecuteMsg::CreateAsk {
+            ask: Ask::new_coin_trade("ask_id", &coins(100, "quote_1")),
+            descriptor: None,
+        };
+
+        // Send 12 base_1 coin, paying 10 into the ask fee, and using 2 as the base itself
+        let asker_info = mock_info("asker", &coins(12, "base_1"));
+
+        // handle create ask
+        let create_ask_response = execute(deps.as_mut(), mock_env(), asker_info, create_ask_msg)
+            .expect("coin trade ask should properly respond");
+
+        assert_eq!(
+            1,
+            create_ask_response.messages.len(),
+            "a single message should be sent for a coin trade when an ask fee is required",
+        );
+        match &create_ask_response.messages.first().unwrap().msg {
+            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                assert_eq!(
+                    DEFAULT_ADMIN_ADDRESS, to_address,
+                    "the admin should receive the ask fee",
+                );
+                assert_eq!(
+                    &coins(10, "base_1"),
+                    amount,
+                    "the ask fee should be charged in full",
+                );
+            }
+            msg => panic!("unexpected message sent with ask fee: {:?}", msg),
+        }
+
+        let ask_order = assert_valid_response(
+            &deps.storage,
+            &create_ask_response,
+            Some(coins(10, "base_1")),
+        );
         assert_eq!("ask_id", ask_order.id);
         assert_eq!("asker", ask_order.owner.as_str());
         assert_eq!(RequestType::CoinTrade, ask_order.ask_type);
@@ -322,7 +438,10 @@ mod tests {
         // verify handle create ask response returns ContractError::MissingField { id }
         match create_ask_response {
             ContractError::InvalidFundsProvided { message } => {
-                assert_eq!("coin trade ask requests should include funds", message,)
+                assert_eq!(
+                    "coin trade ask requests should include enough funds for ask fee + base",
+                    message,
+                )
             }
             e => panic!(
                 "unexpected error when including no funds in an ask request: {:?}",
@@ -383,7 +502,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            create_ask_msg,
+            create_ask_msg.clone(),
         );
         // verify execute create ask response returns ContractError::AskMissingBase
         match create_ask_response {
@@ -393,6 +512,21 @@ mod tests {
                 error => panic!("unexpected error: {:?}", error),
             },
         }
+        // just enough to pay the fee, but not enough to provide a base
+        set_ask_fee(&mut deps, Some(coins(100, "askfeecoin")));
+        let create_ask_response = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &coins(100, "askfeecoin")),
+            create_ask_msg,
+        );
+        match create_ask_response {
+            Ok(_) => panic!("expected error, but execute_create_ask_response ok"),
+            Err(error) => match error {
+                ContractError::InvalidFundsProvided { .. } => {}
+                error => panic!("unexpected error: {:?}", error),
+            },
+        };
     }
 
     #[test]
@@ -433,7 +567,107 @@ mod tests {
             }
             msg => panic!("unexpected message in marker trade: {:?}", msg),
         }
-        let ask_order = assert_valid_response(&deps.storage, &response);
+        let ask_order = assert_valid_response(&deps.storage, &response, None);
+        assert_eq!(
+            "ask_id", ask_order.id,
+            "the proper ask id should be set in the ask order",
+        );
+        assert_eq!(
+            RequestType::MarkerTrade,
+            ask_order.ask_type,
+            "the proper request type should bet set in the ask order",
+        );
+        assert_eq!(
+            "asker",
+            ask_order.owner.as_str(),
+            "the proper owner address should be set in the ask order",
+        );
+        assert_eq!(
+            descriptor,
+            ask_order
+                .descriptor
+                .expect("the descriptor should be set in the ask order"),
+            "the proper descriptor should be set in the ask order",
+        );
+        let marker_trade_collateral = ask_order.collateral.unwrap_marker_trade();
+        assert_eq!(
+            DEFAULT_MARKER_ADDRESS,
+            marker_trade_collateral.address.as_str(),
+            "the correct marker address should be set in the marker trade collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_DENOM, marker_trade_collateral.denom,
+            "the correct marker denom should be set in the marker trade collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_HOLDINGS,
+            marker_trade_collateral.share_count.u128(),
+            "the correct marker share count should be set in the marker trade collateral",
+        );
+        assert_eq!(
+            coins(150, "nhash"),
+            marker_trade_collateral.quote_per_share,
+            "the correct quote per share should be set in the marker trade collateral",
+        );
+    }
+
+    #[test]
+    fn create_marker_trade_ask_with_valid_data_and_ask_fee() {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(
+            &mut deps.storage,
+            TestInstantiate {
+                ask_fee: Some(coins(1, "askfee")),
+                ..TestInstantiate::default()
+            },
+        );
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        let descriptor = RequestDescriptor::basic("a decent ask");
+        let response = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &coins(1, "askfee")),
+            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &[coin(150, "nhash")]),
+            Some(descriptor.to_owned()),
+        )
+        .expect("expected the ask to be accepted");
+        assert_eq!(
+            2,
+            response.messages.len(),
+            "expected the correct number of messages to be generated",
+        );
+        response.messages.iter().for_each(|msg| match &msg.msg {
+            CosmosMsg::Custom(ProvenanceMsg {
+                                  params:
+                                  ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }),
+                                  ..
+                              }) => {
+                assert_eq!(
+                    DEFAULT_MARKER_DENOM, denom,
+                    "the default marker denom should be referenced in the revocation",
+                );
+                assert_eq!(
+                    "asker",
+                    address.as_str(),
+                    "the asker address should be revoked its access from the marker on a successful ask",
+                );
+            },
+            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                assert_eq!(
+                    DEFAULT_ADMIN_ADDRESS,
+                    to_address,
+                    "the ask fee should be sent to the admin address",
+                );
+                assert_eq!(
+                    &coins(1, "askfee"),
+                    amount,
+                    "the correct ask fee amount should be sent",
+                );
+            },
+            msg => panic!("unexpected message in marker trade: {:?}", msg),
+        });
+        let ask_order = assert_valid_response(&deps.storage, &response, Some(coins(1, "askfee")));
         assert_eq!(
             "ask_id", ask_order.id,
             "the proper ask id should be set in the ask order",
@@ -491,7 +725,8 @@ mod tests {
         .expect_err("a marker trade with funds should be rejected");
         assert!(
             matches!(error, ContractError::InvalidFundsProvided { .. }),
-            "an invalid funds error should be returned when funds are added to a marker trade ask",
+            "an invalid funds error should be returned when funds are added to a marker trade ask, but got: {:?}",
+            error,
         );
         let error = create_ask(
             deps.as_mut(),
@@ -505,7 +740,22 @@ mod tests {
         );
         assert!(
             matches!(error, ContractError::Std(_)),
-            "a missing marker should cause a standard cosmwasm error",
+            "a missing marker should cause a standard cosmwasm error, but got: {:?}",
+            error,
+        );
+        set_ask_fee(&mut deps, Some(coins(100, "askfee")));
+        let error = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &coins(101, "askfee")),
+            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &coins(100, "nhash")),
+            None,
+        )
+        .expect_err("when the ask fee is overpaid, the marker trade should be rejected");
+        assert!(
+            matches!(error, ContractError::InvalidFundsProvided { .. }),
+            "an ask fee overpay should result in an invalid funds error, but got: {:?}",
+            error,
         );
     }
 
@@ -555,7 +805,147 @@ mod tests {
             }
             msg => panic!("unexpected message in marker trade: {:?}", msg),
         };
-        let ask_order = assert_valid_response(deps.as_ref().storage, &response);
+        let ask_order = assert_valid_response(deps.as_ref().storage, &response, None);
+        assert_eq!(
+            "ask_id", ask_order.id,
+            "the proper ask id should be set in the ask order"
+        );
+        assert_eq!(
+            RequestType::MarkerShareSale,
+            ask_order.ask_type,
+            "the proper request type should be set in the ask order"
+        );
+        assert_eq!(
+            "asker",
+            ask_order.owner.as_str(),
+            "the proper owner address should be set in the ask order",
+        );
+        assert_eq!(
+            descriptor,
+            ask_order
+                .descriptor
+                .expect("the descriptor should be set in the ask order"),
+            "the proper descriptor should be set in the ask order",
+        );
+        let collateral = ask_order.collateral.unwrap_marker_share_sale();
+        assert_eq!(
+            DEFAULT_MARKER_ADDRESS,
+            collateral.address.as_str(),
+            "the correct marker address should be set in the collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_DENOM, collateral.denom,
+            "the correct marker denom should be set in the collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_HOLDINGS,
+            collateral.remaining_shares.u128(),
+            "the correct number of remaining shares should be set in the collateral",
+        );
+        assert_eq!(
+            coins(100, "nhash"),
+            collateral.quote_per_share,
+            "the correct quote should be returned in the ask",
+        );
+        assert_eq!(
+            1,
+            collateral.removed_permissions.len(),
+            "only one account should have had its permissions removed - the owner",
+        );
+        let access_grant = collateral.removed_permissions.first().unwrap();
+        assert_eq!(
+            "asker",
+            access_grant.address.as_str(),
+            "the asker's permissions should have been removed",
+        );
+        let expected_permissions = MockMarker::get_default_owner_permissions();
+        assert_eq!(
+            access_grant.permissions.len(),
+            expected_permissions.len(),
+            "the same number of permissions should be removed as the default permissions added",
+        );
+        assert!(
+            access_grant
+                .permissions
+                .iter()
+                .all(|p| expected_permissions.contains(p)),
+            "all the correct permissions should be revoked, but some were not",
+        );
+        assert!(
+            matches!(
+                collateral.sale_type,
+                ShareSaleType::SingleTransaction { .. }
+            ),
+            "the share sale type should be properly copied into the ask order from the request",
+        );
+    }
+
+    #[test]
+    fn test_create_marker_share_sale_ask_with_valid_data_and_ask_fee() {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(
+            deps.as_mut().storage,
+            TestInstantiate {
+                ask_fee: Some(coins(1, "askfee")),
+                ..TestInstantiate::default()
+            },
+        );
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::all(&["attribute.pb"]),
+        );
+        let response = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &coins(1, "askfee")),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                &coins(100, "nhash"),
+                ShareSaleType::single(50),
+            ),
+            Some(descriptor.to_owned()),
+        )
+        .expect("expected ask creation to succeed");
+        assert_eq!(
+            2,
+            response.messages.len(),
+            "the correct number of response messages should be generated"
+        );
+        response.messages.iter().for_each(|msg| match &msg.msg {
+            CosmosMsg::Custom(ProvenanceMsg {
+                                  params:
+                                  ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }),
+                                  ..
+                              }) => {
+                assert_eq!(
+                    DEFAULT_MARKER_DENOM, denom,
+                    "the default marker denom should be referenced in the revocation",
+                );
+                assert_eq!(
+                    "asker",
+                    address.as_str(),
+                    "the asker address should be revoked its access from the marker on a successful ask",
+                );
+            },
+            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                assert_eq!(
+                    DEFAULT_ADMIN_ADDRESS,
+                    to_address,
+                    "the admin should receive the ask fee",
+                );
+                assert_eq!(
+                    &coins(1, "askfee"),
+                    amount,
+                    "the correct fee amount should be sent to the admin",
+                );
+            },
+            msg => panic!("unexpected message in marker trade: {:?}", msg),
+        });
+        let ask_order =
+            assert_valid_response(deps.as_ref().storage, &response, Some(coins(1, "askfee")));
         assert_eq!(
             "ask_id", ask_order.id,
             "the proper ask id should be set in the ask order"
@@ -650,7 +1040,8 @@ mod tests {
         .expect_err("an error should be returned when funds are provided for a share sale");
         assert!(
             matches!(err, ContractError::InvalidFundsProvided { .. }),
-            "an invalid funds error should be produced when funds are included for a share sale",
+            "an invalid funds error should be produced when funds are included for a share sale, but got: {:?}",
+            err,
         );
         let err = create_ask(
             deps.as_mut(),
@@ -662,7 +1053,8 @@ mod tests {
         .expect_err("an error should be returned when no marker is found for the denom");
         assert!(
             matches!(err, ContractError::Std(_)),
-            "an std error should be produced when a marker cannot be found",
+            "an std error should be produced when a marker cannot be found, but got: {:?}",
+            err,
         );
         // Put a marker owned by the contract but not be the asker
         deps.querier.with_markers(vec![MockMarker::new_marker()]);
@@ -676,7 +1068,8 @@ mod tests {
         .expect_err("an error should be returned when the marker is badly-formed for the ask");
         assert!(
             matches!(err, ContractError::InvalidMarker { .. }),
-            "an invalid marker error should be returned because the marker is not administered by the asker",
+            "an invalid marker error should be returned because the marker is not administered by the asker, but got: {:?}",
+            err,
         );
         // Set up the ask to be badly-formed
         match ask {
@@ -700,7 +1093,27 @@ mod tests {
         );
         assert!(
             matches!(err, ContractError::ValidationError { .. }),
-            "a validation error should be returned because the ask had no quote-per-share",
+            "a validation error should be returned because the ask had no quote-per-share, but got: {:?}",
+            err,
+        );
+        set_ask_fee(&mut deps, Some(coins(100, "askfee")));
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &coins(101, "askfee")),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                &coins(100, "nhash"),
+                ShareSaleType::single(10),
+            ),
+            None,
+        )
+        .expect_err("when the ask fee is overpaid, the marker trade should be rejected");
+        assert!(
+            matches!(err, ContractError::InvalidFundsProvided { .. }),
+            "an ask fee overpay should result in an invalid funds error, but got: {:?}",
+            err,
         );
     }
 
@@ -726,7 +1139,85 @@ mod tests {
             response.messages.is_empty(),
             "no messages need to be sent for a scope trade",
         );
-        let ask_order = assert_valid_response(deps.as_ref().storage, &response);
+        let ask_order = assert_valid_response(deps.as_ref().storage, &response, None);
+        assert_eq!(
+            "ask_id", ask_order.id,
+            "the proper ask id should be set in the ask order",
+        );
+        assert_eq!(
+            RequestType::ScopeTrade,
+            ask_order.ask_type,
+            "the proper ask type should be set in the ask order",
+        );
+        assert_eq!(
+            "asker",
+            ask_order.owner.as_str(),
+            "the proper owner address should be set in the ask order",
+        );
+        assert_eq!(
+            descriptor,
+            ask_order
+                .descriptor
+                .expect("the descriptor should be set in the ask order"),
+            "the proper descriptor should be set in the ask order",
+        );
+        let collateral = ask_order.collateral.unwrap_scope_trade();
+        assert_eq!(
+            DEFAULT_SCOPE_ID, collateral.scope_address,
+            "the proper scope address should be set in the ask order's collateral",
+        );
+        assert_eq!(
+            coins(100, "nhash"),
+            collateral.quote,
+            "the quote should be properly copied into the ask order's collateral",
+        );
+    }
+
+    #[test]
+    fn test_scope_trade_with_valid_data_and_ask_fee() {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(
+            deps.as_mut().storage,
+            TestInstantiate {
+                ask_fee: Some(coins(1, "askfee")),
+                ..TestInstantiate::default()
+            },
+        );
+        deps.querier
+            .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::any(&["something.pio"]),
+        );
+        let response = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &coins(1, "askfee")),
+            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(100, "nhash")),
+            Some(descriptor.clone()),
+        )
+        .expect("expected the ask to be created successfully");
+        assert_eq!(
+            1,
+            response.messages.len(),
+            "the correct number of messages should be sent",
+        );
+        match &response.messages.first().unwrap().msg {
+            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                assert_eq!(
+                    DEFAULT_ADMIN_ADDRESS, to_address,
+                    "the ask fee should be sent to the admin address",
+                );
+                assert_eq!(
+                    &coins(1, "askfee"),
+                    amount,
+                    "the correct fee amount should be sent to the admin",
+                );
+            }
+            msg => panic!("unexpected message sent: {:?}", msg),
+        };
+        let ask_order =
+            assert_valid_response(deps.as_ref().storage, &response, Some(coins(1, "askfee")));
         assert_eq!(
             "ask_id", ask_order.id,
             "the proper ask id should be set in the ask order",
@@ -775,7 +1266,8 @@ mod tests {
         .expect_err("an error should occur when funds are added to the create ask");
         assert!(
             matches!(err, ContractError::InvalidFundsProvided { .. }),
-            "an invalid funds provided error should occur when funds are added to a scope trade",
+            "an invalid funds provided error should occur when funds are added to a scope trade, but got: {:?}",
+            err,
         );
         let err = create_ask(
             deps.as_mut(),
@@ -787,7 +1279,8 @@ mod tests {
         .expect_err("an error should occur when no scope is found");
         assert!(
             matches!(err, ContractError::Std(_)),
-            "an std error should occur when the scope referenced in the request cannot be found",
+            "an std error should occur when the scope referenced in the request cannot be found, but got: {:?}",
+            err,
         );
         // Mock out the scope but with the wrong owner - it should be the contract
         deps.querier.with_scope(MockScope::new_with_owner("asker"));
@@ -801,7 +1294,8 @@ mod tests {
         .expect_err("an error should occur when the referenced scope is not owned by the contract");
         assert!(
             matches!(err, ContractError::InvalidScopeOwner { .. }),
-            "an invalid scope owner error should occur when the contract does not own the scope",
+            "an invalid scope owner error should occur when the contract does not own the scope, but got: {:?}",
+            err,
         );
         deps.querier
             .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
@@ -823,16 +1317,37 @@ mod tests {
         .expect_err("an error should occur when the ask request is improperly formed");
         assert!(
             matches!(err, ContractError::ValidationError { .. }),
-            "a validation error should occur when the ask request is improperly formed",
+            "a validation error should occur when the ask request is improperly formed, but got: {:?}",
+            err,
+        );
+        set_ask_fee(&mut deps, Some(coins(100, "askfee")));
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &coins(101, "askfee")),
+            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(100, "nhash")),
+            None,
+        )
+        .expect_err("an error should occur when a scope trade overpays the ask fee");
+        assert!(
+            matches!(err, ContractError::InvalidFundsProvided { .. }),
+            "an ask fee overpay should result in an invalid funds error, but got: {:?}",
+            err,
         );
     }
 
     fn assert_valid_response(
         storage: &dyn Storage,
         response: &Response<ProvenanceMsg>,
+        // This function implicitly assumes an ask fee is expected if this is not None
+        expected_ask_fee_charge: Option<Vec<Coin>>,
     ) -> AskOrder {
         assert_eq!(
-            2,
+            2 + if expected_ask_fee_charge.is_some() {
+                1
+            } else {
+                0
+            },
             response.attributes.len(),
             "expected the correct number of attributes",
         );
@@ -846,6 +1361,13 @@ mod tests {
             single_attribute_for_key(&response, "ask_id"),
             "expected the correct ask_id value"
         );
+        if let Some(expected_ask_fee) = expected_ask_fee_charge {
+            assert_eq!(
+                format_coin_display(&expected_ask_fee),
+                single_attribute_for_key(&response, "ask_fee_paid"),
+                "expected the correct ask_fee_paid value",
+            );
+        }
         let ask_order: AskOrder = if let Some(ask_order_binary) = &response.data {
             from_binary(&ask_order_binary)
                 .expect("expected ask order to deserialize properly from response")

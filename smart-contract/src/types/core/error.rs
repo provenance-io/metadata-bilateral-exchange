@@ -6,6 +6,9 @@ pub enum ContractError {
     #[error("Cannot create [{id_type}] with id [{id}]. One with that id already exists")]
     ExistingId { id_type: String, id: String },
 
+    #[error("{message}")]
+    GenericError { message: String },
+
     #[error("Invalid funds provided: {message}")]
     InvalidFundsProvided { message: String },
 
@@ -47,6 +50,12 @@ impl ContractError {
         ContractError::ExistingId {
             id_type: id_type.into(),
             id: id.into(),
+        }
+    }
+
+    pub fn generic_error<S: Into<String>>(message: S) -> ContractError {
+        ContractError::GenericError {
+            message: message.into(),
         }
     }
 
