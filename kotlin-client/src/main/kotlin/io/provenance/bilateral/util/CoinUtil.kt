@@ -35,6 +35,6 @@ internal object CoinUtil {
             // Ignore coins that have zero denom and/or amounts that cannot be represented as digits
             .filter { coin ->
                 coin.denom.isNotBlank() &&
-                coin.amount.toBigDecimalOrNull()?.let { amount -> amount.setScale(0) > BigDecimal.ZERO } == true
+                    coin.amount.toBigDecimalOrNull()?.let { amount -> amount.setScale(0) > BigDecimal.ZERO } == true
             }
 }
