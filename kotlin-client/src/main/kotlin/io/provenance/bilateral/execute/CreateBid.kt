@@ -12,6 +12,7 @@ import io.provenance.bilateral.execute.Bid.MarkerTradeBid
 import io.provenance.bilateral.execute.Bid.ScopeTradeBid
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.models.RequestDescriptor
+import io.provenance.bilateral.util.CoinUtil
 
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
@@ -99,12 +100,14 @@ data class CreateBid(val bid: Bid, val descriptor: RequestDescriptor?) : Contrac
     )
 
     @JsonIgnore
-    fun getFunds(): List<Coin> = mapBid(
+    fun getFunds(bidFee: List<Coin>?): List<Coin> = mapBid(
         coinTrade = { coinTrade -> coinTrade.quote },
         markerTrade = { markerTrade -> markerTrade.quote },
         markerShareSale = { markerShareSale -> markerShareSale.quote },
         scopeTrade = { scopeTrade -> scopeTrade.quote },
-    )
+    ).let { funds ->
+        bidFee?.let { CoinUtil.combineFunds(funds, bidFee) } ?: funds
+    }
 }
 
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)

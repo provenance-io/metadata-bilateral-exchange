@@ -93,25 +93,45 @@ class BilateralContractClient private constructor(
         createAsk: CreateAsk,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions(),
-    ): BroadcastTxResponse = executeContract(createAsk, signer, options, funds = createAsk.getFunds())
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = createAsk,
+        signer = signer,
+        options = options,
+        funds = createAsk.getFunds(askFee = this.getContractInfo().askFee),
+    )
 
     fun createBid(
         createBid: CreateBid,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions(),
-    ): BroadcastTxResponse = executeContract(createBid, signer, options, funds = createBid.getFunds())
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = createBid,
+        signer = signer,
+        options = options,
+        funds = createBid.getFunds(bidFee = this.getContractInfo().bidFee),
+    )
 
     fun cancelAsk(
         askId: String,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions(),
-    ): BroadcastTxResponse = executeContract(CancelAsk(askId), signer, options, funds = emptyList())
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = CancelAsk(askId),
+        signer = signer,
+        options = options,
+        funds = emptyList(),
+    )
 
     fun cancelBid(
         bidId: String,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions(),
-    ): BroadcastTxResponse = executeContract(CancelBid(bidId), signer, options, funds = emptyList())
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = CancelBid(bidId),
+        signer = signer,
+        options = options,
+        funds = emptyList(),
+    )
 
     // IMPORTANT: The Signer used in this function must be the contract's admin account or the asker associated with the
     // match message's askId.
@@ -119,47 +139,81 @@ class BilateralContractClient private constructor(
         executeMatch: ExecuteMatch,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions(),
-    ): BroadcastTxResponse = executeContract(executeMatch, signer, options, funds = emptyList())
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = executeMatch,
+        signer = signer,
+        options = options,
+        funds = emptyList(),
+    )
 
     // IMPORTANT: The Signer used in this function must be the contract's admin account.
     fun updateSettings(
         updateSettings: UpdateSettings,
         signer: Signer,
         options: BroadcastOptions = BroadcastOptions(),
-    ): BroadcastTxResponse = executeContract(updateSettings, signer, options, funds = emptyList())
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = updateSettings,
+        signer = signer,
+        options = options,
+        funds = emptyList(),
+    )
 
     fun generateCreateAskMsg(
         createAsk: CreateAsk,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(createAsk, senderAddress, funds = createAsk.getFunds())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = createAsk,
+        senderAddress = senderAddress,
+        funds = createAsk.getFunds(askFee = this.getContractInfo().askFee),
+    )
 
     fun generateCreateBidMsg(
         createBid: CreateBid,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(createBid, senderAddress, funds = createBid.getFunds())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = createBid,
+        senderAddress = senderAddress,
+        funds = createBid.getFunds(bidFee = this.getContractInfo().bidFee),
+    )
 
     fun generateCancelAskMsg(
         askId: String,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(CancelAsk(askId), senderAddress, funds = emptyList())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = CancelAsk(askId),
+        senderAddress = senderAddress,
+        funds = emptyList(),
+    )
 
     fun generateCancelBidMsg(
         bidId: String,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(CancelBid(bidId), senderAddress, funds = emptyList())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = CancelBid(bidId),
+        senderAddress = senderAddress,
+        funds = emptyList(),
+    )
 
     // IMPORTANT: The Signer used in this function must be the contract's admin account or the asker associated with the
     // match message's askId.
     fun generateExecuteMatchMsg(
         executeMatch: ExecuteMatch,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(executeMatch, senderAddress, funds = emptyList())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = executeMatch,
+        senderAddress = senderAddress,
+        funds = emptyList(),
+    )
 
     // IMPORTANT: The Signer used in this function must be the contract's admin account.
     fun generateUpdateSettingsMsg(
         updateSettings: UpdateSettings,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(updateSettings, senderAddress, funds = emptyList())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = updateSettings,
+        senderAddress = senderAddress,
+        funds = emptyList(),
+    )
 
     /**
      * Converts a class that inherits from ContractExecuteMsg to a MsgExecuteContract.  This ensures

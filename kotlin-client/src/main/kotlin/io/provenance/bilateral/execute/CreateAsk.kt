@@ -13,6 +13,7 @@ import io.provenance.bilateral.execute.Ask.ScopeTradeAsk
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.models.RequestDescriptor
 import io.provenance.bilateral.models.ShareSaleType
+import io.provenance.bilateral.util.CoinUtil
 
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
@@ -102,12 +103,14 @@ data class CreateAsk(
     )
 
     @JsonIgnore
-    fun getFunds(): List<Coin> = mapAsk(
+    fun getFunds(askFee: List<Coin>?): List<Coin> = mapAsk(
         coinTrade = { coinTrade -> coinTrade.base },
         markerTrade = { emptyList() },
         markerShareSale = { emptyList() },
         scopeTrade = { emptyList() },
-    )
+    ).let { funds ->
+        askFee?.let { CoinUtil.combineFunds(funds, it) } ?: funds
+    }
 }
 
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
