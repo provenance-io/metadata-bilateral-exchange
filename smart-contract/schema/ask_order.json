@@ -187,18 +187,19 @@
     "MarkerShareSaleAskCollateral": {
       "type": "object",
       "required": [
-        "address",
-        "denom",
+        "marker_address",
+        "marker_denom",
         "quote_per_share",
-        "remaining_shares",
+        "remaining_shares_in_sale",
         "removed_permissions",
-        "sale_type"
+        "sale_type",
+        "total_shares_in_sale"
       ],
       "properties": {
-        "address": {
+        "marker_address": {
           "$ref": "#/definitions/Addr"
         },
-        "denom": {
+        "marker_denom": {
           "type": "string"
         },
         "quote_per_share": {
@@ -207,7 +208,7 @@
             "$ref": "#/definitions/Coin"
           }
         },
-        "remaining_shares": {
+        "remaining_shares_in_sale": {
           "$ref": "#/definitions/Uint128"
         },
         "removed_permissions": {
@@ -218,23 +219,26 @@
         },
         "sale_type": {
           "$ref": "#/definitions/ShareSaleType"
+        },
+        "total_shares_in_sale": {
+          "$ref": "#/definitions/Uint128"
         }
       }
     },
     "MarkerTradeAskCollateral": {
       "type": "object",
       "required": [
-        "address",
-        "denom",
+        "marker_address",
+        "marker_denom",
         "quote_per_share",
         "removed_permissions",
         "share_count"
       ],
       "properties": {
-        "address": {
+        "marker_address": {
           "$ref": "#/definitions/Addr"
         },
-        "denom": {
+        "marker_denom": {
           "type": "string"
         },
         "quote_per_share": {
@@ -313,53 +317,10 @@
       }
     },
     "ShareSaleType": {
-      "anyOf": [
-        {
-          "description": "Indicates that only a single transaction will be made after an ask of this share type is made. Ex: Asker indicates they want to sell  80 shares of their marker at a certain quote.  The bidder must buy exactly that many shares.",
-          "type": "object",
-          "required": [
-            "single_transaction"
-          ],
-          "properties": {
-            "single_transaction": {
-              "type": "object",
-              "required": [
-                "share_count"
-              ],
-              "properties": {
-                "share_count": {
-                  "$ref": "#/definitions/Uint128"
-                }
-              }
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "Indicates that multiple transactions can be made after an ask of this share type is made. Optionally allows the sale to be withdrawn after a certain share count is met.  This ensures that shares can be purchased many times from the marker, but never more shares than would reduce the marker's share count below the specified threshold.  The ask is automatically deleted after the threshold is hit.  If the value is not specified, a default of zero will be used. Ex: Asker indicates they want to sell shares of their marker until there are only 10 remaining.  Multiple bids can come in and incrementally buy shares from the marker.  Once the threshold of 10 remaining shares is hit, the ask will be automatically deleted.",
-          "type": "object",
-          "required": [
-            "multiple_transactions"
-          ],
-          "properties": {
-            "multiple_transactions": {
-              "type": "object",
-              "properties": {
-                "remove_sale_share_threshold": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/definitions/Uint128"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "additionalProperties": false
-        }
+      "type": "string",
+      "enum": [
+        "single_transaction",
+        "multiple_transactions"
       ]
     },
     "Timestamp": {

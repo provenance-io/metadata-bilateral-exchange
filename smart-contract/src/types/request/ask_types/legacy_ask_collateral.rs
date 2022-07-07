@@ -1,5 +1,5 @@
 use crate::types::core::error::ContractError;
-use crate::types::request::share_sale_type::ShareSaleType;
+use crate::types::request::legacy_share_sale_type::LegacyShareSaleType;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{Addr, Coin, Uint128};
 use provwasm_std::AccessGrant;
@@ -42,7 +42,7 @@ impl LegacyAskCollateral {
         remaining_shares: u128,
         quote_per_share: &[Coin],
         removed_permissions: &[AccessGrant],
-        sale_type: ShareSaleType,
+        sale_type: LegacyShareSaleType,
     ) -> Self {
         Self::MarkerShareSale(LegacyMarkerShareSaleAskCollateral::new(
             address,
@@ -139,7 +139,7 @@ pub struct LegacyMarkerShareSaleAskCollateral {
     pub remaining_shares: Uint128,
     pub quote_per_share: Vec<Coin>,
     pub removed_permissions: Vec<AccessGrant>,
-    pub sale_type: ShareSaleType,
+    pub sale_type: LegacyShareSaleType,
 }
 impl LegacyMarkerShareSaleAskCollateral {
     fn new<S: Into<String>>(
@@ -148,7 +148,7 @@ impl LegacyMarkerShareSaleAskCollateral {
         remaining_shares: u128,
         quote_per_share: &[Coin],
         removed_permissions: &[AccessGrant],
-        sale_type: ShareSaleType,
+        sale_type: LegacyShareSaleType,
     ) -> Self {
         Self {
             address,

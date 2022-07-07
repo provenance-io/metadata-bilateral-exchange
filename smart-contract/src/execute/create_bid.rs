@@ -95,7 +95,8 @@ fn create_marker_trade_collateral(
         .to_err();
     }
     // This grants us access to the marker address, as well as ensuring that the marker is real
-    let marker = ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.marker_denom)?;
+    let marker =
+        ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.marker_denom)?;
     BidCollateral::marker_trade(marker.address, &marker_trade.marker_denom, quote_funds).to_ok()
 }
 
@@ -122,8 +123,8 @@ fn create_marker_share_sale_collateral(
         )
         .to_err();
     }
-    let marker =
-        ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_share_sale.marker_denom)?;
+    let marker = ProvenanceQuerier::new(&deps.querier)
+        .get_marker_by_denom(&marker_share_sale.marker_denom)?;
     let marker_shares_available = get_single_marker_coin_holding(&marker)?.amount.u128();
     if marker_share_sale.share_count.u128() > marker_shares_available {
         return ContractError::validation_error(&[format!(

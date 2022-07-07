@@ -6,6 +6,7 @@ use crate::execute::execute_match::execute_match;
 use crate::execute::update_settings::update_settings;
 use crate::instantiate::instantiate_contract::instantiate_contract;
 use crate::migrate::migrate_contract::migrate_contract;
+use crate::migrate::migrate_legacy_orders::migrate_legacy_orders;
 use crate::query::get_ask::query_ask;
 use crate::query::get_ask_by_collateral_id::query_ask_by_collateral_id;
 use crate::query::get_bid::query_bid;
@@ -78,6 +79,7 @@ pub fn migrate(
     msg: MigrateMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     match msg {
-        MigrateMsg::ContractUpgrade {} => migrate_contract(deps),
+        MigrateMsg::ContractUpgrade {} => migrate_contract(&deps),
+        MigrateMsg::MigrateLegacyOrders {} => migrate_legacy_orders(deps),
     }
 }

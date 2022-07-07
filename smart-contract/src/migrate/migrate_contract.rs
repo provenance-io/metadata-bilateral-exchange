@@ -6,7 +6,7 @@ use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
 use semver::Version;
 
 pub fn migrate_contract(
-    deps: DepsMut<ProvenanceQuery>,
+    deps: &DepsMut<ProvenanceQuery>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let mut contract_info = get_contract_info(deps.storage)?;
     check_valid_migration_versioning(&contract_info)?;
@@ -45,7 +45,7 @@ mod tests {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         let response =
-            migrate_contract(deps.as_mut()).expect("expected a simple migrate to succeed");
+            migrate_contract(&deps.as_mut()).expect("expected a simple migrate to succeed");
         assert!(
             response.messages.is_empty(),
             "migrations should never produce messages",
@@ -76,7 +76,7 @@ mod tests {
         contract_info.contract_version = "999.999.999".to_string();
         set_contract_info(deps.as_mut().storage, &contract_info)
             .expect("expected contract info to be stored successfully");
-        let err = migrate_contract(deps.as_mut())
+        let err = migrate_contract(&deps.as_mut())
             .expect_err("an error should be produced if the contract is downgraded");
         match err {
             ContractError::InvalidMigration { message } => {
