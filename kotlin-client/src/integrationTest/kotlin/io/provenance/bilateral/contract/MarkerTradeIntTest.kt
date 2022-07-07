@@ -54,7 +54,7 @@ class MarkerTradeIntTest : ContractIntTest() {
         val askUuid = UUID.randomUUID()
         val createAsk = CreateAsk.newMarkerTrade(
             id = askUuid.toString(),
-            denom = markerDenom,
+            markerDenom = markerDenom,
             quotePerShare = newCoins(15, bidderDenom),
             descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
         )
@@ -70,7 +70,7 @@ class MarkerTradeIntTest : ContractIntTest() {
         val bidUuid = UUID.randomUUID()
         val createBid = CreateBid.newMarkerTrade(
             id = bidUuid.toString(),
-            denom = markerDenom,
+            markerDenom = markerDenom,
             quote = newCoins(150, bidderDenom),
             descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
         )
@@ -125,7 +125,7 @@ class MarkerTradeIntTest : ContractIntTest() {
         val askUuid = UUID.randomUUID()
         val createAsk = CreateAsk.newMarkerTrade(
             id = askUuid.toString(),
-            denom = markerDenom,
+            markerDenom = markerDenom,
             quotePerShare = newCoins(10, "nhash"),
         )
         assertFails("When the contract is not an admin on the marker, creating the ask should fail") {
@@ -145,7 +145,7 @@ class MarkerTradeIntTest : ContractIntTest() {
             bilateralClient.createAsk(
                 createAsk = CreateAsk.newMarkerTrade(
                     id = UUID.randomUUID().toString(),
-                    denom = markerDenom,
+                    markerDenom = markerDenom,
                     quotePerShare = newCoins(150, "nhash"),
                 ),
                 signer = BilateralAccounts.askerAccount,
@@ -183,7 +183,7 @@ class MarkerTradeIntTest : ContractIntTest() {
         val bidUuid = UUID.randomUUID()
         val createBid = CreateBid.newMarkerTrade(
             id = bidUuid.toString(),
-            denom = bidderDenom,
+            markerDenom = bidderDenom,
             quote = newCoins(99, bidderDenom),
         )
         bilateralClient.createBid(createBid, BilateralAccounts.bidderAccount)

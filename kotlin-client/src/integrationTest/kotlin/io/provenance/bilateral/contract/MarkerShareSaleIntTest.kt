@@ -60,9 +60,10 @@ class MarkerShareSaleIntTest : ContractIntTest() {
         val askUuid = UUID.randomUUID()
         val createAsk = CreateAsk.newMarkerShareSale(
             id = askUuid.toString(),
-            denom = markerDenom,
+            markerDenom = markerDenom,
+            sharesToSell = shareSaleAmount.toString(),
             quotePerShare = newCoins(1, bidderDenom),
-            shareSaleType = ShareSaleType.single(shareSaleAmount.toString()),
+            shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now())
         )
         bilateralClient.createAsk(createAsk, BilateralAccounts.askerAccount)
@@ -76,9 +77,10 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             bilateralClient.createAsk(
                 createAsk = CreateAsk.newMarkerShareSale(
                     id = UUID.randomUUID().toString(),
-                    denom = markerDenom,
+                    markerDenom = markerDenom,
+                    sharesToSell = shareSaleAmount.toString(),
                     quotePerShare = newCoins(1, bidderDenom),
-                    shareSaleType = ShareSaleType.single(shareSaleAmount.toString()),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
                 ),
                 signer = BilateralAccounts.askerAccount,
             )
@@ -86,7 +88,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
         val bidUuid = UUID.randomUUID()
         val createBid = CreateBid.newMarkerShareSale(
             id = bidUuid.toString(),
-            denom = markerDenom,
+            markerDenom = markerDenom,
             shareCount = shareSaleAmount.toString(),
             quote = newCoins(50, bidderDenom),
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now())
@@ -164,9 +166,10 @@ class MarkerShareSaleIntTest : ContractIntTest() {
         val askUuid = UUID.randomUUID()
         val createAsk = CreateAsk.newMarkerShareSale(
             id = askUuid.toString(),
-            denom = markerDenom,
+            markerDenom = markerDenom,
+            sharesToSell = shareCount.minus(shareCutoff).toString(),
             quotePerShare = newCoins(1, bidderDenom),
-            shareSaleType = ShareSaleType.multiple(removeSaleShareThreshold = shareCutoff.toString()),
+            shareSaleType = ShareSaleType.MULTIPLE_TRANSACTIONS,
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now())
         )
         bilateralClient.createAsk(
@@ -186,7 +189,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             val bidUuid = UUID.randomUUID()
             val createBid = CreateBid.newMarkerShareSale(
                 id = bidUuid.toString(),
-                denom = markerDenom,
+                markerDenom = markerDenom,
                 shareCount = sharePurchaseCount.toString(),
                 // Pay 1 bidderDenom per share
                 quote = newCoins(sharePurchaseCount, bidderDenom),
@@ -255,9 +258,10 @@ class MarkerShareSaleIntTest : ContractIntTest() {
         val askUuid = UUID.randomUUID()
         val createAsk = CreateAsk.newMarkerShareSale(
             id = askUuid.toString(),
-            denom = markerDenom,
+            markerDenom = markerDenom,
+            sharesToSell = 100.toString(),
             quotePerShare = newCoins(100, "nhash"),
-            shareSaleType = ShareSaleType.single(100.toString()),
+            shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
         )
         assertFails("An ask cannot be created when the contract does not have admin and withdraw permissions on the marker") {
             bilateralClient.createAsk(createAsk, BilateralAccounts.askerAccount)
@@ -298,9 +302,10 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             bilateralClient.createAsk(
                 createAsk = CreateAsk.newMarkerShareSale(
                     id = UUID.randomUUID().toString(),
-                    denom = markerDenom,
+                    markerDenom = markerDenom,
+                    sharesToSell = 100.toString(),
                     quotePerShare = newCoins(1, "nhash"),
-                    shareSaleType = ShareSaleType.single(100.toString()),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
                 ),
                 signer = BilateralAccounts.askerAccount,
             )
@@ -332,7 +337,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
         val bidUuid = UUID.randomUUID()
         val createBid = CreateBid.newMarkerShareSale(
             id = bidUuid.toString(),
-            denom = bidderDenom,
+            markerDenom = bidderDenom,
             shareCount = 100.toString(),
             quote = newCoins(100, bidderDenom),
         )

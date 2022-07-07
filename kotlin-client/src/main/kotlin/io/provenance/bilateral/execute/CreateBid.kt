@@ -35,13 +35,13 @@ data class CreateBid(val bid: Bid, val descriptor: RequestDescriptor?) : Contrac
 
         fun newMarkerTrade(
             id: String,
-            denom: String,
+            markerDenom: String,
             quote: List<Coin>,
             descriptor: RequestDescriptor? = null,
         ): CreateBid = CreateBid(
             bid = MarkerTradeBid(
                 id = id,
-                denom = denom,
+                markerDenom = markerDenom,
                 quote = quote,
             ),
             descriptor = descriptor,
@@ -49,14 +49,14 @@ data class CreateBid(val bid: Bid, val descriptor: RequestDescriptor?) : Contrac
 
         fun newMarkerShareSale(
             id: String,
-            denom: String,
+            markerDenom: String,
             shareCount: String,
             quote: List<Coin>,
             descriptor: RequestDescriptor? = null,
         ): CreateBid = CreateBid(
             bid = MarkerShareSaleBid(
                 id = id,
-                denom = denom,
+                markerDenom = markerDenom,
                 shareCount = shareCount,
                 quote = quote,
             ),
@@ -126,7 +126,7 @@ sealed interface Bid {
     @JsonTypeName("marker_trade")
     data class MarkerTradeBid(
         val id: String,
-        val denom: String,
+        val markerDenom: String,
         // The quote is used for funds, and never added to the json payload send to the contract
         @JsonIgnore
         val quote: List<Coin>,
@@ -136,7 +136,7 @@ sealed interface Bid {
     @JsonTypeName("marker_share_sale")
     data class MarkerShareSaleBid(
         val id: String,
-        val denom: String,
+        val markerDenom: String,
         val shareCount: String,
         // The quote is used for funds, and never added to the json payload send to the contract
         @JsonIgnore
