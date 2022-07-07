@@ -53,9 +53,9 @@ impl AskOrder {
             // Coin trades have no metadata involved - just use self.id as a duplicate index
             AskCollateral::CoinTrade(_) => self.id.clone(),
             // Marker trades include a marker address - only one ask per marker should be created at a time
-            AskCollateral::MarkerTrade(collateral) => collateral.address.to_string(),
+            AskCollateral::MarkerTrade(collateral) => collateral.marker_address.to_string(),
             // Marker trades include a marker address - only one ask per marker should be created at a time
-            AskCollateral::MarkerShareSale(collateral) => collateral.address.to_string(),
+            AskCollateral::MarkerShareSale(collateral) => collateral.marker_address.to_string(),
             // Scope trades include a scope address - only one ask per scope should be created at a time
             AskCollateral::ScopeTrade(collateral) => collateral.scope_address.to_owned(),
         }

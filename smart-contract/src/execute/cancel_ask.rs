@@ -42,14 +42,14 @@ pub fn cancel_ask(
         }
         AskCollateral::MarkerTrade(collateral) => {
             messages.append(&mut release_marker_from_contract(
-                &collateral.denom,
+                &collateral.marker_denom,
                 &env.contract.address,
                 &collateral.removed_permissions,
             )?);
         }
         AskCollateral::MarkerShareSale(collateral) => {
             messages.append(&mut release_marker_from_contract(
-                &collateral.denom,
+                &collateral.marker_denom,
                 &env.contract.address,
                 &collateral.removed_permissions,
             )?);
@@ -312,8 +312,9 @@ mod tests {
             Ask::new_marker_share_sale(
                 &ask_id,
                 DEFAULT_MARKER_DENOM,
+                DEFAULT_MARKER_HOLDINGS,
                 &coins(150, "nhash"),
-                ShareSaleType::single(DEFAULT_MARKER_HOLDINGS),
+                ShareSaleType::SingleTransaction,
             ),
             None,
         )

@@ -6,29 +6,30 @@ use provwasm_std::AccessGrant;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+// TODO: Remove this after type migrations have occurred
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum AskCollateral {
-    CoinTrade(CoinTradeAskCollateral),
-    MarkerTrade(MarkerTradeAskCollateral),
-    MarkerShareSale(MarkerShareSaleAskCollateral),
-    ScopeTrade(ScopeTradeAskCollateral),
+pub enum LegacyAskCollateral {
+    CoinTrade(LegacyCoinTradeAskCollateral),
+    MarkerTrade(LegacyMarkerTradeAskCollateral),
+    MarkerShareSale(LegacyMarkerShareSaleAskCollateral),
+    ScopeTrade(LegacyScopeTradeAskCollateral),
 }
-impl AskCollateral {
+impl LegacyAskCollateral {
     pub fn coin_trade(base: &[Coin], quote: &[Coin]) -> Self {
-        Self::CoinTrade(CoinTradeAskCollateral::new(base, quote))
+        Self::CoinTrade(LegacyCoinTradeAskCollateral::new(base, quote))
     }
 
     pub fn marker_trade<S: Into<String>>(
-        marker_address: Addr,
-        marker_denom: S,
+        address: Addr,
+        denom: S,
         share_count: u128,
         quote_per_share: &[Coin],
         removed_permissions: &[AccessGrant],
     ) -> Self {
-        Self::MarkerTrade(MarkerTradeAskCollateral::new(
-            marker_address,
-            marker_denom,
+        Self::MarkerTrade(LegacyMarkerTradeAskCollateral::new(
+            address,
+            denom,
             share_count,
             quote_per_share,
             removed_permissions,
@@ -36,19 +37,17 @@ impl AskCollateral {
     }
 
     pub fn marker_share_sale<S: Into<String>>(
-        marker_address: Addr,
-        marker_denom: S,
-        total_shares_in_sale: u128,
-        remaining_shares_in_sale: u128,
+        address: Addr,
+        denom: S,
+        remaining_shares: u128,
         quote_per_share: &[Coin],
         removed_permissions: &[AccessGrant],
         sale_type: ShareSaleType,
     ) -> Self {
-        Self::MarkerShareSale(MarkerShareSaleAskCollateral::new(
-            marker_address,
-            marker_denom,
-            total_shares_in_sale,
-            remaining_shares_in_sale,
+        Self::MarkerShareSale(LegacyMarkerShareSaleAskCollateral::new(
+            address,
+            denom,
+            remaining_shares,
             quote_per_share,
             removed_permissions,
             sale_type,
@@ -56,33 +55,35 @@ impl AskCollateral {
     }
 
     pub fn scope_trade<S: Into<String>>(scope_address: S, quote: &[Coin]) -> Self {
-        Self::ScopeTrade(ScopeTradeAskCollateral::new(scope_address, quote))
+        Self::ScopeTrade(LegacyScopeTradeAskCollateral::new(scope_address, quote))
     }
 
-    pub fn get_coin_trade(&self) -> Result<&CoinTradeAskCollateral, ContractError> {
+    pub fn get_coin_trade(&self) -> Result<&LegacyCoinTradeAskCollateral, ContractError> {
         match self {
-            AskCollateral::CoinTrade(collateral) => collateral.to_ok(),
+            LegacyAskCollateral::CoinTrade(collateral) => collateral.to_ok(),
             _ => ContractError::invalid_type("expected coin trade ask collateral").to_err(),
         }
     }
 
-    pub fn get_marker_trade(&self) -> Result<&MarkerTradeAskCollateral, ContractError> {
+    pub fn get_marker_trade(&self) -> Result<&LegacyMarkerTradeAskCollateral, ContractError> {
         match self {
-            AskCollateral::MarkerTrade(collateral) => collateral.to_ok(),
+            LegacyAskCollateral::MarkerTrade(collateral) => collateral.to_ok(),
             _ => ContractError::invalid_type("expected marker trade ask collateral").to_err(),
         }
     }
 
-    pub fn get_marker_share_sale(&self) -> Result<&MarkerShareSaleAskCollateral, ContractError> {
+    pub fn get_marker_share_sale(
+        &self,
+    ) -> Result<&LegacyMarkerShareSaleAskCollateral, ContractError> {
         match self {
-            AskCollateral::MarkerShareSale(collateral) => collateral.to_ok(),
+            LegacyAskCollateral::MarkerShareSale(collateral) => collateral.to_ok(),
             _ => ContractError::invalid_type("expected marker share sale ask collateral").to_err(),
         }
     }
 
-    pub fn get_scope_trade(&self) -> Result<&ScopeTradeAskCollateral, ContractError> {
+    pub fn get_scope_trade(&self) -> Result<&LegacyScopeTradeAskCollateral, ContractError> {
         match self {
-            AskCollateral::ScopeTrade(collateral) => collateral.to_ok(),
+            LegacyAskCollateral::ScopeTrade(collateral) => collateral.to_ok(),
             _ => ContractError::invalid_type("expected scope trade ask collateral").to_err(),
         }
     }
@@ -90,11 +91,11 @@ impl AskCollateral {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub struct CoinTradeAskCollateral {
+pub struct LegacyCoinTradeAskCollateral {
     pub base: Vec<Coin>,
     pub quote: Vec<Coin>,
 }
-impl CoinTradeAskCollateral {
+impl LegacyCoinTradeAskCollateral {
     fn new(base: &[Coin], quote: &[Coin]) -> Self {
         Self {
             base: base.to_owned(),
@@ -105,24 +106,24 @@ impl CoinTradeAskCollateral {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub struct MarkerTradeAskCollateral {
-    pub marker_address: Addr,
-    pub marker_denom: String,
+pub struct LegacyMarkerTradeAskCollateral {
+    pub address: Addr,
+    pub denom: String,
     pub share_count: Uint128,
     pub quote_per_share: Vec<Coin>,
     pub removed_permissions: Vec<AccessGrant>,
 }
-impl MarkerTradeAskCollateral {
+impl LegacyMarkerTradeAskCollateral {
     fn new<S: Into<String>>(
-        marker_address: Addr,
-        marker_denom: S,
+        address: Addr,
+        denom: S,
         share_count: u128,
         quote_per_share: &[Coin],
         removed_permissions: &[AccessGrant],
     ) -> Self {
         Self {
-            marker_address,
-            marker_denom: marker_denom.into(),
+            address,
+            denom: denom.into(),
             share_count: Uint128::new(share_count),
             quote_per_share: quote_per_share.to_owned(),
             removed_permissions: removed_permissions.to_owned(),
@@ -132,30 +133,27 @@ impl MarkerTradeAskCollateral {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub struct MarkerShareSaleAskCollateral {
-    pub marker_address: Addr,
-    pub marker_denom: String,
-    pub total_shares_in_sale: Uint128,
-    pub remaining_shares_in_sale: Uint128,
+pub struct LegacyMarkerShareSaleAskCollateral {
+    pub address: Addr,
+    pub denom: String,
+    pub remaining_shares: Uint128,
     pub quote_per_share: Vec<Coin>,
     pub removed_permissions: Vec<AccessGrant>,
     pub sale_type: ShareSaleType,
 }
-impl MarkerShareSaleAskCollateral {
+impl LegacyMarkerShareSaleAskCollateral {
     fn new<S: Into<String>>(
-        marker_address: Addr,
-        marker_denom: S,
-        total_shares_in_sale: u128,
-        remaining_shares_in_sale: u128,
+        address: Addr,
+        denom: S,
+        remaining_shares: u128,
         quote_per_share: &[Coin],
         removed_permissions: &[AccessGrant],
         sale_type: ShareSaleType,
     ) -> Self {
         Self {
-            marker_address,
-            marker_denom: marker_denom.into(),
-            total_shares_in_sale: Uint128::new(total_shares_in_sale),
-            remaining_shares_in_sale: Uint128::new(remaining_shares_in_sale),
+            address,
+            denom: denom.into(),
+            remaining_shares: Uint128::new(remaining_shares),
             quote_per_share: quote_per_share.to_owned(),
             removed_permissions: removed_permissions.to_owned(),
             sale_type,
@@ -165,11 +163,11 @@ impl MarkerShareSaleAskCollateral {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub struct ScopeTradeAskCollateral {
+pub struct LegacyScopeTradeAskCollateral {
     pub scope_address: String,
     pub quote: Vec<Coin>,
 }
-impl ScopeTradeAskCollateral {
+impl LegacyScopeTradeAskCollateral {
     fn new<S: Into<String>>(scope_address: S, quote: &[Coin]) -> Self {
         Self {
             scope_address: scope_address.into(),

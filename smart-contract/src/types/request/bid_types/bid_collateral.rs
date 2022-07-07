@@ -17,19 +17,27 @@ impl BidCollateral {
         Self::CoinTrade(CoinTradeBidCollateral::new(base, quote))
     }
 
-    pub fn marker_trade<S: Into<String>>(address: Addr, denom: S, quote: &[Coin]) -> Self {
-        Self::MarkerTrade(MarkerTradeBidCollateral::new(address, denom, quote))
+    pub fn marker_trade<S: Into<String>>(
+        marker_address: Addr,
+        marker_denom: S,
+        quote: &[Coin],
+    ) -> Self {
+        Self::MarkerTrade(MarkerTradeBidCollateral::new(
+            marker_address,
+            marker_denom,
+            quote,
+        ))
     }
 
     pub fn marker_share_sale<S: Into<String>>(
-        address: Addr,
-        denom: S,
+        marker_address: Addr,
+        marker_denom: S,
         share_count: u128,
         quote: &[Coin],
     ) -> Self {
         Self::MarkerShareSale(MarkerShareSaleBidCollateral::new(
-            address,
-            denom,
+            marker_address,
+            marker_denom,
             share_count,
             quote,
         ))
@@ -86,15 +94,15 @@ impl CoinTradeBidCollateral {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MarkerTradeBidCollateral {
-    pub address: Addr,
-    pub denom: String,
+    pub marker_address: Addr,
+    pub marker_denom: String,
     pub quote: Vec<Coin>,
 }
 impl MarkerTradeBidCollateral {
-    pub fn new<S: Into<String>>(address: Addr, denom: S, quote: &[Coin]) -> Self {
+    pub fn new<S: Into<String>>(marker_address: Addr, marker_denom: S, quote: &[Coin]) -> Self {
         Self {
-            address,
-            denom: denom.into(),
+            marker_address,
+            marker_denom: marker_denom.into(),
             quote: quote.to_owned(),
         }
     }
@@ -103,21 +111,21 @@ impl MarkerTradeBidCollateral {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MarkerShareSaleBidCollateral {
-    pub address: Addr,
-    pub denom: String,
+    pub marker_address: Addr,
+    pub marker_denom: String,
     pub share_count: Uint128,
     pub quote: Vec<Coin>,
 }
 impl MarkerShareSaleBidCollateral {
     pub fn new<S: Into<String>>(
-        address: Addr,
-        denom: S,
+        marker_address: Addr,
+        marker_denom: S,
         share_count: u128,
         quote: &[Coin],
     ) -> Self {
         Self {
-            address,
-            denom: denom.into(),
+            marker_address,
+            marker_denom: marker_denom.into(),
             share_count: Uint128::new(share_count),
             quote: quote.to_owned(),
         }

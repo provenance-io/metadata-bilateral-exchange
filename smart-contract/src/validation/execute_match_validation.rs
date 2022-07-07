@@ -239,18 +239,18 @@ fn get_marker_trade_collateral_validation(
         "MARKER TRADE Match Validation for AskOrder [{}] and BidOrder [{}]:",
         &ask.id, &bid.id
     );
-    if ask_collateral.denom != bid_collateral.denom {
+    if ask_collateral.marker_denom != bid_collateral.marker_denom {
         validation_messages.push(format!(
             "{} Ask marker denom [{}] does not match bid marker denom [{}]",
-            &identifiers, &ask_collateral.denom, &bid_collateral.denom
+            &identifiers, &ask_collateral.marker_denom, &bid_collateral.marker_denom
         ));
     }
-    if ask_collateral.address.as_str() != bid_collateral.address.as_str() {
+    if ask_collateral.marker_address.as_str() != bid_collateral.marker_address.as_str() {
         validation_messages.push(format!(
             "{} Ask marker address [{}] does not match bid marker address [{}]",
             &identifiers,
-            &ask_collateral.address.as_str(),
-            &bid_collateral.address.as_str()
+            &ask_collateral.marker_address.as_str(),
+            &bid_collateral.marker_address.as_str()
         ));
     }
     // If a denom or address mismatch exists between the ask and bid, no other sane checks can be
@@ -258,19 +258,20 @@ fn get_marker_trade_collateral_validation(
     if !validation_messages.is_empty() {
         return validation_messages;
     }
-    let marker =
-        match ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&ask_collateral.denom) {
-            Ok(marker) => marker,
-            // Exit early if the marker does not appear to be available in the Provenance Blockchain
-            // system.  No marker means the remaining checks are meaningless.
-            Err(_) => {
-                validation_messages.push(format!(
-                    "{} Failed to find marker for denom [{}]",
-                    &identifiers, &ask_collateral.denom
-                ));
-                return validation_messages;
-            }
-        };
+    let marker = match ProvenanceQuerier::new(&deps.querier)
+        .get_marker_by_denom(&ask_collateral.marker_denom)
+    {
+        Ok(marker) => marker,
+        // Exit early if the marker does not appear to be available in the Provenance Blockchain
+        // system.  No marker means the remaining checks are meaningless.
+        Err(_) => {
+            validation_messages.push(format!(
+                "{} Failed to find marker for denom [{}]",
+                &identifiers, &ask_collateral.marker_denom
+            ));
+            return validation_messages;
+        }
+    };
     let marker_share_count = if let Ok(marker_coin) = get_single_marker_coin_holding(&marker) {
         if marker_coin.amount.u128() != ask_collateral.share_count.u128() {
             validation_messages.push(
@@ -288,7 +289,7 @@ fn get_marker_trade_collateral_validation(
             "{} Marker had invalid coin holdings for match: [{}]. Expected a single instance of coin [{}]",
             &identifiers,
             format_coin_display(&marker.coins),
-            &ask_collateral.denom,
+            &ask_collateral.marker_denom,
         ));
         return validation_messages;
     };
@@ -323,18 +324,18 @@ fn get_marker_share_sale_collateral_validation(
         "MARKER SHARE SALE Match Validation for AskOrder [{}] and BidOrder [{}]:",
         &ask.id, &bid.id,
     );
-    if ask_collateral.denom != bid_collateral.denom {
+    if ask_collateral.marker_denom != bid_collateral.marker_denom {
         validation_messages.push(format!(
             "{} Ask marker denom [{}] does not match bid marker denom [{}]",
-            &identifiers, &ask_collateral.denom, &bid_collateral.denom,
+            &identifiers, &ask_collateral.marker_denom, &bid_collateral.marker_denom,
         ));
     }
-    if ask_collateral.address.as_str() != bid_collateral.address.as_str() {
+    if ask_collateral.marker_address.as_str() != bid_collateral.marker_address.as_str() {
         validation_messages.push(format!(
             "{} Ask marker address [{}] does not match bid marker address [{}]",
             &identifiers,
-            &ask_collateral.address.as_str(),
-            &bid_collateral.address.as_str()
+            &ask_collateral.marker_address.as_str(),
+            &bid_collateral.marker_address.as_str()
         ));
     }
     // If a denom or address mismatch exists between the ask and bid, no other sane checks can be
@@ -343,64 +344,48 @@ fn get_marker_share_sale_collateral_validation(
         return validation_messages;
     }
     match ask_collateral.sale_type {
-        ShareSaleType::SingleTransaction { share_count } => {
-            if bid_collateral.share_count.u128() != share_count.u128() {
+        ShareSaleType::SingleTransaction => {
+            if bid_collateral.share_count.u128() != ask_collateral.total_shares_in_sale.u128() {
                 validation_messages.push(format!(
                     "{} Ask requested that [{}] shares be purchased, but bid wanted [{}]",
                     &identifiers,
-                    share_count.u128(),
+                    ask_collateral.total_shares_in_sale.u128(),
                     bid_collateral.share_count.u128(),
                 ));
             }
         }
-        ShareSaleType::MultipleTransactions {
-            remove_sale_share_threshold,
-        } => {
-            if ask_collateral.remaining_shares.u128() < bid_collateral.share_count.u128() {
+        ShareSaleType::MultipleTransactions => {
+            if ask_collateral.remaining_shares_in_sale.u128() < bid_collateral.share_count.u128() {
                 validation_messages.push(format!(
                     "{} Bid requested [{}] shares but the remaining share count is [{}]",
                     &identifiers,
                     bid_collateral.share_count.u128(),
-                    ask_collateral.remaining_shares.u128()
+                    ask_collateral.remaining_shares_in_sale.u128()
                 ));
-            } else {
-                let shares_remaining_after_sale =
-                    ask_collateral.remaining_shares.u128() - bid_collateral.share_count.u128();
-                let share_threshold = remove_sale_share_threshold.map(|u| u.u128()).unwrap_or(0);
-                if shares_remaining_after_sale < share_threshold {
-                    validation_messages.push(
-                        format!(
-                            "{} Bid requested [{}] shares, which would reduce the remaining share count to [{}], which is lower than the specified threshold of [{}] shares",
-                            &identifiers,
-                            bid_collateral.share_count.u128(),
-                            shares_remaining_after_sale,
-                            share_threshold,
-                        )
-                    );
-                }
             }
         }
     }
-    let marker =
-        match ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&ask_collateral.denom) {
-            Ok(marker) => marker,
-            // Exit early if the marker does not appear to be available in the Provenance Blockchain
-            // system.  No marker means the remaining checks are meaningless.
-            Err(_) => {
-                validation_messages.push(format!(
-                    "{} Failed to find marker for denom [{}]",
-                    &identifiers, &ask_collateral.denom
-                ));
-                return validation_messages;
-            }
-        };
-    if let Ok(marker_coin) = get_single_marker_coin_holding(&marker) {
-        if marker_coin.amount.u128() != ask_collateral.remaining_shares.u128() {
+    let marker = match ProvenanceQuerier::new(&deps.querier)
+        .get_marker_by_denom(&ask_collateral.marker_denom)
+    {
+        Ok(marker) => marker,
+        // Exit early if the marker does not appear to be available in the Provenance Blockchain
+        // system.  No marker means the remaining checks are meaningless.
+        Err(_) => {
             validation_messages.push(format!(
-                "{} Marker had [{}] shares remaining, which does not match the recorded amount of [{}]",
+                "{} Failed to find marker for denom [{}]",
+                &identifiers, &ask_collateral.marker_denom
+            ));
+            return validation_messages;
+        }
+    };
+    if let Ok(marker_coin) = get_single_marker_coin_holding(&marker) {
+        if marker_coin.amount.u128() < ask_collateral.remaining_shares_in_sale.u128() {
+            validation_messages.push(format!(
+                "{} Marker is not synced with the contract! Marker had [{}] shares remaining, which is less than the listed available share count of [{}]",
                 &identifiers,
                 marker_coin.amount.u128(),
-                ask_collateral.remaining_shares.u128(),
+                ask_collateral.remaining_shares_in_sale.u128(),
             ));
         }
     } else {
@@ -408,7 +393,7 @@ fn get_marker_share_sale_collateral_validation(
             "{} Marker had invalid coin holdings for match: [{}]. Expected a single instance of coin [{}]",
             &identifiers,
             format_coin_display(&marker.coins),
-            &ask_collateral.denom,
+            &ask_collateral.marker_denom,
         ));
         return validation_messages;
     }
@@ -471,10 +456,10 @@ fn get_scope_trade_collateral_validation(
 mod tests {
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_ADDRESS};
     use crate::test::request_helpers::{
-        mock_ask_marker_share_multi, mock_ask_marker_share_single, mock_ask_marker_trade,
-        mock_ask_order, mock_ask_order_with_descriptor, mock_ask_scope_trade,
-        mock_bid_marker_share, mock_bid_marker_trade, mock_bid_order, mock_bid_scope_trade,
-        mock_bid_with_descriptor, replace_ask_quote, replace_bid_quote,
+        mock_ask_marker_share_sale, mock_ask_marker_trade, mock_ask_order,
+        mock_ask_order_with_descriptor, mock_ask_scope_trade, mock_bid_marker_share,
+        mock_bid_marker_trade, mock_bid_order, mock_bid_scope_trade, mock_bid_with_descriptor,
+        replace_ask_quote, replace_bid_quote,
     };
     use crate::types::core::error::ContractError;
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
@@ -624,13 +609,14 @@ mod tests {
             AskCollateral::marker_share_sale(
                 Addr::unchecked(DEFAULT_MARKER_ADDRESS),
                 "targetcoin",
-                10,
+                5,
+                5,
                 &coins(100, "nhash"),
                 &[AccessGrant {
                     address: Addr::unchecked("asker"),
                     permissions: vec![MarkerAccess::Admin],
                 }],
-                ShareSaleType::single(5),
+                ShareSaleType::SingleTransaction,
             ),
             Some(RequestDescriptor::new_populated_attributes(
                 "ask description",
@@ -692,13 +678,14 @@ mod tests {
             AskCollateral::marker_share_sale(
                 Addr::unchecked(DEFAULT_MARKER_ADDRESS),
                 "targetcoin",
-                10,
+                5,
+                5,
                 &coins(100, "nhash"),
                 &[AccessGrant {
                     address: Addr::unchecked("asker"),
                     permissions: vec![MarkerAccess::Admin],
                 }],
-                ShareSaleType::multiple(Some(5)),
+                ShareSaleType::MultipleTransactions,
             ),
             Some(RequestDescriptor::new_populated_attributes(
                 "ask description",
@@ -1296,12 +1283,13 @@ mod tests {
         assert_validation_failure(
             "Marker ask and bid collaterals refer to different marker denoms",
             &deps.as_ref(),
-            &mock_ask_order(mock_ask_marker_share_single(
+            &mock_ask_order(mock_ask_marker_share_sale(
                 "marker",
                 "denom1",
                 10,
-                &[],
                 10,
+                &[],
+                ShareSaleType::SingleTransaction,
             )),
             &mock_bid_order(mock_bid_marker_share("marker", "denom2", 10, &[])),
             marker_share_sale_error(
@@ -1317,12 +1305,13 @@ mod tests {
         assert_validation_failure(
             "Marker ask and bid addresses refer to different markers",
             &deps.as_ref(),
-            &mock_ask_order(mock_ask_marker_share_single(
+            &mock_ask_order(mock_ask_marker_share_sale(
                 "marker1",
                 "denom",
                 10,
-                &[],
                 10,
+                &[],
+                ShareSaleType::SingleTransaction,
             )),
             &mock_bid_order(mock_bid_marker_share("marker2", "denom", 10, &[])),
             marker_share_sale_error(
@@ -1338,7 +1327,14 @@ mod tests {
         assert_validation_failure(
             "Marker ask requires 10 shares to be purchased, but bidder wants 5",
             &deps.as_ref(),
-            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 10, &[], 10)),
+            &mock_ask_order(mock_ask_marker_share_sale(
+                "marker",
+                "denom",
+                10,
+                10,
+                &[],
+                ShareSaleType::SingleTransaction,
+            )),
             &mock_bid_order(mock_bid_marker_share("marker", "denom", 5, &[])),
             marker_share_sale_error(
                 "Ask requested that [10] shares be purchased, but bid wanted [5]",
@@ -1353,37 +1349,17 @@ mod tests {
         assert_validation_failure(
             "Marker bid attempts to purchase more shares than the marker has",
             &deps.as_ref(),
-            &mock_ask_order(mock_ask_marker_share_multi(
+            &mock_ask_order(mock_ask_marker_share_sale(
                 "marker",
                 "denom",
                 10,
+                10,
                 &[],
-                None,
+                ShareSaleType::MultipleTransactions,
             )),
             &mock_bid_order(mock_bid_marker_share("marker", "denom", 11, &[])),
             marker_share_sale_error(
                 "Bid requested [11] shares but the remaining share count is [10]",
-            ),
-            true,
-        );
-    }
-
-    #[test]
-    fn test_marker_share_sale_multi_tx_bidder_wants_more_shares_than_threshold_allows() {
-        let deps = mock_dependencies(&[]);
-        assert_validation_failure(
-            "Marker bid attempts to purchase more shares than the share threshold allows",
-            &deps.as_ref(),
-            &mock_ask_order(mock_ask_marker_share_multi(
-                "marker",
-                "denom",
-                10,
-                &[],
-                Some(5),
-            )),
-            &mock_bid_order(mock_bid_marker_share("marker", "denom", 6, &[])),
-            marker_share_sale_error(
-                "Bid requested [6] shares, which would reduce the remaining share count to [4], which is lower than the specified threshold of [5] shares",
             ),
             true,
         );
@@ -1395,7 +1371,14 @@ mod tests {
         assert_validation_failure(
             "Marker for ask and bid does not appear to exist",
             &deps.as_ref(),
-            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 10, &[], 10)),
+            &mock_ask_order(mock_ask_marker_share_sale(
+                "marker",
+                "denom",
+                10,
+                10,
+                &[],
+                ShareSaleType::SingleTransaction,
+            )),
             &mock_bid_order(mock_bid_marker_share("marker", "denom", 10, &[])),
             marker_share_sale_error("Failed to find marker for denom [denom]"),
             true,
@@ -1416,9 +1399,9 @@ mod tests {
         assert_validation_failure(
             "Marker on chain does not match share count in ask - this would be a security bug if we ever see it",
             &deps.as_ref(),
-            &mock_ask_order(mock_ask_marker_share_single("marker", "fakecoin", 15, &[], 15)),
+            &mock_ask_order(mock_ask_marker_share_sale("marker", "fakecoin", 15, 15, &[], ShareSaleType::SingleTransaction)),
             &mock_bid_order(mock_bid_marker_share("marker", "fakecoin", 15, &[])),
-            marker_share_sale_error("Marker had [10] shares remaining, which does not match the recorded amount of [15]"),
+            marker_share_sale_error("Marker is not synced with the contract! Marker had [10] shares remaining, which is less than the listed available share count of [15]"),
             true,
         );
     }
@@ -1437,7 +1420,7 @@ mod tests {
         assert_validation_failure(
             "Marker on chain does not hold any of its own denom anymore somehow - this would be a security bug if we ever see it",
             &deps.as_ref(),
-            &mock_ask_order(mock_ask_marker_share_single("marker", "fakecoin", 10, &[], 10)),
+            &mock_ask_order(mock_ask_marker_share_sale("marker", "fakecoin", 10, 10, &[], ShareSaleType::MultipleTransactions)),
             &mock_bid_order(mock_bid_marker_share("marker", "fakecoin", 10, &[])),
             marker_share_sale_error("Marker had invalid coin holdings for match: [10lessfakecoin]. Expected a single instance of coin [fakecoin]"),
             true,
@@ -1455,12 +1438,13 @@ mod tests {
         }
         .to_marker();
         deps.querier.with_markers(vec![marker]);
-        let mut ask_order = mock_ask_order(mock_ask_marker_share_single(
+        let mut ask_order = mock_ask_order(mock_ask_marker_share_sale(
             "marker",
             "fakecoin",
             10,
-            &coins(100, "nhash"),
             10,
+            &coins(100, "nhash"),
+            ShareSaleType::SingleTransaction,
         ));
         let mut bid_order = mock_bid_order(mock_bid_marker_share(
             "marker",

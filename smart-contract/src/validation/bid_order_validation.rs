@@ -109,11 +109,11 @@ pub fn validate_bid_order(bid_order: &BidOrder) -> Result<(), ContractError> {
         }
         BidCollateral::MarkerTrade(collateral) => {
             let prefix = format!("BidOrder [{}] of type marker trade", bid_order.id);
-            if collateral.address.as_str().is_empty() {
+            if collateral.marker_address.as_str().is_empty() {
                 invalid_field_messages
                     .push(format!("{} must include a valid marker address", prefix,));
             }
-            if collateral.denom.is_empty() {
+            if collateral.marker_denom.is_empty() {
                 invalid_field_messages
                     .push(format!("{} must include a valid marker denom", prefix,));
             }
@@ -131,11 +131,11 @@ pub fn validate_bid_order(bid_order: &BidOrder) -> Result<(), ContractError> {
         }
         BidCollateral::MarkerShareSale(collateral) => {
             let prefix = format!("BidOrder [{}] of type marker share sale", bid_order.id);
-            if collateral.address.as_str().is_empty() {
+            if collateral.marker_address.as_str().is_empty() {
                 invalid_field_messages
                     .push(format!("{} must include a valid marker address", prefix));
             }
-            if collateral.denom.is_empty() {
+            if collateral.marker_denom.is_empty() {
                 invalid_field_messages
                     .push(format!("{} must include a valid marker denom", prefix));
             }
