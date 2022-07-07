@@ -1,8 +1,6 @@
 package io.provenance.bilateral.contract
 
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastMode
-import io.provenance.bilateral.execute.CancelAsk
-import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.models.AttributeRequirement
@@ -86,7 +84,7 @@ class SearchIntTest : ContractIntTest() {
         pbClient.estimateAndBroadcastTx(
             txBody = askUuids.map { askUuid ->
                 bilateralClient.generateCancelAskMsg(
-                    cancelAsk = CancelAsk.new(askUuid.toString()),
+                    askId = askUuid.toString(),
                     senderAddress = BilateralAccounts.askerAccount.address(),
                 ).toAny()
             }.toTxBody(),
@@ -156,7 +154,7 @@ class SearchIntTest : ContractIntTest() {
         pbClient.estimateAndBroadcastTx(
             txBody = bidUuids.map { bidUuid ->
                 bilateralClient.generateCancelBidMsg(
-                    cancelBid = CancelBid.new(bidUuid.toString()),
+                    bidId = bidUuid.toString(),
                     senderAddress = BilateralAccounts.bidderAccount.address(),
                 ).toAny()
             }.toTxBody(),

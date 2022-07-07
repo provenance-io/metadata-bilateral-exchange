@@ -2,6 +2,7 @@ use crate::storage::contract_info::{get_contract_info, set_contract_info, Contra
 use crate::types::core::error::ContractError;
 use crate::types::core::msg::InstantiateMsg;
 use crate::util::extensions::ResultExtensions;
+use crate::validation::instantiation_validation::validate_instantiate_msg;
 use cosmwasm_std::{DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{bind_name, NameBinding, ProvenanceMsg, ProvenanceQuery};
 
@@ -11,15 +12,16 @@ pub fn instantiate_contract(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
-    if msg.bind_name.is_empty() {
-        return ContractError::missing_field("bind_name").to_err();
-    }
-    if msg.contract_name.is_empty() {
-        return ContractError::missing_field("contract_name").to_err();
-    }
+    validate_instantiate_msg(&msg)?;
 
     // set contract info
-    let contract_info = ContractInfo::new(info.sender, msg.bind_name, msg.contract_name);
+    let contract_info = ContractInfo::new(
+        info.sender,
+        msg.bind_name,
+        msg.contract_name,
+        msg.ask_fee,
+        msg.bid_fee,
+    );
     set_contract_info(deps.storage, &contract_info)?;
 
     // create name binding provenance message
@@ -46,7 +48,7 @@ mod tests {
     use crate::contract::instantiate;
     use crate::storage::contract_info::{CONTRACT_TYPE, CONTRACT_VERSION};
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{attr, Addr, CosmosMsg};
+    use cosmwasm_std::{attr, coins, Addr, CosmosMsg};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::{NameMsgParams, ProvenanceMsgParams, ProvenanceRoute};
 
@@ -58,6 +60,8 @@ mod tests {
         let init_msg = InstantiateMsg {
             bind_name: "contract_bind_name".to_string(),
             contract_name: "contract_name".to_string(),
+            ask_fee: Some(coins(100, "nhash")),
+            bid_fee: Some(coins(200, "nhash")),
         };
 
         // initialize
@@ -85,6 +89,8 @@ mod tests {
                     contract_name: "contract_name".to_string(),
                     contract_type: CONTRACT_TYPE.into(),
                     contract_version: CONTRACT_VERSION.into(),
+                    ask_fee: Some(coins(100, "nhash")),
+                    bid_fee: Some(coins(200, "nhash")),
                 };
 
                 assert_eq!(init_response.attributes.len(), 2);
@@ -106,6 +112,8 @@ mod tests {
         let init_msg = InstantiateMsg {
             bind_name: "".to_string(),
             contract_name: "contract_name".to_string(),
+            ask_fee: Some(coins(10, "nhash")),
+            bid_fee: Some(coins(20, "nhash")),
         };
 
         // initialize
@@ -115,27 +123,13 @@ mod tests {
         match init_response {
             Ok(_) => panic!("expected error, but init_response ok"),
             Err(error) => match error {
-                ContractError::MissingField { field } => {
-                    assert_eq!(field, "bind_name")
-                }
-                error => panic!("unexpected error: {:?}", error),
-            },
-        }
-
-        let init_msg = InstantiateMsg {
-            bind_name: "bind_name".to_string(),
-            contract_name: "".to_string(),
-        };
-
-        // initialize
-        let init_response = instantiate(deps.as_mut(), mock_env(), info, init_msg);
-
-        // verify initialize response
-        match init_response {
-            Ok(_) => panic!("expected error, but init_response ok"),
-            Err(error) => match error {
-                ContractError::MissingField { field } => {
-                    assert_eq!(field, "contract_name")
+                ContractError::ValidationError { messages } => {
+                    assert_eq!(1, messages.len(), "one message should be emitted");
+                    assert_eq!(
+                        "bind_name value was empty",
+                        messages.first().unwrap(),
+                        "incorrect validation message was emitted",
+                    );
                 }
                 error => panic!("unexpected error: {:?}", error),
             },

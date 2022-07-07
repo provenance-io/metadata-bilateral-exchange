@@ -1,11 +1,46 @@
+use crate::execute::update_settings::update_settings;
+use crate::storage::contract_info::get_contract_info;
+use crate::test::cosmos_type_helpers::MockOwnedDeps;
 use crate::types::request::ask_types::ask_collateral::AskCollateral;
 use crate::types::request::ask_types::ask_order::AskOrder;
 use crate::types::request::bid_types::bid_collateral::BidCollateral;
 use crate::types::request::bid_types::bid_order::BidOrder;
 use crate::types::request::request_descriptor::RequestDescriptor;
+use crate::types::request::settings_update::SettingsUpdate;
 use crate::types::request::share_sale_type::ShareSaleType;
+use cosmwasm_std::testing::mock_info;
 use cosmwasm_std::{Addr, Coin};
 use provwasm_std::{AccessGrant, MarkerAccess};
+
+pub fn set_ask_fee(deps: &mut MockOwnedDeps, ask_fee: Option<Vec<Coin>>) {
+    let contract_info =
+        get_contract_info(deps.as_ref().storage).expect("expected contract info to load");
+    update_settings(
+        deps.as_mut(),
+        mock_info(contract_info.admin.as_str(), &[]),
+        SettingsUpdate {
+            new_admin_address: None,
+            ask_fee,
+            bid_fee: contract_info.bid_fee,
+        },
+    )
+    .expect("expected the settings update to succeed");
+}
+
+pub fn set_bid_fee(deps: &mut MockOwnedDeps, bid_fee: Option<Vec<Coin>>) {
+    let contract_info =
+        get_contract_info(deps.as_ref().storage).expect("expected contract info to load");
+    update_settings(
+        deps.as_mut(),
+        mock_info(contract_info.admin.as_str(), &[]),
+        SettingsUpdate {
+            new_admin_address: None,
+            ask_fee: contract_info.ask_fee,
+            bid_fee,
+        },
+    )
+    .expect("expected the settings update to succeed");
+}
 
 pub fn replace_ask_quote(ask_order: &mut AskOrder, quote: &[Coin]) {
     match ask_order.collateral {

@@ -13,7 +13,7 @@ mod tests {
     use super::*;
     use crate::contract::query;
     use crate::storage::bid_order_storage::insert_bid_order;
-    use crate::storage::contract_info::{set_contract_info, ContractInfo};
+    use crate::test::mock_instantiate::default_instantiate;
     use crate::types::core::msg::QueryMsg;
     use crate::types::request::bid_types::bid_collateral::BidCollateral;
     use crate::types::request::bid_types::bid_order::BidOrder;
@@ -26,16 +26,7 @@ mod tests {
     pub fn query_with_valid_data() {
         // setup
         let mut deps = mock_dependencies(&[]);
-        if let Err(error) = set_contract_info(
-            &mut deps.storage,
-            &ContractInfo::new(
-                Addr::unchecked("contract_admin"),
-                "contract_bind_name".into(),
-                "contract_name".into(),
-            ),
-        ) {
-            panic!("unexpected error: {:?}", error)
-        }
+        default_instantiate(deps.as_mut().storage);
 
         // store valid bid order
         let bid_order = BidOrder::new_unchecked(

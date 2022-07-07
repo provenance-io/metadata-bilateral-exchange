@@ -3,6 +3,7 @@ use crate::execute::cancel_bid::cancel_bid;
 use crate::execute::create_ask::create_ask;
 use crate::execute::create_bid::create_bid;
 use crate::execute::execute_match::execute_match;
+use crate::execute::update_settings::update_settings;
 use crate::instantiate::instantiate_contract::instantiate_contract;
 use crate::migrate::migrate_contract::migrate_contract;
 use crate::query::get_ask::query_ask;
@@ -46,6 +47,7 @@ pub fn execute(
             bid_id,
             accept_mismatched_bids,
         } => execute_match(deps, env, info, ask_id, bid_id, accept_mismatched_bids),
+        ExecuteMsg::UpdateSettings { update } => update_settings(deps, info, update),
     }
 }
 
@@ -76,6 +78,6 @@ pub fn migrate(
     msg: MigrateMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     match msg {
-        MigrateMsg::ContractUpgrade { options } => migrate_contract(deps, options),
+        MigrateMsg::ContractUpgrade {} => migrate_contract(deps),
     }
 }

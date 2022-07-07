@@ -6,8 +6,8 @@ pub enum ContractError {
     #[error("Cannot create [{id_type}] with id [{id}]. One with that id already exists")]
     ExistingId { id_type: String, id: String },
 
-    #[error("Validation failed with messages: {messages:?}")]
-    ValidationError { messages: Vec<String> },
+    #[error("{message}")]
+    GenericError { message: String },
 
     #[error("Invalid funds provided: {message}")]
     InvalidFundsProvided { message: String },
@@ -41,6 +41,9 @@ pub enum ContractError {
 
     #[error("Unauthorized")]
     Unauthorized,
+
+    #[error("Validation failed with messages: {messages:?}")]
+    ValidationError { messages: Vec<String> },
 }
 impl ContractError {
     pub fn existing_id<S1: Into<String>, S2: Into<String>>(id_type: S1, id: S2) -> ContractError {
@@ -50,12 +53,9 @@ impl ContractError {
         }
     }
 
-    pub fn validation_error<S: Into<String>>(messages: &[S]) -> ContractError
-    where
-        S: Clone,
-    {
-        ContractError::ValidationError {
-            messages: messages.iter().cloned().map(|s| s.into()).collect(),
+    pub fn generic_error<S: Into<String>>(message: S) -> ContractError {
+        ContractError::GenericError {
+            message: message.into(),
         }
     }
 
@@ -107,5 +107,14 @@ impl ContractError {
 
     pub fn unauthorized() -> ContractError {
         ContractError::Unauthorized
+    }
+
+    pub fn validation_error<S: Into<String>>(messages: &[S]) -> ContractError
+    where
+        S: Clone,
+    {
+        ContractError::ValidationError {
+            messages: messages.iter().cloned().map(|s| s.into()).collect(),
+        }
     }
 }

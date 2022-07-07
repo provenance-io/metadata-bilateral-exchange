@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, StdResult, Storage};
+use cosmwasm_std::{Addr, Coin, StdResult, Storage};
 use cw_storage_plus::Item;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -18,16 +18,26 @@ pub struct ContractInfo {
     pub contract_name: String,
     pub contract_type: String,
     pub contract_version: String,
+    pub ask_fee: Option<Vec<Coin>>,
+    pub bid_fee: Option<Vec<Coin>>,
 }
 
 impl ContractInfo {
-    pub fn new(admin: Addr, bind_name: String, contract_name: String) -> ContractInfo {
+    pub fn new(
+        admin: Addr,
+        bind_name: String,
+        contract_name: String,
+        ask_fee: Option<Vec<Coin>>,
+        bid_fee: Option<Vec<Coin>>,
+    ) -> ContractInfo {
         ContractInfo {
             admin,
             bind_name,
             contract_name,
             contract_type: CONTRACT_TYPE.into(),
             contract_version: CONTRACT_VERSION.into(),
+            ask_fee,
+            bid_fee,
         }
     }
 }
@@ -51,7 +61,7 @@ mod tests {
     use crate::storage::contract_info::{
         get_contract_info, set_contract_info, ContractInfo, CONTRACT_TYPE, CONTRACT_VERSION,
     };
-    use cosmwasm_std::Addr;
+    use cosmwasm_std::{coins, Addr};
 
     #[test]
     pub fn set_contract_info_with_valid_data() {
@@ -62,6 +72,8 @@ mod tests {
                 Addr::unchecked("contract_admin"),
                 "contract_bind_name".into(),
                 "contract_name".into(),
+                Some(coins(100, "nhash")),
+                None,
             ),
         );
         match result {
@@ -77,6 +89,8 @@ mod tests {
                 assert_eq!(contract_info.contract_name, "contract_name");
                 assert_eq!(contract_info.contract_type, CONTRACT_TYPE);
                 assert_eq!(contract_info.contract_version, CONTRACT_VERSION);
+                assert_eq!(contract_info.ask_fee, Some(coins(100, "nhash")));
+                assert_eq!(contract_info.bid_fee, None);
             }
             result => panic!("unexpected error: {:?}", result),
         }

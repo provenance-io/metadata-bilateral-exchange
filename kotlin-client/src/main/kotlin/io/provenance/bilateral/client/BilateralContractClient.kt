@@ -11,6 +11,7 @@ import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
+import io.provenance.bilateral.execute.UpdateSettings
 import io.provenance.bilateral.functions.tryOrNull
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.interfaces.ContractQueryMsg
@@ -54,19 +55,19 @@ class BilateralContractClient private constructor(
 
     val contractAddress by lazy { addressResolver.getAddress(pbClient) }
 
-    fun getAsk(id: String): AskOrder = queryContract(GetAsk.new(id))
+    fun getAsk(id: String): AskOrder = queryContract(GetAsk(id))
 
     fun getAskOrNull(id: String): AskOrder? = tryOrNull { getAsk(id) }
 
-    fun getAskByCollateralId(collateralId: String): AskOrder = queryContract(GetAskByCollateralId.new(collateralId))
+    fun getAskByCollateralId(collateralId: String): AskOrder = queryContract(GetAskByCollateralId(collateralId))
 
     fun getAskByCollateralIdOrNull(collateralId: String): AskOrder? = tryOrNull { getAskByCollateralId(collateralId) }
 
-    fun getBid(id: String): BidOrder = queryContract(GetBid.new(id))
+    fun getBid(id: String): BidOrder = queryContract(GetBid(id))
 
     fun getBidOrNull(id: String): BidOrder? = tryOrNull { getBid(id) }
 
-    fun getMatchReport(askId: String, bidId: String): MatchReport = queryContract(GetMatchReport.new(askId, bidId))
+    fun getMatchReport(askId: String, bidId: String): MatchReport = queryContract(GetMatchReport(askId, bidId))
 
     fun getMatchReportOrNull(askId: String, bidId: String): MatchReport? = tryOrNull { getMatchReport(askId, bidId) }
 
@@ -84,66 +85,135 @@ class BilateralContractClient private constructor(
 
     fun searchBidsOrNull(searchBids: SearchBids): ContractSearchResult<BidOrder>? = tryOrNull { searchBids(searchBids) }
 
-    fun getContractInfo(): ContractInfo = queryContract(GetContractInfo.new())
+    fun getContractInfo(): ContractInfo = queryContract(GetContractInfo())
 
     fun getContractInfoOrNull(): ContractInfo? = tryOrNull { getContractInfo() }
 
     fun createAsk(
         createAsk: CreateAsk,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(createAsk, signer, options, funds = createAsk.getFunds())
+        options: BroadcastOptions = BroadcastOptions(),
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = createAsk,
+        signer = signer,
+        options = options,
+        funds = createAsk.getFunds(askFee = this.getContractInfo().askFee),
+    )
 
     fun createBid(
         createBid: CreateBid,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(createBid, signer, options, funds = createBid.getFunds())
+        options: BroadcastOptions = BroadcastOptions(),
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = createBid,
+        signer = signer,
+        options = options,
+        funds = createBid.getFunds(bidFee = this.getContractInfo().bidFee),
+    )
 
     fun cancelAsk(
         askId: String,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(CancelAsk.new(askId), signer, options, funds = emptyList())
+        options: BroadcastOptions = BroadcastOptions(),
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = CancelAsk(askId),
+        signer = signer,
+        options = options,
+        funds = emptyList(),
+    )
 
     fun cancelBid(
         bidId: String,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(CancelBid.new(bidId), signer, options, funds = emptyList())
+        options: BroadcastOptions = BroadcastOptions(),
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = CancelBid(bidId),
+        signer = signer,
+        options = options,
+        funds = emptyList(),
+    )
 
-    // IMPORTANT: The Signer used in this function must be the contract's admin account.  This value can be found by
-    // running getContractInfo()
+    // IMPORTANT: The Signer used in this function must be the contract's admin account or the asker associated with the
+    // match message's askId.
     fun executeMatch(
         executeMatch: ExecuteMatch,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions()
-    ): BroadcastTxResponse = executeContract(executeMatch, signer, options, funds = emptyList())
+        options: BroadcastOptions = BroadcastOptions(),
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = executeMatch,
+        signer = signer,
+        options = options,
+        funds = emptyList(),
+    )
+
+    // IMPORTANT: The Signer used in this function must be the contract's admin account.
+    fun updateSettings(
+        updateSettings: UpdateSettings,
+        signer: Signer,
+        options: BroadcastOptions = BroadcastOptions(),
+    ): BroadcastTxResponse = executeContract(
+        executeMsg = updateSettings,
+        signer = signer,
+        options = options,
+        funds = emptyList(),
+    )
 
     fun generateCreateAskMsg(
         createAsk: CreateAsk,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(createAsk, senderAddress, funds = createAsk.getFunds())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = createAsk,
+        senderAddress = senderAddress,
+        funds = createAsk.getFunds(askFee = this.getContractInfo().askFee),
+    )
 
     fun generateCreateBidMsg(
         createBid: CreateBid,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(createBid, senderAddress, funds = createBid.getFunds())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = createBid,
+        senderAddress = senderAddress,
+        funds = createBid.getFunds(bidFee = this.getContractInfo().bidFee),
+    )
 
     fun generateCancelAskMsg(
-        cancelAsk: CancelAsk,
+        askId: String,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(cancelAsk, senderAddress, funds = emptyList())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = CancelAsk(askId),
+        senderAddress = senderAddress,
+        funds = emptyList(),
+    )
 
     fun generateCancelBidMsg(
-        cancelBid: CancelBid,
+        bidId: String,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(cancelBid, senderAddress, funds = emptyList())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = CancelBid(bidId),
+        senderAddress = senderAddress,
+        funds = emptyList(),
+    )
 
+    // IMPORTANT: The Signer used in this function must be the contract's admin account or the asker associated with the
+    // match message's askId.
     fun generateExecuteMatchMsg(
         executeMatch: ExecuteMatch,
         senderAddress: String,
-    ): MsgExecuteContract = generateProtoExecuteMsg(executeMatch, senderAddress, funds = emptyList())
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = executeMatch,
+        senderAddress = senderAddress,
+        funds = emptyList(),
+    )
+
+    // IMPORTANT: The Signer used in this function must be the contract's admin account.
+    fun generateUpdateSettingsMsg(
+        updateSettings: UpdateSettings,
+        senderAddress: String,
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = updateSettings,
+        senderAddress = senderAddress,
+        funds = emptyList(),
+    )
 
     /**
      * Converts a class that inherits from ContractExecuteMsg to a MsgExecuteContract.  This ensures
