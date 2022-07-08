@@ -9,11 +9,10 @@ use crate::types::request::request_descriptor::RequestDescriptor;
 use crate::types::request::request_type::RequestType;
 use crate::types::request::share_sale_type::ShareSaleType;
 use cosmwasm_std::{Addr, Uint128};
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 // TODO: Remove this after type migrations have occurred
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct LegacyAskOrder {
     pub id: String,
@@ -102,7 +101,10 @@ impl LegacyAskOrder {
 mod tests {
     use crate::test::mock_scope::DEFAULT_SCOPE_ID;
     use crate::types::request::ask_types::ask_order::AskOrder;
-    use crate::types::request::ask_types::legacy_ask_collateral::LegacyAskCollateral;
+    use crate::types::request::ask_types::legacy_ask_collateral::{
+        LegacyAskCollateral, LegacyCoinTradeAskCollateral, LegacyMarkerShareSaleAskCollateral,
+        LegacyMarkerTradeAskCollateral, LegacyScopeTradeAskCollateral,
+    };
     use crate::types::request::ask_types::legacy_ask_order::LegacyAskOrder;
     use crate::types::request::legacy_share_sale_type::LegacyShareSaleType;
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
@@ -117,7 +119,10 @@ mod tests {
             id: "ask_id".to_string(),
             ask_type: RequestType::CoinTrade,
             owner: Addr::unchecked("asker"),
-            collateral: LegacyAskCollateral::coin_trade(&coins(100, "base"), &coins(100, "quote")),
+            collateral: LegacyAskCollateral::CoinTrade(LegacyCoinTradeAskCollateral {
+                base: coins(100, "base"),
+                quote: coins(100, "quote"),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::any(&["your", "face"]),
@@ -140,16 +145,16 @@ mod tests {
             id: "ask_id".to_string(),
             ask_type: RequestType::MarkerTrade,
             owner: Addr::unchecked("asker"),
-            collateral: LegacyAskCollateral::marker_trade(
-                Addr::unchecked("markeraddress"),
-                "markerdenom",
-                10,
-                &coins(100, "quote"),
-                &[AccessGrant {
+            collateral: LegacyAskCollateral::MarkerTrade(LegacyMarkerTradeAskCollateral {
+                address: Addr::unchecked("markeraddress"),
+                denom: "markerdenom".to_string(),
+                share_count: Uint128::new(10),
+                quote_per_share: coins(100, "quote"),
+                removed_permissions: vec![AccessGrant {
                     permissions: vec![MarkerAccess::Admin],
                     address: Addr::unchecked("someperson"),
                 }],
-            ),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::any(&["your", "face"]),
@@ -181,19 +186,19 @@ mod tests {
             id: "ask_id".to_string(),
             ask_type: RequestType::MarkerShareSale,
             owner: Addr::unchecked("asker"),
-            collateral: LegacyAskCollateral::marker_share_sale(
-                Addr::unchecked("markeraddress"),
-                "markerdenom",
-                10,
-                &coins(100, "quote"),
-                &[AccessGrant {
+            collateral: LegacyAskCollateral::MarkerShareSale(LegacyMarkerShareSaleAskCollateral {
+                address: Addr::unchecked("markeraddress"),
+                denom: "markerdenom".to_string(),
+                remaining_shares: Uint128::new(10),
+                quote_per_share: coins(100, "quote"),
+                removed_permissions: vec![AccessGrant {
                     permissions: vec![MarkerAccess::Admin],
                     address: Addr::unchecked("someperson"),
                 }],
-                LegacyShareSaleType::SingleTransaction {
+                sale_type: LegacyShareSaleType::SingleTransaction {
                     share_count: Uint128::new(10),
                 },
-            ),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::any(&["your", "face"]),
@@ -227,19 +232,19 @@ mod tests {
             id: "ask_id".to_string(),
             ask_type: RequestType::MarkerShareSale,
             owner: Addr::unchecked("asker"),
-            collateral: LegacyAskCollateral::marker_share_sale(
-                Addr::unchecked("markeraddress"),
-                "markerdenom",
-                10,
-                &coins(100, "quote"),
-                &[AccessGrant {
+            collateral: LegacyAskCollateral::MarkerShareSale(LegacyMarkerShareSaleAskCollateral {
+                address: Addr::unchecked("markeraddress"),
+                denom: "markerdenom".to_string(),
+                remaining_shares: Uint128::new(10),
+                quote_per_share: coins(100, "quote"),
+                removed_permissions: vec![AccessGrant {
                     permissions: vec![MarkerAccess::Admin],
                     address: Addr::unchecked("someperson"),
                 }],
-                LegacyShareSaleType::MultipleTransactions {
+                sale_type: LegacyShareSaleType::MultipleTransactions {
                     remove_sale_share_threshold: Some(Uint128::new(7)),
                 },
-            ),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::any(&["your", "face"]),
@@ -276,19 +281,19 @@ mod tests {
             id: "ask_id".to_string(),
             ask_type: RequestType::MarkerShareSale,
             owner: Addr::unchecked("asker"),
-            collateral: LegacyAskCollateral::marker_share_sale(
-                Addr::unchecked("markeraddress"),
-                "markerdenom",
-                15,
-                &coins(100, "quote"),
-                &[AccessGrant {
+            collateral: LegacyAskCollateral::MarkerShareSale(LegacyMarkerShareSaleAskCollateral {
+                address: Addr::unchecked("markeraddress"),
+                denom: "markerdenom".to_string(),
+                remaining_shares: Uint128::new(15),
+                quote_per_share: coins(100, "quote"),
+                removed_permissions: vec![AccessGrant {
                     permissions: vec![MarkerAccess::Admin],
                     address: Addr::unchecked("someperson"),
                 }],
-                LegacyShareSaleType::MultipleTransactions {
+                sale_type: LegacyShareSaleType::MultipleTransactions {
                     remove_sale_share_threshold: None,
                 },
-            ),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::any(&["your", "face"]),
@@ -325,7 +330,10 @@ mod tests {
             id: "ask_id".to_string(),
             ask_type: RequestType::ScopeTrade,
             owner: Addr::unchecked("asker"),
-            collateral: LegacyAskCollateral::scope_trade(DEFAULT_SCOPE_ID, &coins(100, "quote")),
+            collateral: LegacyAskCollateral::ScopeTrade(LegacyScopeTradeAskCollateral {
+                scope_address: DEFAULT_SCOPE_ID.to_string(),
+                quote: coins(100, "quote"),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::any(&["your", "face"]),

@@ -52,9 +52,13 @@ mod tests {
     use crate::storage::legacy_bid_order_storage::legacy_bid_orders;
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::mock_instantiate::default_instantiate;
-    use crate::types::request::ask_types::legacy_ask_collateral::LegacyAskCollateral;
+    use crate::types::request::ask_types::legacy_ask_collateral::{
+        LegacyAskCollateral, LegacyMarkerShareSaleAskCollateral, LegacyMarkerTradeAskCollateral,
+    };
     use crate::types::request::ask_types::legacy_ask_order::LegacyAskOrder;
-    use crate::types::request::bid_types::legacy_bid_collateral::LegacyBidCollateral;
+    use crate::types::request::bid_types::legacy_bid_collateral::{
+        LegacyBidCollateral, LegacyMarkerShareSaleBidCollateral, LegacyMarkerTradeBidCollateral,
+    };
     use crate::types::request::bid_types::legacy_bid_order::LegacyBidOrder;
     use crate::types::request::legacy_share_sale_type::LegacyShareSaleType;
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
@@ -70,13 +74,13 @@ mod tests {
             id: "ask_id".to_string(),
             ask_type: RequestType::MarkerTrade,
             owner: Addr::unchecked("asker"),
-            collateral: LegacyAskCollateral::marker_trade(
-                Addr::unchecked("marker address"),
-                "marker denom",
-                100,
-                &coins(100, "quote"),
-                &[],
-            ),
+            collateral: LegacyAskCollateral::MarkerTrade(LegacyMarkerTradeAskCollateral {
+                address: Addr::unchecked("marker address"),
+                denom: "marker denom".to_string(),
+                share_count: Uint128::new(100),
+                quote_per_share: coins(100, "quote"),
+                removed_permissions: vec![],
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::all(&["something.pb"]),
@@ -87,11 +91,11 @@ mod tests {
             id: "bid_id".to_string(),
             bid_type: RequestType::MarkerTrade,
             owner: Addr::unchecked("bidder"),
-            collateral: LegacyBidCollateral::marker_trade(
-                Addr::unchecked("marker address"),
-                "marker denom",
-                &coins(100, "quote"),
-            ),
+            collateral: LegacyBidCollateral::MarkerTrade(LegacyMarkerTradeBidCollateral {
+                address: Addr::unchecked("marker address"),
+                denom: "marker denom".to_string(),
+                quote: coins(100, "quote"),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::none(&["NONE.PIO"]),
@@ -159,20 +163,22 @@ mod tests {
                 id: format!("ask_id_{}", ask_id),
                 ask_type: RequestType::MarkerShareSale,
                 owner: Addr::unchecked(format!("asker_{}", ask_id)),
-                collateral: LegacyAskCollateral::marker_share_sale(
-                    Addr::unchecked(format!("marker_{}", ask_id)),
-                    format!("denom_{}", ask_id),
-                    100,
-                    &coins(100, "quote"),
-                    &[],
-                    if ask_id % 2 == 0 {
-                        LegacyShareSaleType::SingleTransaction {
-                            share_count: Uint128::new(50),
-                        }
-                    } else {
-                        LegacyShareSaleType::MultipleTransactions {
-                            remove_sale_share_threshold: Some(Uint128::new(10)),
-                        }
+                collateral: LegacyAskCollateral::MarkerShareSale(
+                    LegacyMarkerShareSaleAskCollateral {
+                        address: Addr::unchecked(format!("marker_{}", ask_id)),
+                        denom: format!("denom_{}", ask_id),
+                        remaining_shares: Uint128::new(100),
+                        quote_per_share: coins(100, "quote"),
+                        removed_permissions: vec![],
+                        sale_type: if ask_id % 2 == 0 {
+                            LegacyShareSaleType::SingleTransaction {
+                                share_count: Uint128::new(50),
+                            }
+                        } else {
+                            LegacyShareSaleType::MultipleTransactions {
+                                remove_sale_share_threshold: Some(Uint128::new(10)),
+                            }
+                        },
                     },
                 ),
                 descriptor: Some(RequestDescriptor::new_populated_attributes(
@@ -189,11 +195,13 @@ mod tests {
                 id: format!("bid_id_{}", bid_id),
                 bid_type: RequestType::MarkerShareSale,
                 owner: Addr::unchecked(format!("bidder_{}", bid_id)),
-                collateral: LegacyBidCollateral::marker_share_sale(
-                    Addr::unchecked(format!("marker_{}", bid_id)),
-                    format!("denom_{}", bid_id),
-                    100,
-                    &coins(100, "quote"),
+                collateral: LegacyBidCollateral::MarkerShareSale(
+                    LegacyMarkerShareSaleBidCollateral {
+                        address: Addr::unchecked(format!("marker_{}", bid_id)),
+                        denom: format!("denom_{}", bid_id),
+                        share_count: Uint128::new(100),
+                        quote: coins(100, "quote"),
+                    },
                 ),
                 descriptor: Some(RequestDescriptor::new_populated_attributes(
                     "description",
@@ -277,13 +285,9 @@ mod tests {
         legacy_ask_orders()
             .replace(storage, ask_order.get_pk(), Some(ask_order), None)
             .expect("legacy ask order insert should succeed");
-        let inserted_ask_order = state
+        state
             .load(storage, ask_order.id.as_bytes())
             .expect("expected legacy ask order to be available in storage");
-        assert_eq!(
-            &inserted_ask_order, ask_order,
-            "expected the inserted value to equate to the value fetched",
-        );
     }
 
     fn insert_legacy_bid_order(storage: &mut dyn Storage, bid_order: &LegacyBidOrder) {
@@ -298,12 +302,8 @@ mod tests {
         legacy_bid_orders()
             .replace(storage, bid_order.get_pk(), Some(bid_order), None)
             .expect("legacy bid order insert should succeed");
-        let inserted_bid_order = state
+        state
             .load(storage, bid_order.id.as_bytes())
             .expect("expected legacy bid order to be available in storage");
-        assert_eq!(
-            &inserted_bid_order, bid_order,
-            "expected the inserted value to equate to the value fetched",
-        );
     }
 }

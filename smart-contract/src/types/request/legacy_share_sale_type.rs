@@ -1,9 +1,8 @@
 use cosmwasm_std::Uint128;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 // TODO: Remove this after type migrations have occurred
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum LegacyShareSaleType {
     /// Indicates that only a single transaction will be made after an ask of this share type is made.

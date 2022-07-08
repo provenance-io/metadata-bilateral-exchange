@@ -7,11 +7,10 @@ use crate::types::request::bid_types::legacy_bid_collateral::LegacyBidCollateral
 use crate::types::request::request_descriptor::RequestDescriptor;
 use crate::types::request::request_type::RequestType;
 use cosmwasm_std::Addr;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 // TODO: Remove this after type migrations have occurred
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct LegacyBidOrder {
     pub id: String,
@@ -67,11 +66,14 @@ impl LegacyBidOrder {
 #[cfg(test)]
 mod tests {
     use crate::types::request::bid_types::bid_order::BidOrder;
-    use crate::types::request::bid_types::legacy_bid_collateral::LegacyBidCollateral;
+    use crate::types::request::bid_types::legacy_bid_collateral::{
+        LegacyBidCollateral, LegacyCoinTradeBidCollateral, LegacyMarkerShareSaleBidCollateral,
+        LegacyMarkerTradeBidCollateral, LegacyScopeTradeBidCollateral,
+    };
     use crate::types::request::bid_types::legacy_bid_order::LegacyBidOrder;
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
-    use cosmwasm_std::{coins, Addr};
+    use cosmwasm_std::{coins, Addr, Uint128};
 
     #[test]
     fn test_successful_conversion_for_coin_trade() {
@@ -79,7 +81,10 @@ mod tests {
             id: "bid_id".to_string(),
             bid_type: RequestType::CoinTrade,
             owner: Addr::unchecked("bidder"),
-            collateral: LegacyBidCollateral::coin_trade(&coins(100, "base"), &coins(100, "quote")),
+            collateral: LegacyBidCollateral::CoinTrade(LegacyCoinTradeBidCollateral {
+                base: coins(100, "base"),
+                quote: coins(100, "quote"),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::all(&["some", "stuff"]),
@@ -102,11 +107,11 @@ mod tests {
             id: "bid_id".to_string(),
             bid_type: RequestType::MarkerTrade,
             owner: Addr::unchecked("bidder"),
-            collateral: LegacyBidCollateral::marker_trade(
-                Addr::unchecked("marker_address"),
-                "markerdenom",
-                &coins(100, "quote"),
-            ),
+            collateral: LegacyBidCollateral::MarkerTrade(LegacyMarkerTradeBidCollateral {
+                address: Addr::unchecked("marker_address"),
+                denom: "markerdenom".to_string(),
+                quote: coins(100, "quote"),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::all(&["some", "stuff"]),
@@ -130,12 +135,12 @@ mod tests {
             id: "bid_id".to_string(),
             bid_type: RequestType::MarkerShareSale,
             owner: Addr::unchecked("bidder"),
-            collateral: LegacyBidCollateral::marker_share_sale(
-                Addr::unchecked("marker_address"),
-                "markerdenom",
-                100,
-                &coins(100, "quote"),
-            ),
+            collateral: LegacyBidCollateral::MarkerShareSale(LegacyMarkerShareSaleBidCollateral {
+                address: Addr::unchecked("marker_address"),
+                denom: "markerdenom".to_string(),
+                share_count: Uint128::new(100),
+                quote: coins(100, "quote"),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::all(&["some", "stuff"]),
@@ -160,7 +165,10 @@ mod tests {
             id: "bid_id".to_string(),
             bid_type: RequestType::ScopeTrade,
             owner: Addr::unchecked("bidder"),
-            collateral: LegacyBidCollateral::scope_trade("scope address", &coins(100, "quote")),
+            collateral: LegacyBidCollateral::ScopeTrade(LegacyScopeTradeBidCollateral {
+                scope_address: "scope address".to_string(),
+                quote: coins(100, "quote"),
+            }),
             descriptor: Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::all(&["some", "stuff"]),
