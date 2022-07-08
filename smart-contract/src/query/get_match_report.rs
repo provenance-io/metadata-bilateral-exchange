@@ -8,6 +8,7 @@ pub fn get_match_report(
     _ask_id: String,
     _bid_id: String,
 ) -> Result<Binary, ContractError> {
+    // TODO: Re-enable this code once the legacy migration has been completed
     // The code required to convert from legacy ask and bid orders to the new schema causes the output
     // binary to be too large.  Temporarily disabling match reports removes enough code to make the
     // contract deployable.  This is an unfortunate compromise to allow this migration to take place.

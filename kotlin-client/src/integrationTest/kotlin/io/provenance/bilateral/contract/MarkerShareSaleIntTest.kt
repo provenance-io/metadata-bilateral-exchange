@@ -140,7 +140,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
         val markerDenom = "multipletx"
         val shareCount = 100L
         val sharePurchaseCount = 25L
-        val shareCutoff = 25L
+        val sharesToSell = 75L
         val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_DEPOSIT, Access.ACCESS_DELETE)
         createMarker(
             pbClient = pbClient,
@@ -167,7 +167,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
         val createAsk = CreateAsk.newMarkerShareSale(
             id = askUuid.toString(),
             markerDenom = markerDenom,
-            sharesToSell = shareCount.minus(shareCutoff).toString(),
+            sharesToSell = sharesToSell.toString(),
             quotePerShare = newCoins(1, bidderDenom),
             shareSaleType = ShareSaleType.MULTIPLE_TRANSACTIONS,
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now())
@@ -182,7 +182,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             actual = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Expected only a single access control list to exist after creating a share sale").address,
             message = "The contract should be the sole owner of the marker during the share sale",
         )
-        val maxIteration = (shareCount - shareCutoff) / sharePurchaseCount - 1
+        val maxIteration = sharesToSell / sharePurchaseCount - 1
         var expectedBidderMarkerHoldings = 0L
         var expectedAskerDenomHoldings = 0L
         for (counter in 0..maxIteration) {
