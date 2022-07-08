@@ -44,10 +44,6 @@ impl AskOrder {
         }
     }
 
-    pub fn get_pk(&self) -> &[u8] {
-        self.id.as_bytes()
-    }
-
     pub fn get_collateral_index(&self) -> String {
         match &self.collateral {
             // Coin trades have no metadata involved - just use self.id as a duplicate index

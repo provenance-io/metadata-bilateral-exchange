@@ -43,8 +43,4 @@ impl BidOrder {
             descriptor,
         }
     }
-
-    pub fn get_pk(&self) -> &[u8] {
-        self.id.as_bytes()
-    }
 }

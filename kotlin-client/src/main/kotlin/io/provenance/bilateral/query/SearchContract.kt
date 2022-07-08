@@ -5,7 +5,10 @@ import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.annotation.JsonValue
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
+import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import io.provenance.bilateral.interfaces.ContractQueryMsg
+import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
+import java.math.BigInteger
 
 /**
  * See ContractSearchType for JSON payloads for each different type of ask search.
@@ -26,25 +29,13 @@ data class SearchBids(val search: ContractSearchRequest) : ContractQueryMsg
 @JsonNaming(SnakeCaseStrategy::class)
 data class ContractSearchRequest(
     val searchType: ContractSearchType,
-    val pageSize: String? = null,
-    val pageNumber: String? = null,
+    @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
+    val pageSize: BigInteger? = null,
+    @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
+    val pageNumber: BigInteger? = null,
 ) {
-    companion object {
-        fun newSearchAsks(
-            searchType: ContractSearchType,
-            pageSize: Int? = null,
-            pageNumber: Int? = null,
-        ): SearchAsks = ContractSearchRequest(searchType, pageSize?.toString(), pageNumber?.toString()).searchAsks()
-
-        fun newSearchBids(
-            searchType: ContractSearchType,
-            pageSize: Int? = null,
-            pageNumber: Int? = null,
-        ): SearchBids = ContractSearchRequest(searchType, pageSize?.toString(), pageNumber?.toString()).searchBids()
-    }
-
-    fun searchAsks(): SearchAsks = SearchAsks(this)
-    fun searchBids(): SearchBids = SearchBids(this)
+    internal fun searchAsks(): SearchAsks = SearchAsks(this)
+    internal fun searchBids(): SearchBids = SearchBids(this)
 }
 
 sealed interface ContractSearchType {

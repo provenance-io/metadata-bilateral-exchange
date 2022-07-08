@@ -6,27 +6,26 @@ import cosmos.base.v1beta1.CoinOuterClass.Coin
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
 import cosmwasm.wasm.v1.QueryOuterClass
 import cosmwasm.wasm.v1.Tx.MsgExecuteContract
+import io.provenance.bilateral.exceptions.NullContractResultException
 import io.provenance.bilateral.execute.CancelAsk
 import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
 import io.provenance.bilateral.execute.UpdateSettings
-import io.provenance.bilateral.functions.tryOrNull
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.interfaces.ContractQueryMsg
 import io.provenance.bilateral.models.AskOrder
 import io.provenance.bilateral.models.BidOrder
 import io.provenance.bilateral.models.ContractInfo
 import io.provenance.bilateral.models.MatchReport
+import io.provenance.bilateral.query.ContractSearchRequest
 import io.provenance.bilateral.query.ContractSearchResult
 import io.provenance.bilateral.query.GetAsk
 import io.provenance.bilateral.query.GetAskByCollateralId
 import io.provenance.bilateral.query.GetBid
 import io.provenance.bilateral.query.GetContractInfo
 import io.provenance.bilateral.query.GetMatchReport
-import io.provenance.bilateral.query.SearchAsks
-import io.provenance.bilateral.query.SearchBids
 import io.provenance.bilateral.util.ContractAddressResolver
 import io.provenance.bilateral.util.ObjectMapperProvider
 import io.provenance.client.grpc.BaseReqSigner
@@ -55,39 +54,40 @@ class BilateralContractClient private constructor(
 
     val contractAddress by lazy { addressResolver.getAddress(pbClient) }
 
-    fun getAsk(id: String): AskOrder = queryContract(GetAsk(id))
+    fun getAsk(id: String): AskOrder = queryContract(query = GetAsk(id = id))
 
-    fun getAskOrNull(id: String): AskOrder? = tryOrNull { getAsk(id) }
+    fun getAskOrNull(id: String): AskOrder? = queryContractOrNull(query = GetAsk(id = id))
 
-    fun getAskByCollateralId(collateralId: String): AskOrder = queryContract(GetAskByCollateralId(collateralId))
+    fun getAskByCollateralId(collateralId: String): AskOrder = queryContract(
+        query = GetAskByCollateralId(collateralId = collateralId),
+    )
 
-    fun getAskByCollateralIdOrNull(collateralId: String): AskOrder? = tryOrNull { getAskByCollateralId(collateralId) }
+    fun getAskByCollateralIdOrNull(collateralId: String): AskOrder? = queryContractOrNull(
+        query = GetAskByCollateralId(collateralId = collateralId),
+    )
 
-    fun getBid(id: String): BidOrder = queryContract(GetBid(id))
+    fun getBid(id: String): BidOrder = queryContract(query = GetBid(id = id))
 
-    fun getBidOrNull(id: String): BidOrder? = tryOrNull { getBid(id) }
+    fun getBidOrNull(id: String): BidOrder? = queryContractOrNull(query = GetBid(id = id))
 
-    fun getMatchReport(askId: String, bidId: String): MatchReport = queryContract(GetMatchReport(askId, bidId))
+    fun getMatchReport(askId: String, bidId: String): MatchReport = queryContract(
+        query = GetMatchReport(
+            askId = askId,
+            bidId = bidId,
+        ),
+    )
 
-    fun getMatchReportOrNull(askId: String, bidId: String): MatchReport? = tryOrNull { getMatchReport(askId, bidId) }
-
-    fun searchAsks(searchAsks: SearchAsks): ContractSearchResult<AskOrder> = queryContractWithReference(
-        query = searchAsks,
+    fun searchAsks(searchRequest: ContractSearchRequest): ContractSearchResult<AskOrder> = queryContractWithReference(
+        query = searchRequest.searchAsks(),
         typeReference = object : TypeReference<ContractSearchResult<AskOrder>>() {},
     )
 
-    fun searchAsksOrNull(searchAsks: SearchAsks): ContractSearchResult<AskOrder>? = tryOrNull { searchAsks(searchAsks) }
-
-    fun searchBids(searchBids: SearchBids): ContractSearchResult<BidOrder> = queryContractWithReference(
-        query = searchBids,
+    fun searchBids(searchRequest: ContractSearchRequest): ContractSearchResult<BidOrder> = queryContractWithReference(
+        query = searchRequest.searchBids(),
         typeReference = object : TypeReference<ContractSearchResult<BidOrder>>() {},
     )
 
-    fun searchBidsOrNull(searchBids: SearchBids): ContractSearchResult<BidOrder>? = tryOrNull { searchBids(searchBids) }
-
-    fun getContractInfo(): ContractInfo = queryContract(GetContractInfo())
-
-    fun getContractInfoOrNull(): ContractInfo? = tryOrNull { getContractInfo() }
+    fun getContractInfo(): ContractInfo = queryContract(query = GetContractInfo())
 
     fun createAsk(
         createAsk: CreateAsk,
@@ -265,8 +265,11 @@ class BilateralContractClient private constructor(
         }.build()
     ).data.toByteArray()
 
-    private inline fun <T : ContractQueryMsg, reified U : Any> queryContract(query: T): U =
+    private inline fun <T: ContractQueryMsg, reified U: Any> queryContractOrNull(query: T): U? =
         getQueryResponseBytes(query).let { bytes -> objectMapper.readValue(bytes, U::class.java) }
+
+    private inline fun <T : ContractQueryMsg, reified U : Any> queryContract(query: T): U =
+        queryContractOrNull(query) ?: throw NullContractResultException("Got null response from the Metadata Bilateral Exchange contract for query")
 
     /**
      * Allows a type reference to be passed in, ensuring that generic types within response values can be properly

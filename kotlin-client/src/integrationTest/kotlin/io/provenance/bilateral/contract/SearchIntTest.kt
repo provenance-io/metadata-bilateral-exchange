@@ -51,9 +51,9 @@ class SearchIntTest : ContractIntTest() {
             gasAdjustment = 1.2,
         ).checkIsSuccess()
         val searchResult = bilateralClient.searchAsks(
-            ContractSearchRequest.newSearchAsks(
+            ContractSearchRequest(
                 searchType = ContractSearchType.byOwner(BilateralAccounts.askerAccount.address()),
-                pageSize = 11,
+                pageSize = 11.toBigInteger(),
             )
         )
         assertEquals(
@@ -121,9 +121,9 @@ class SearchIntTest : ContractIntTest() {
             gasAdjustment = 1.2,
         ).checkIsSuccess()
         val searchResult = bilateralClient.searchBids(
-            ContractSearchRequest.newSearchBids(
+            ContractSearchRequest(
                 searchType = ContractSearchType.byOwner(BilateralAccounts.bidderAccount.address()),
-                pageSize = 11,
+                pageSize = 11.toBigInteger(),
             )
         )
         assertEquals(

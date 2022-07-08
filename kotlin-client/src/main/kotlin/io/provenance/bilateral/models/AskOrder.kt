@@ -6,13 +6,11 @@ import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonNaming
-import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import io.provenance.bilateral.models.AskCollateral.CoinTrade
 import io.provenance.bilateral.models.AskCollateral.MarkerShareSale
 import io.provenance.bilateral.models.AskCollateral.MarkerTrade
 import io.provenance.bilateral.models.AskCollateral.ScopeTrade
-import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
 import io.provenance.bilateral.serialization.CosmWasmUintToBigIntegerDeserializer
 import java.math.BigInteger
 
@@ -61,10 +59,8 @@ sealed interface AskCollateral {
     data class MarkerShareSale(
         val markerAddress: String,
         val markerDenom: String,
-        @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
         @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
         val totalSharesInSale: BigInteger,
-        @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
         @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
         val remainingSharesInSale: BigInteger,
         val quotePerShare: List<Coin>,
