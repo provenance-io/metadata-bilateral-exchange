@@ -2,7 +2,6 @@ use crate::types::core::error::ContractError;
 use crate::types::request::ask_types::ask_collateral::AskCollateral;
 use crate::types::request::ask_types::ask_order::AskOrder;
 use crate::types::request::request_type::RequestType;
-use crate::types::request::share_sale_type::ShareSaleType;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::Coin;
 
@@ -110,11 +109,11 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
         }
         AskCollateral::MarkerTrade(collateral) => {
             let prefix = format!("AskOrder [{}] of type marker trade", ask_order.id);
-            if collateral.address.as_str().is_empty() {
+            if collateral.marker_address.as_str().is_empty() {
                 invalid_field_messages
                     .push(format!("{} must have a valid marker address", prefix,));
             }
-            if collateral.denom.is_empty() {
+            if collateral.marker_denom.is_empty() {
                 invalid_field_messages.push(format!("{} must have a specified denom", prefix,));
             }
             if collateral.share_count.is_zero() {
@@ -147,17 +146,26 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
         }
         AskCollateral::MarkerShareSale(collateral) => {
             let prefix = format!("AskOrder [{}] of type marker share sale", ask_order.id);
-            if collateral.address.as_str().is_empty() {
+            if collateral.marker_address.as_str().is_empty() {
                 invalid_field_messages.push(format!("{} must have a valid marker address", prefix));
             }
-            if collateral.denom.is_empty() {
+            if collateral.marker_denom.is_empty() {
                 invalid_field_messages.push(format!("{} must have a specified denom", prefix));
             }
-            if collateral.remaining_shares.is_zero() {
+            if collateral.total_shares_in_sale.is_zero() {
                 invalid_field_messages.push(format!(
-                    "{} must refer to a marker with at least one of its coins held",
+                    "{} must specify at least one total share in sale, but specified zero for this value",
                     prefix,
-                ))
+                ));
+            }
+            if collateral.remaining_shares_in_sale.u128() != collateral.total_shares_in_sale.u128()
+            {
+                invalid_field_messages.push(format!(
+                    "{} did not specify the same remaining_shares_in_sale [{}] as its total_shares_in_sale [{}]",
+                    prefix,
+                    collateral.remaining_shares_in_sale.u128(),
+                    collateral.total_shares_in_sale.u128(),
+                ));
             }
             if collateral.quote_per_share.is_empty() {
                 invalid_field_messages.push(format!("{} must have a quote per share", prefix))
@@ -180,44 +188,6 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
                     ask_order.owner.as_str()
                 ));
             }
-            match collateral.sale_type {
-                ShareSaleType::SingleTransaction { share_count } => {
-                    if share_count.is_zero() {
-                        invalid_field_messages.push(
-                            format!(
-                                "{} specified share count for single transaction must be greater than zero",
-                                prefix,
-                            )
-                        );
-                    }
-                    if share_count.u128() > collateral.remaining_shares.u128() {
-                        invalid_field_messages.push(
-                            format!(
-                                "{} specified share count [{}] cannot be greater than marker remaining shares [{}]", 
-                                prefix,
-                                share_count.u128(),
-                                collateral.remaining_shares.u128(),
-                            )
-                        );
-                    }
-                }
-                ShareSaleType::MultipleTransactions {
-                    remove_sale_share_threshold,
-                } => {
-                    if let Some(threshold) = remove_sale_share_threshold {
-                        if threshold.u128() > collateral.remaining_shares.u128() {
-                            invalid_field_messages.push(
-                                format!(
-                                    "{} specified ask removal threshold [{}] cannot be greater than marker remaining shares [{}]",
-                                    prefix,
-                                    threshold.u128(),
-                                    collateral.remaining_shares.u128(),
-                                )
-                            );
-                        }
-                    }
-                }
-            };
         }
         AskCollateral::ScopeTrade(collateral) => {
             let prefix = format!("AskOrder [{}] of type scope trade", ask_order.id);
@@ -247,8 +217,8 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
 #[cfg(test)]
 mod tests {
     use crate::test::request_helpers::{
-        mock_ask_marker_share_multi, mock_ask_marker_share_single, mock_ask_marker_trade,
-        mock_ask_order, mock_ask_order_with_descriptor, mock_ask_scope_trade,
+        mock_ask_marker_share_sale, mock_ask_marker_trade, mock_ask_order,
+        mock_ask_order_with_descriptor, mock_ask_scope_trade,
     };
     use crate::types::core::error::ContractError;
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
@@ -481,7 +451,14 @@ mod tests {
     fn test_marker_share_sale_invalid_marker_address() {
         assert_validation_failure(
             "ask order does not include a valid marker address",
-            &mock_ask_order(mock_ask_marker_share_single("", "denom", 10, &[], 10)),
+            &mock_ask_order(mock_ask_marker_share_sale(
+                "",
+                "denom",
+                10,
+                10,
+                &[],
+                ShareSaleType::MultipleTransactions,
+            )),
             marker_share_sale_error("must have a valid marker address"),
         );
     }
@@ -490,17 +467,15 @@ mod tests {
     fn test_marker_share_sale_invalid_marker_denom() {
         assert_validation_failure(
             "ask order does not include a valid marker denom",
-            &mock_ask_order(mock_ask_marker_share_single("marker", "", 10, &[], 10)),
+            &mock_ask_order(mock_ask_marker_share_sale(
+                "marker",
+                "",
+                10,
+                10,
+                &[],
+                ShareSaleType::MultipleTransactions,
+            )),
             marker_share_sale_error("must have a specified denom"),
-        );
-    }
-
-    #[test]
-    fn test_marker_share_sale_zero_remaining_shares() {
-        assert_validation_failure(
-            "ask order indicates that referenced marker has no remaining held shares",
-            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 0, &[], 10)),
-            marker_share_sale_error("must refer to a marker with at least one of its coins held"),
         );
     }
 
@@ -508,7 +483,14 @@ mod tests {
     fn test_marker_share_sale_empty_quote_per_share() {
         assert_validation_failure(
             "ask order includes an empty quote per share",
-            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 10, &[], 10)),
+            &mock_ask_order(mock_ask_marker_share_sale(
+                "marker",
+                "denom",
+                10,
+                10,
+                &[],
+                ShareSaleType::SingleTransaction,
+            )),
             marker_share_sale_error("must have a quote per share"),
         );
     }
@@ -517,23 +499,25 @@ mod tests {
     fn test_marker_share_sale_quote_per_share_includes_invalid_coins() {
         assert_validation_failure(
             "ask order includes quote per share with zero amount in coin",
-            &mock_ask_order(mock_ask_marker_share_single(
+            &mock_ask_order(mock_ask_marker_share_sale(
                 "marker",
                 "denom",
                 10,
-                &coins(0, "nhash"),
                 10,
+                &coins(0, "nhash"),
+                ShareSaleType::SingleTransaction,
             )),
             zero_coin_error("nhash", "AskCollateral Quote per Share Coin"),
         );
         assert_validation_failure(
             "ask order includes quote per share with invalid denom in coin",
-            &mock_ask_order(mock_ask_marker_share_single(
+            &mock_ask_order(mock_ask_marker_share_sale(
                 "marker",
                 "denom",
                 10,
-                &coins(100, ""),
                 10,
+                &coins(100, ""),
+                ShareSaleType::MultipleTransactions,
             )),
             blank_denom_error(100, "AskCollateral Quote per Share Coin"),
         );
@@ -547,43 +531,42 @@ mod tests {
                 Addr::unchecked("marker_address"),
                 "denom",
                 100,
+                100,
                 &coins(150, "nhash"),
                 &[AccessGrant {
                     permissions: vec![],
                     address: Addr::unchecked("some rando"),
                 }],
-                ShareSaleType::single(100),
+                ShareSaleType::SingleTransaction,
             )),
             marker_share_sale_error("does not have a permission for owner [asker]"),
         );
     }
 
     #[test]
-    fn test_marker_share_sale_single_tx_share_count_is_zero() {
+    fn test_marker_share_sale_total_shares_in_sale_is_zero() {
         assert_validation_failure(
-            "ask order specifies a single transaction sale but it wants to sell zero shares",
-            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 100, &[], 0)),
+            "ask order specifies a total share count of zero",
+            &mock_ask_order(mock_ask_marker_share_sale(
+                "marker",
+                "denom",
+                0,
+                0,
+                &[],
+                ShareSaleType::SingleTransaction,
+            )),
             marker_share_sale_error(
-                "specified share count for single transaction must be greater than zero",
+                "must specify at least one total share in sale, but specified zero for this value",
             ),
         );
     }
 
     #[test]
-    fn test_marker_share_sale_single_tx_share_count_greater_than_remaining_shares() {
+    fn test_marker_share_sale_total_shares_and_remaining_shares_do_not_match() {
         assert_validation_failure(
-            "ask order specifies a single transaction that wants to sell more shares than the marker has",
-            &mock_ask_order(mock_ask_marker_share_single("marker", "denom", 100, &[], 101)),
-            marker_share_sale_error("specified share count [101] cannot be greater than marker remaining shares [100]"),
-        );
-    }
-
-    #[test]
-    fn test_marker_share_sale_multi_tx_threshold_greater_than_remaining_shares() {
-        assert_validation_failure(
-            "ask order specifies a multiple transaction with a removal threshold greater than remaining shares",
-            &mock_ask_order(mock_ask_marker_share_multi("marker", "denom", 100, &[], Some(101))),
-            marker_share_sale_error("specified ask removal threshold [101] cannot be greater than marker remaining shares [100]"),
+            "ask order specifies a total share count that does not match its remaining share count",
+            &mock_ask_order(mock_ask_marker_share_sale("marker", "denom", 100, 99, &[], ShareSaleType::SingleTransaction)),
+            marker_share_sale_error("did not specify the same remaining_shares_in_sale [99] as its total_shares_in_sale [100]"),
         );
     }
 

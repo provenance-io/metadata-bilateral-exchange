@@ -141,11 +141,12 @@ mod tests {
     };
     use crate::test::mock_marker::DEFAULT_MARKER_DENOM;
     use crate::test::request_helpers::{
-        mock_ask_marker_share_single, mock_ask_marker_trade, mock_ask_order, mock_ask_scope_trade,
+        mock_ask_marker_share_sale, mock_ask_marker_trade, mock_ask_order, mock_ask_scope_trade,
     };
     use crate::types::core::error::ContractError;
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::ask_types::ask_order::AskOrder;
+    use crate::types::request::share_sale_type::ShareSaleType;
     use cosmwasm_std::{coins, Addr};
     use provwasm_mocks::mock_dependencies;
 
@@ -172,7 +173,7 @@ mod tests {
             "expected a secondary insert to be rejected because the marker denoms match",
         );
         if let AskCollateral::MarkerTrade(ref mut collateral) = order.collateral {
-            collateral.address = Addr::unchecked("marker-address-2");
+            collateral.marker_address = Addr::unchecked("marker-address-2");
         }
         insert_ask_order(deps.as_mut().storage, &order)
             .expect("expected the insert to succeed when the ask did not violate any indices");
@@ -270,12 +271,13 @@ mod tests {
         );
         let marker_share_sale_order = AskOrder {
             id: "marker_share_sale".to_string(),
-            ..mock_ask_order(mock_ask_marker_share_single(
+            ..mock_ask_order(mock_ask_marker_share_sale(
                 "marker_share_sale_address",
                 DEFAULT_MARKER_DENOM,
                 100,
-                &[],
                 50,
+                &[],
+                ShareSaleType::MultipleTransactions,
             ))
         };
         test_collateral_id(

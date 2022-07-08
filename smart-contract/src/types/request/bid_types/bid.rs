@@ -15,16 +15,16 @@ impl Bid {
         Self::CoinTrade(CoinTradeBid::new(id, base))
     }
 
-    pub fn new_marker_trade<S1: Into<String>, S2: Into<String>>(id: S1, denom: S2) -> Self {
-        Self::MarkerTrade(MarkerTradeBid::new(id, denom))
+    pub fn new_marker_trade<S1: Into<String>, S2: Into<String>>(id: S1, marker_denom: S2) -> Self {
+        Self::MarkerTrade(MarkerTradeBid::new(id, marker_denom))
     }
 
     pub fn new_marker_share_sale<S1: Into<String>, S2: Into<String>>(
         id: S1,
-        denom: S2,
+        marker_denom: S2,
         share_count: u128,
     ) -> Self {
-        Self::MarkerShareSale(MarkerShareSaleBid::new(id, denom, share_count))
+        Self::MarkerShareSale(MarkerShareSaleBid::new(id, marker_denom, share_count))
     }
 
     pub fn new_scope_trade<S1: Into<String>, S2: Into<String>>(id: S1, scope_address: S2) -> Self {
@@ -64,13 +64,13 @@ impl CoinTradeBid {
 #[serde(rename_all = "snake_case")]
 pub struct MarkerTradeBid {
     pub id: String,
-    pub denom: String,
+    pub marker_denom: String,
 }
 impl MarkerTradeBid {
-    pub fn new<S1: Into<String>, S2: Into<String>>(id: S1, denom: S2) -> Self {
+    pub fn new<S1: Into<String>, S2: Into<String>>(id: S1, marker_denom: S2) -> Self {
         Self {
             id: id.into(),
-            denom: denom.into(),
+            marker_denom: marker_denom.into(),
         }
     }
 }
@@ -79,14 +79,18 @@ impl MarkerTradeBid {
 #[serde(rename_all = "snake_case")]
 pub struct MarkerShareSaleBid {
     pub id: String,
-    pub denom: String,
+    pub marker_denom: String,
     pub share_count: Uint128,
 }
 impl MarkerShareSaleBid {
-    pub fn new<S1: Into<String>, S2: Into<String>>(id: S1, denom: S2, share_count: u128) -> Self {
+    pub fn new<S1: Into<String>, S2: Into<String>>(
+        id: S1,
+        marker_denom: S2,
+        share_count: u128,
+    ) -> Self {
         Self {
             id: id.into(),
-            denom: denom.into(),
+            marker_denom: marker_denom.into(),
             share_count: Uint128::new(share_count),
         }
     }

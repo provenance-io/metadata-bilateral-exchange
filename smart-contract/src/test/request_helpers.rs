@@ -98,43 +98,25 @@ pub fn mock_ask_marker_trade<S1: Into<String>, S2: Into<String>>(
     )
 }
 
-pub fn mock_ask_marker_share_single<S1: Into<String>, S2: Into<String>>(
+pub fn mock_ask_marker_share_sale<S1: Into<String>, S2: Into<String>>(
     addr: S1,
     denom: S2,
-    remaining_shares: u128,
+    total_shares_to_sell: u128,
+    remaining_shares_to_sell: u128,
     share_quote: &[Coin],
-    share_sale_amount: u128,
+    share_sale_type: ShareSaleType,
 ) -> AskCollateral {
     AskCollateral::marker_share_sale(
         Addr::unchecked(addr),
         denom,
-        remaining_shares,
+        total_shares_to_sell,
+        remaining_shares_to_sell,
         share_quote,
         &[AccessGrant {
             address: Addr::unchecked("asker"),
             permissions: vec![MarkerAccess::Admin],
         }],
-        ShareSaleType::single(share_sale_amount),
-    )
-}
-
-pub fn mock_ask_marker_share_multi<S1: Into<String>, S2: Into<String>>(
-    addr: S1,
-    denom: S2,
-    remaining_shares: u128,
-    share_quote: &[Coin],
-    sale_cutoff: Option<u128>,
-) -> AskCollateral {
-    AskCollateral::marker_share_sale(
-        Addr::unchecked(addr),
-        denom,
-        remaining_shares,
-        share_quote,
-        &[AccessGrant {
-            address: Addr::unchecked("asker"),
-            permissions: vec![MarkerAccess::Admin],
-        }],
-        ShareSaleType::multiple(sale_cutoff),
+        share_sale_type,
     )
 }
 

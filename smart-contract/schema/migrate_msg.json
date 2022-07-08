@@ -13,6 +13,18 @@
         }
       },
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "migrate_legacy_orders"
+      ],
+      "properties": {
+        "migrate_legacy_orders": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
     }
   ]
 }

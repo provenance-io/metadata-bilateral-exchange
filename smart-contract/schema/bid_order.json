@@ -154,16 +154,16 @@
     "MarkerShareSaleBidCollateral": {
       "type": "object",
       "required": [
-        "address",
-        "denom",
+        "marker_address",
+        "marker_denom",
         "quote",
         "share_count"
       ],
       "properties": {
-        "address": {
+        "marker_address": {
           "$ref": "#/definitions/Addr"
         },
-        "denom": {
+        "marker_denom": {
           "type": "string"
         },
         "quote": {
@@ -180,15 +180,15 @@
     "MarkerTradeBidCollateral": {
       "type": "object",
       "required": [
-        "address",
-        "denom",
+        "marker_address",
+        "marker_denom",
         "quote"
       ],
       "properties": {
-        "address": {
+        "marker_address": {
           "$ref": "#/definitions/Addr"
         },
-        "denom": {
+        "marker_denom": {
           "type": "string"
         },
         "quote": {

@@ -159,7 +159,7 @@ fn execute_marker_trade(
         let mut bidder_permissions = asker_permissions.to_owned();
         bidder_permissions.address = bid_order.owner.to_owned();
         messages.append(&mut release_marker_from_contract(
-            &ask_collateral.denom,
+            &ask_collateral.marker_denom,
             &env.contract.address,
             &[bidder_permissions],
         )?);
@@ -198,16 +198,16 @@ fn execute_marker_share_sale(
             amount: bid_collateral.quote.to_owned(),
         }),
         withdraw_coins(
-            &ask_collateral.denom,
+            &ask_collateral.marker_denom,
             bid_collateral.share_count.u128(),
-            &ask_collateral.denom,
+            &ask_collateral.marker_denom,
             bid_order.owner.to_owned(),
         )?,
     ];
     let mut terminate_sale = || -> Result<(), ContractError> {
         // Marker gets released to the asker.  The sale is effectively over.
         messages.append(&mut release_marker_from_contract(
-            &ask_collateral.denom,
+            &ask_collateral.marker_denom,
             &env.contract.address,
             &ask_collateral.removed_permissions,
         )?);
@@ -215,21 +215,20 @@ fn execute_marker_share_sale(
         ().to_ok()
     };
     match ask_collateral.sale_type {
-        ShareSaleType::SingleTransaction { .. } => terminate_sale()?,
-        ShareSaleType::MultipleTransactions {
-            remove_sale_share_threshold,
-        } => {
-            let share_threshold = remove_sale_share_threshold.map(|t| t.u128()).unwrap_or(0);
+        // Single transaction sales should always terminate immediately after the sale completes
+        ShareSaleType::SingleTransaction => terminate_sale()?,
+        ShareSaleType::MultipleTransactions => {
+            // Validation will prevent this value from ever becoming less than zero from the sale,
+            // so this is a safe operation
             let shares_remaining_after_sale =
-                ask_collateral.remaining_shares.u128() - bid_collateral.share_count.u128();
-            // Validation will prevent this code from being executed if shares_remaining_after_sale
-            // is ever less than share_threshold, so only an equality check is necessary
-            if share_threshold == shares_remaining_after_sale {
+                ask_collateral.remaining_shares_in_sale.u128() - bid_collateral.share_count.u128();
+            // If all listed shares are now sold, terminate the sale
+            if shares_remaining_after_sale == 0 {
                 terminate_sale()?;
             } else {
                 let mut ask_order = ask_order.to_owned();
                 let mut ask_collateral = ask_collateral.to_owned();
-                ask_collateral.remaining_shares = Uint128::new(shares_remaining_after_sale);
+                ask_collateral.remaining_shares_in_sale = Uint128::new(shares_remaining_after_sale);
                 ask_order.collateral = AskCollateral::MarkerShareSale(ask_collateral);
                 // Replace the ask order in storage with an updated remaining_shares value
                 update_ask_order(deps.storage, &ask_order)?;
@@ -760,8 +759,9 @@ mod tests {
             Ask::new_marker_share_sale(
                 "ask_id",
                 DEFAULT_MARKER_DENOM,
+                15,
                 &coins(1, "quote"),
-                ShareSaleType::single(15),
+                ShareSaleType::SingleTransaction,
             ),
             None,
         )
@@ -882,8 +882,9 @@ mod tests {
             Ask::new_marker_share_sale(
                 "ask_id",
                 DEFAULT_MARKER_DENOM,
+                100,
                 &coins(1, "quote"),
-                ShareSaleType::multiple(None),
+                ShareSaleType::MultipleTransactions,
             ),
             None,
         )
@@ -940,8 +941,13 @@ mod tests {
             .expect("ask should remain in storage");
         let collateral = ask_order.collateral.unwrap_marker_share_sale();
         assert_eq!(
+            100,
+            collateral.total_shares_in_sale.u128(),
+            "there should be 100 total shares in sale, indicating the correct original amount",
+        );
+        assert_eq!(
             50,
-            collateral.remaining_shares.u128(),
+            collateral.remaining_shares_in_sale.u128(),
             "there should be 50 remaining shares after the sale completes, down from the original 100",
         );
         get_bid_order_by_id(deps.as_ref().storage, "bid_id")

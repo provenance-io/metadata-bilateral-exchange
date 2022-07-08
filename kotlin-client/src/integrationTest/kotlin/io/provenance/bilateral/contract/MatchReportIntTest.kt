@@ -11,10 +11,13 @@ import testconfiguration.functions.assertBidIsDeleted
 import testconfiguration.functions.newCoins
 import testconfiguration.testcontainers.ContractIntTest
 import java.util.UUID
+import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class MatchReportIntTest : ContractIntTest() {
+    // TODO: Stop ignoring this test once match reports are no longer disabled (in v1.0.4)
+    @Ignore
     @Test
     fun testSimpleMatchReport() {
         val askId = UUID.randomUUID().toString()

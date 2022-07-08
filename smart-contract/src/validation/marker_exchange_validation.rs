@@ -11,6 +11,7 @@ pub fn validate_marker_for_ask(
     original_owner_address: &Addr,
     contract_address: &Addr,
     expected_contract_permissions: &[MarkerAccess],
+    shares_sold: Option<u128>,
 ) -> Result<(), ContractError> {
     if !marker_has_admin(marker, original_owner_address) {
         return ContractError::invalid_marker(format!(
@@ -45,6 +46,17 @@ pub fn validate_marker_for_ask(
         ))
         .to_err();
     }
+    if let Some(shares_sold) = shares_sold {
+        if marker_coin.amount.u128() < shares_sold {
+            return ContractError::invalid_marker(format!(
+                "expected marker [{}] to have at least [{}] shares to sell, but it only had [{}]",
+                marker.denom,
+                shares_sold,
+                marker_coin.amount.u128(),
+            ))
+            .to_err();
+        }
+    }
     ().to_ok()
 }
 
@@ -67,6 +79,7 @@ mod tests {
             &Addr::unchecked("asker"),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin, MarkerAccess::Withdraw],
+            None,
         )
         .expect("expected validation to pass for a valid marker ask scenario");
     }
@@ -80,6 +93,7 @@ mod tests {
             &Addr::unchecked("asker"),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin, MarkerAccess::Withdraw],
+            None,
         )
         .expect_err("an error should occur when the owner is missing from the marker permissions");
         assert_invalid_marker_error(
@@ -106,6 +120,7 @@ mod tests {
             &Addr::unchecked("asker"),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin],
+            None,
         )
         .expect_err(
             "expected an error to occur when the contract is not even listed on the marker",
@@ -133,6 +148,7 @@ mod tests {
             &Addr::unchecked("asker"),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin, MarkerAccess::Withdraw],
+            None,
         )
         .expect_err("an error should occur when the marker is not in active status");
         assert_invalid_marker_error(
@@ -156,12 +172,37 @@ mod tests {
             &Addr::unchecked("asker"),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin, MarkerAccess::Withdraw],
+            None,
         )
         .expect_err("an error should occur when the marker has zero of its own coin");
         assert_invalid_marker_error(
             err,
             format!(
                 "expected marker [{}] to hold at least one of its supply of denom, but it had [0]",
+                DEFAULT_MARKER_DENOM,
+            ),
+        );
+    }
+
+    #[test]
+    fn test_marker_with_too_few_coins_for_sale() {
+        let marker = MockMarker {
+            coins: vec![coin(10, DEFAULT_MARKER_DENOM)],
+            ..MockMarker::new_owned_mock_marker("asker")
+        }
+        .to_marker();
+        let err = validate_marker_for_ask(
+            &marker,
+            &Addr::unchecked("asker"),
+            &Addr::unchecked(MOCK_CONTRACT_ADDR),
+            &[MarkerAccess::Admin, MarkerAccess::Withdraw],
+            Some(11),
+        )
+        .expect_err("an error should occur when more shares are requested than are available");
+        assert_invalid_marker_error(
+            err,
+            format!(
+                "expected marker [{}] to have at least [11] shares to sell, but it only had [10]",
                 DEFAULT_MARKER_DENOM,
             ),
         );

@@ -39,11 +39,11 @@ data class CreateAsk(
          */
         fun newMarkerTrade(
             id: String,
-            denom: String,
+            markerDenom: String,
             quotePerShare: List<Coin>,
             descriptor: RequestDescriptor? = null,
         ): CreateAsk = CreateAsk(
-            ask = MarkerTradeAsk(id, denom, quotePerShare),
+            ask = MarkerTradeAsk(id, markerDenom, quotePerShare),
             descriptor = descriptor,
         )
 
@@ -57,12 +57,13 @@ data class CreateAsk(
          */
         fun newMarkerShareSale(
             id: String,
-            denom: String,
+            markerDenom: String,
+            sharesToSell: String,
             quotePerShare: List<Coin>,
             shareSaleType: ShareSaleType,
             descriptor: RequestDescriptor? = null,
         ): CreateAsk = CreateAsk(
-            ask = MarkerShareSaleAsk(id, denom, quotePerShare, shareSaleType),
+            ask = MarkerShareSaleAsk(id, markerDenom, sharesToSell, quotePerShare, shareSaleType),
             descriptor = descriptor,
         )
 
@@ -129,7 +130,7 @@ sealed interface Ask {
     @JsonTypeName("marker_trade")
     data class MarkerTradeAsk(
         val id: String,
-        val denom: String,
+        val markerDenom: String,
         val quotePerShare: List<Coin>,
     ) : Ask
 
@@ -137,7 +138,8 @@ sealed interface Ask {
     @JsonTypeName("marker_share_sale")
     data class MarkerShareSaleAsk(
         val id: String,
-        val denom: String,
+        val markerDenom: String,
+        val sharesToSell: String,
         val quotePerShare: List<Coin>,
         val shareSaleType: ShareSaleType,
     ) : Ask

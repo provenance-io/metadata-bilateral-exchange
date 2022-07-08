@@ -85,7 +85,7 @@ fn create_marker_trade_collateral(
     if marker_trade.id.is_empty() {
         return ContractError::missing_field("id").to_err();
     }
-    if marker_trade.denom.is_empty() {
+    if marker_trade.marker_denom.is_empty() {
         return ContractError::missing_field("denom").to_err();
     }
     if quote_funds.is_empty() {
@@ -95,8 +95,9 @@ fn create_marker_trade_collateral(
         .to_err();
     }
     // This grants us access to the marker address, as well as ensuring that the marker is real
-    let marker = ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.denom)?;
-    BidCollateral::marker_trade(marker.address, &marker_trade.denom, quote_funds).to_ok()
+    let marker =
+        ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.marker_denom)?;
+    BidCollateral::marker_trade(marker.address, &marker_trade.marker_denom, quote_funds).to_ok()
 }
 
 fn create_marker_share_sale_collateral(
@@ -107,7 +108,7 @@ fn create_marker_share_sale_collateral(
     if marker_share_sale.id.is_empty() {
         return ContractError::missing_field("id").to_err();
     }
-    if marker_share_sale.denom.is_empty() {
+    if marker_share_sale.marker_denom.is_empty() {
         return ContractError::missing_field("denom").to_err();
     }
     if marker_share_sale.share_count.is_zero() {
@@ -122,21 +123,21 @@ fn create_marker_share_sale_collateral(
         )
         .to_err();
     }
-    let marker =
-        ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_share_sale.denom)?;
+    let marker = ProvenanceQuerier::new(&deps.querier)
+        .get_marker_by_denom(&marker_share_sale.marker_denom)?;
     let marker_shares_available = get_single_marker_coin_holding(&marker)?.amount.u128();
     if marker_share_sale.share_count.u128() > marker_shares_available {
         return ContractError::validation_error(&[format!(
             "share count [{}] must be less than or equal to remaining [{}] shares available [{}]",
             marker_share_sale.share_count.u128(),
-            marker_share_sale.denom,
+            marker_share_sale.marker_denom,
             marker_shares_available,
         )])
         .to_err();
     }
     BidCollateral::marker_share_sale(
         marker.address,
-        &marker_share_sale.denom,
+        &marker_share_sale.marker_denom,
         marker_share_sale.share_count.u128(),
         quote_funds,
     )
@@ -907,11 +908,11 @@ mod tests {
         );
         let collateral = bid_order.collateral.unwrap_marker_trade();
         assert_eq!(
-            DEFAULT_MARKER_ADDRESS, collateral.address,
+            DEFAULT_MARKER_ADDRESS, collateral.marker_address,
             "the correct marker address should be set on the collateral",
         );
         assert_eq!(
-            DEFAULT_MARKER_DENOM, collateral.denom,
+            DEFAULT_MARKER_DENOM, collateral.marker_denom,
             "the correct marker denom should be set on the collateral",
         );
         assert_eq!(
@@ -962,11 +963,11 @@ mod tests {
         let collateral = bid_order.collateral.unwrap_marker_share_sale();
         assert_eq!(
             DEFAULT_MARKER_ADDRESS,
-            collateral.address.as_str(),
+            collateral.marker_address.as_str(),
             "the correct marker address should be set in the collateral",
         );
         assert_eq!(
-            DEFAULT_MARKER_DENOM, collateral.denom,
+            DEFAULT_MARKER_DENOM, collateral.marker_denom,
             "the correct marker denom should be set in the collateral",
         );
         assert_eq!(

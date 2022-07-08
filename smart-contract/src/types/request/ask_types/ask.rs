@@ -1,5 +1,5 @@
 use crate::types::request::share_sale_type::ShareSaleType;
-use cosmwasm_std::Coin;
+use cosmwasm_std::{Coin, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -18,21 +18,23 @@ impl Ask {
 
     pub fn new_marker_trade<S1: Into<String>, S2: Into<String>>(
         id: S1,
-        denom: S2,
+        marker_denom: S2,
         quote_per_share: &[Coin],
     ) -> Self {
-        Self::MarkerTrade(MarkerTradeAsk::new(id, denom, quote_per_share))
+        Self::MarkerTrade(MarkerTradeAsk::new(id, marker_denom, quote_per_share))
     }
 
     pub fn new_marker_share_sale<S1: Into<String>, S2: Into<String>>(
         id: S1,
-        denom: S2,
+        marker_denom: S2,
+        shares_to_sell: u128,
         quote_per_share: &[Coin],
         share_sale_type: ShareSaleType,
     ) -> Self {
         Self::MarkerShareSale(MarkerShareSaleAsk::new(
             id,
-            denom,
+            marker_denom,
+            shares_to_sell,
             quote_per_share,
             share_sale_type,
         ))
@@ -79,18 +81,18 @@ impl CoinTradeAsk {
 #[serde(rename_all = "snake_case")]
 pub struct MarkerTradeAsk {
     pub id: String,
-    pub denom: String,
+    pub marker_denom: String,
     pub quote_per_share: Vec<Coin>,
 }
 impl MarkerTradeAsk {
     pub fn new<S1: Into<String>, S2: Into<String>>(
         id: S1,
-        denom: S2,
+        marker_denom: S2,
         quote_per_share: &[Coin],
     ) -> Self {
         Self {
             id: id.into(),
-            denom: denom.into(),
+            marker_denom: marker_denom.into(),
             quote_per_share: quote_per_share.to_owned(),
         }
     }
@@ -100,20 +102,23 @@ impl MarkerTradeAsk {
 #[serde(rename_all = "snake_case")]
 pub struct MarkerShareSaleAsk {
     pub id: String,
-    pub denom: String,
+    pub marker_denom: String,
+    pub shares_to_sell: Uint128,
     pub quote_per_share: Vec<Coin>,
     pub share_sale_type: ShareSaleType,
 }
 impl MarkerShareSaleAsk {
     pub fn new<S1: Into<String>, S2: Into<String>>(
         id: S1,
-        denom: S2,
+        marker_denom: S2,
+        shares_to_sell: u128,
         quote_per_share: &[Coin],
         share_sale_type: ShareSaleType,
     ) -> Self {
         Self {
             id: id.into(),
-            denom: denom.into(),
+            marker_denom: marker_denom.into(),
+            shares_to_sell: Uint128::new(shares_to_sell),
             quote_per_share: quote_per_share.to_owned(),
             share_sale_type,
         }

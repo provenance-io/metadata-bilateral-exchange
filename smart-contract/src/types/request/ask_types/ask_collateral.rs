@@ -20,15 +20,15 @@ impl AskCollateral {
     }
 
     pub fn marker_trade<S: Into<String>>(
-        address: Addr,
-        denom: S,
+        marker_address: Addr,
+        marker_denom: S,
         share_count: u128,
         quote_per_share: &[Coin],
         removed_permissions: &[AccessGrant],
     ) -> Self {
         Self::MarkerTrade(MarkerTradeAskCollateral::new(
-            address,
-            denom,
+            marker_address,
+            marker_denom,
             share_count,
             quote_per_share,
             removed_permissions,
@@ -36,17 +36,19 @@ impl AskCollateral {
     }
 
     pub fn marker_share_sale<S: Into<String>>(
-        address: Addr,
-        denom: S,
-        remaining_shares: u128,
+        marker_address: Addr,
+        marker_denom: S,
+        total_shares_in_sale: u128,
+        remaining_shares_in_sale: u128,
         quote_per_share: &[Coin],
         removed_permissions: &[AccessGrant],
         sale_type: ShareSaleType,
     ) -> Self {
         Self::MarkerShareSale(MarkerShareSaleAskCollateral::new(
-            address,
-            denom,
-            remaining_shares,
+            marker_address,
+            marker_denom,
+            total_shares_in_sale,
+            remaining_shares_in_sale,
             quote_per_share,
             removed_permissions,
             sale_type,
@@ -104,23 +106,23 @@ impl CoinTradeAskCollateral {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MarkerTradeAskCollateral {
-    pub address: Addr,
-    pub denom: String,
+    pub marker_address: Addr,
+    pub marker_denom: String,
     pub share_count: Uint128,
     pub quote_per_share: Vec<Coin>,
     pub removed_permissions: Vec<AccessGrant>,
 }
 impl MarkerTradeAskCollateral {
     fn new<S: Into<String>>(
-        address: Addr,
-        denom: S,
+        marker_address: Addr,
+        marker_denom: S,
         share_count: u128,
         quote_per_share: &[Coin],
         removed_permissions: &[AccessGrant],
     ) -> Self {
         Self {
-            address,
-            denom: denom.into(),
+            marker_address,
+            marker_denom: marker_denom.into(),
             share_count: Uint128::new(share_count),
             quote_per_share: quote_per_share.to_owned(),
             removed_permissions: removed_permissions.to_owned(),
@@ -131,26 +133,29 @@ impl MarkerTradeAskCollateral {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MarkerShareSaleAskCollateral {
-    pub address: Addr,
-    pub denom: String,
-    pub remaining_shares: Uint128,
+    pub marker_address: Addr,
+    pub marker_denom: String,
+    pub total_shares_in_sale: Uint128,
+    pub remaining_shares_in_sale: Uint128,
     pub quote_per_share: Vec<Coin>,
     pub removed_permissions: Vec<AccessGrant>,
     pub sale_type: ShareSaleType,
 }
 impl MarkerShareSaleAskCollateral {
     fn new<S: Into<String>>(
-        address: Addr,
-        denom: S,
-        remaining_shares: u128,
+        marker_address: Addr,
+        marker_denom: S,
+        total_shares_in_sale: u128,
+        remaining_shares_in_sale: u128,
         quote_per_share: &[Coin],
         removed_permissions: &[AccessGrant],
         sale_type: ShareSaleType,
     ) -> Self {
         Self {
-            address,
-            denom: denom.into(),
-            remaining_shares: Uint128::new(remaining_shares),
+            marker_address,
+            marker_denom: marker_denom.into(),
+            total_shares_in_sale: Uint128::new(total_shares_in_sale),
+            remaining_shares_in_sale: Uint128::new(remaining_shares_in_sale),
             quote_per_share: quote_per_share.to_owned(),
             removed_permissions: removed_permissions.to_owned(),
             sale_type,

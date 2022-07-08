@@ -120,12 +120,14 @@ fn create_marker_trade_ask_collateral(
         )
         .to_err();
     }
-    let marker = ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.denom)?;
+    let marker =
+        ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.marker_denom)?;
     validate_marker_for_ask(
         &marker,
         &info.sender,
         &env.contract.address,
         &[MarkerAccess::Admin],
+        None,
     )?;
     let mut messages: Vec<CosmosMsg<ProvenanceMsg>> = vec![];
     for permission in marker
@@ -168,13 +170,14 @@ fn create_marker_share_sale_ask_collateral(
         )
         .to_err();
     }
-    let marker =
-        ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_share_sale.denom)?;
+    let marker = ProvenanceQuerier::new(&deps.querier)
+        .get_marker_by_denom(&marker_share_sale.marker_denom)?;
     validate_marker_for_ask(
         &marker,
         &info.sender,
         &env.contract.address,
         &[MarkerAccess::Admin, MarkerAccess::Withdraw],
+        Some(marker_share_sale.shares_to_sell.u128()),
     )?;
     let mut messages: Vec<CosmosMsg<ProvenanceMsg>> = vec![];
     for permission in marker
@@ -191,7 +194,8 @@ fn create_marker_share_sale_ask_collateral(
         collateral: AskCollateral::marker_share_sale(
             marker.address.clone(),
             &marker.denom,
-            get_single_marker_coin_holding(&marker)?.amount.u128(),
+            marker_share_sale.shares_to_sell.u128(),
+            marker_share_sale.shares_to_sell.u128(),
             &marker_share_sale.quote_per_share,
             &marker
                 .permissions
@@ -520,8 +524,9 @@ mod tests {
         let mut ask = Ask::new_marker_share_sale(
             "ask_id",
             DEFAULT_MARKER_DENOM,
+            100,
             &coins(100, "nhash"),
-            ShareSaleType::single(100),
+            ShareSaleType::SingleTransaction,
         );
         let err = create_ask(
             deps.as_mut(),
@@ -597,8 +602,9 @@ mod tests {
             Ask::new_marker_share_sale(
                 "ask_id",
                 DEFAULT_MARKER_DENOM,
+                10,
                 &coins(100, "nhash"),
-                ShareSaleType::single(10),
+                ShareSaleType::SingleTransaction,
             ),
             None,
         )
@@ -895,11 +901,11 @@ mod tests {
         let marker_trade_collateral = ask_order.collateral.unwrap_marker_trade();
         assert_eq!(
             DEFAULT_MARKER_ADDRESS,
-            marker_trade_collateral.address.as_str(),
+            marker_trade_collateral.marker_address.as_str(),
             "the correct marker address should be set in the marker trade collateral",
         );
         assert_eq!(
-            DEFAULT_MARKER_DENOM, marker_trade_collateral.denom,
+            DEFAULT_MARKER_DENOM, marker_trade_collateral.marker_denom,
             "the correct marker denom should be set in the marker trade collateral",
         );
         assert_eq!(
@@ -943,8 +949,9 @@ mod tests {
             Ask::new_marker_share_sale(
                 "ask_id",
                 DEFAULT_MARKER_DENOM,
+                50,
                 &coins(100, "nhash"),
-                ShareSaleType::single(50),
+                ShareSaleType::SingleTransaction,
             ),
             Some(descriptor.to_owned()),
         )
@@ -1013,17 +1020,22 @@ mod tests {
         let collateral = ask_order.collateral.unwrap_marker_share_sale();
         assert_eq!(
             DEFAULT_MARKER_ADDRESS,
-            collateral.address.as_str(),
+            collateral.marker_address.as_str(),
             "the correct marker address should be set in the collateral",
         );
         assert_eq!(
-            DEFAULT_MARKER_DENOM, collateral.denom,
+            DEFAULT_MARKER_DENOM, collateral.marker_denom,
             "the correct marker denom should be set in the collateral",
         );
         assert_eq!(
-            DEFAULT_MARKER_HOLDINGS,
-            collateral.remaining_shares.u128(),
-            "the correct number of remaining shares should be set in the collateral",
+            50,
+            collateral.total_shares_in_sale.u128(),
+            "the correct total shares in sale value should be set in the collateral",
+        );
+        assert_eq!(
+            50,
+            collateral.remaining_shares_in_sale.u128(),
+            "the correct remaiining shares in sale value should be set in the collateral",
         );
         assert_eq!(
             coins(100, "nhash"),
