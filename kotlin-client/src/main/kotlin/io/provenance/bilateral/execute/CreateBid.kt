@@ -4,7 +4,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonNaming
+import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.Bid.MarkerShareSaleBid
@@ -12,7 +14,10 @@ import io.provenance.bilateral.execute.Bid.MarkerTradeBid
 import io.provenance.bilateral.execute.Bid.ScopeTradeBid
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.models.RequestDescriptor
+import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
+import io.provenance.bilateral.serialization.CosmWasmUintToBigIntegerDeserializer
 import io.provenance.bilateral.util.CoinUtil
+import java.math.BigInteger
 
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
@@ -50,7 +55,7 @@ data class CreateBid(val bid: Bid, val descriptor: RequestDescriptor?) : Contrac
         fun newMarkerShareSale(
             id: String,
             markerDenom: String,
-            shareCount: String,
+            shareCount: BigInteger,
             quote: List<Coin>,
             descriptor: RequestDescriptor? = null,
         ): CreateBid = CreateBid(
@@ -137,7 +142,9 @@ sealed interface Bid {
     data class MarkerShareSaleBid(
         val id: String,
         val markerDenom: String,
-        val shareCount: String,
+        @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
+        @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
+        val shareCount: BigInteger,
         // The quote is used for funds, and never added to the json payload send to the contract
         @JsonIgnore
         val quote: List<Coin>,

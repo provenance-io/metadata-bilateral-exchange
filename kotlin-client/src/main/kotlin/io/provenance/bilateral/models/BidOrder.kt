@@ -4,12 +4,17 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonNaming
+import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import io.provenance.bilateral.models.BidCollateral.CoinTrade
 import io.provenance.bilateral.models.BidCollateral.MarkerShareSale
 import io.provenance.bilateral.models.BidCollateral.MarkerTrade
 import io.provenance.bilateral.models.BidCollateral.ScopeTrade
+import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
+import io.provenance.bilateral.serialization.CosmWasmUintToBigIntegerDeserializer
+import java.math.BigInteger
 
 @JsonNaming(SnakeCaseStrategy::class)
 data class BidOrder(
@@ -55,7 +60,9 @@ sealed interface BidCollateral {
     data class MarkerShareSale(
         val markerAddress: String,
         val markerDenom: String,
-        val shareCount: String,
+        @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
+        @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
+        val shareCount: BigInteger,
         val quote: List<Coin>,
     ) : BidCollateral
 

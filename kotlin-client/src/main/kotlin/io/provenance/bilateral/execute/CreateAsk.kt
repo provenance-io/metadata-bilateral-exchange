@@ -4,7 +4,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonNaming
+import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import io.provenance.bilateral.execute.Ask.CoinTradeAsk
 import io.provenance.bilateral.execute.Ask.MarkerShareSaleAsk
@@ -13,7 +15,10 @@ import io.provenance.bilateral.execute.Ask.ScopeTradeAsk
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.models.RequestDescriptor
 import io.provenance.bilateral.models.ShareSaleType
+import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
+import io.provenance.bilateral.serialization.CosmWasmUintToBigIntegerDeserializer
 import io.provenance.bilateral.util.CoinUtil
+import java.math.BigInteger
 
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
@@ -58,7 +63,7 @@ data class CreateAsk(
         fun newMarkerShareSale(
             id: String,
             markerDenom: String,
-            sharesToSell: String,
+            sharesToSell: BigInteger,
             quotePerShare: List<Coin>,
             shareSaleType: ShareSaleType,
             descriptor: RequestDescriptor? = null,
@@ -139,7 +144,9 @@ sealed interface Ask {
     data class MarkerShareSaleAsk(
         val id: String,
         val markerDenom: String,
-        val sharesToSell: String,
+        @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
+        @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
+        val sharesToSell: BigInteger,
         val quotePerShare: List<Coin>,
         val shareSaleType: ShareSaleType,
     ) : Ask

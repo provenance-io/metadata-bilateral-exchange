@@ -12,7 +12,7 @@ import java.time.ZoneOffset
 /**
  * See ContractUTCTimestampSerializer for information on why this is necessary for cosmwasm Timestamp struct values.
  */
-class ContractUTCTimestampDeserializer : JsonDeserializer<OffsetDateTime>() {
+class CosmWasmUTCTimestampToOffsetDateTimeDeserializer : JsonDeserializer<OffsetDateTime>() {
     private companion object {
         private val NANO_TO_SECONDS_DIVISOR = BigDecimal.valueOf(1_000_000_000L)
     }

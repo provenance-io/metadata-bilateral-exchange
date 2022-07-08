@@ -4,8 +4,8 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
-import io.provenance.bilateral.serialization.ContractUTCTimestampDeserializer
-import io.provenance.bilateral.serialization.ContractUTCTimestampSerializer
+import io.provenance.bilateral.serialization.CosmWasmUTCTimestampToOffsetDateTimeDeserializer
+import io.provenance.bilateral.serialization.CosmWasmUTCOffsetDateTimeToTimestampSerializer
 import java.time.OffsetDateTime
 
 /**
@@ -17,8 +17,8 @@ import java.time.OffsetDateTime
 @JsonNaming(SnakeCaseStrategy::class)
 data class RequestDescriptor(
     val description: String? = null,
-    @JsonSerialize(using = ContractUTCTimestampSerializer::class)
-    @JsonDeserialize(using = ContractUTCTimestampDeserializer::class)
+    @JsonSerialize(using = CosmWasmUTCOffsetDateTimeToTimestampSerializer::class)
+    @JsonDeserialize(using = CosmWasmUTCTimestampToOffsetDateTimeDeserializer::class)
     val effectiveTime: OffsetDateTime? = null,
     val attributeRequirement: AttributeRequirement? = null,
 )
