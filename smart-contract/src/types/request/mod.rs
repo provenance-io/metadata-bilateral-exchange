@@ -1,6 +1,5 @@
 pub mod ask_types;
 pub mod bid_types;
-pub mod legacy_share_sale_type;
 pub mod match_report;
 pub mod request_descriptor;
 pub mod request_type;
