@@ -1,6 +1,5 @@
 package io.provenance.bilateral.execute
 
-import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
