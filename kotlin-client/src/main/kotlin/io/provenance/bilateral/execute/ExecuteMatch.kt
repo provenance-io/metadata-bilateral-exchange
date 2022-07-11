@@ -25,6 +25,5 @@ data class ExecuteMatch(
     val bidId: String,
     val acceptMismatchedBids: Boolean? = null,
 ) : ContractExecuteMsg {
-    @JsonIgnore
-    internal fun getLoggingString(): String = "executeMatch, askId = [$askId], bidId = [$bidId], acceptMismatchedBids = [$acceptMismatchedBids]"
+    override fun toLoggingString(): String = "executeMatch, askId = [$askId], bidId = [$bidId], acceptMismatchedBids = [$acceptMismatchedBids]"
 }

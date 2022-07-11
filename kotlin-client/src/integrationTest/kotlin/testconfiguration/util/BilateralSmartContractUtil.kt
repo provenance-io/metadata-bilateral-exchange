@@ -91,7 +91,9 @@ object BilateralSmartContractUtil {
 data class MetadataBilateralExchangeInstantiateMsg(
     val bindName: String,
     val contractName: String,
-) : ContractMsg
+) : ContractMsg {
+    override fun toLoggingString(): String = "metadataBilateralExchangeInstantiateMsg, bindName = [$bindName], contractName = [$contractName]"
+}
 
 data class ContractInstantiationResult(
     val codeId: Long,

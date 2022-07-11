@@ -17,7 +17,9 @@ import java.math.BigInteger
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("search_asks")
-data class SearchAsks(val search: ContractSearchRequest) : ContractQueryMsg
+data class SearchAsks(val search: ContractSearchRequest) : ContractQueryMsg {
+    override fun toLoggingString(): String = "searchAsks, ${search.getLoggingSuffix()}"
+}
 
 /**
  * See ContractSearchType for JSON payloads for each different type of bid search.
@@ -25,7 +27,9 @@ data class SearchAsks(val search: ContractSearchRequest) : ContractQueryMsg
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("search_bids")
-data class SearchBids(val search: ContractSearchRequest) : ContractQueryMsg
+data class SearchBids(val search: ContractSearchRequest) : ContractQueryMsg {
+    override fun toLoggingString(): String = "searchBids, ${search.getLoggingSuffix()}"
+}
 
 @JsonNaming(SnakeCaseStrategy::class)
 data class ContractSearchRequest(
@@ -39,7 +43,7 @@ data class ContractSearchRequest(
     internal fun searchBids(): SearchBids = SearchBids(this)
 
     @JsonIgnore
-    internal fun getLoggingString(): String = when (this.searchType) {
+    internal fun getLoggingSuffix(): String = when (this.searchType) {
         is ContractSearchType.All -> "[all]"
         is ContractSearchType.Type -> "[type], type = [${this.searchType.valueType}]"
         is ContractSearchType.Id -> "[id], id = [${this.searchType.id}]"

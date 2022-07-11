@@ -9,4 +9,6 @@ import io.provenance.bilateral.interfaces.ContractExecuteMsg
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("cancel_bid")
-data class CancelBid(val id: String) : ContractExecuteMsg
+data class CancelBid(val id: String) : ContractExecuteMsg {
+    override fun toLoggingString(): String = "cancelBid, id = [$id]"
+}

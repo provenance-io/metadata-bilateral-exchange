@@ -9,4 +9,6 @@ import io.provenance.bilateral.interfaces.ContractQueryMsg
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("get_ask")
-data class GetAsk(val id: String) : ContractQueryMsg
+data class GetAsk(val id: String) : ContractQueryMsg {
+    override fun toLoggingString(): String = "getAsk, id = [$id]"
+}

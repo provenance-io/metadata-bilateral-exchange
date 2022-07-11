@@ -116,8 +116,7 @@ data class CreateAsk(
         askFee?.let { CoinUtil.combineFunds(funds, it) } ?: funds
     }
 
-    @JsonIgnore
-    internal fun getLoggingString(): String = mapAsk(
+    override fun toLoggingString(): String = mapAsk(
         coinTrade = { "askType = [coin_trade], id = [${it.id}]" },
         markerTrade = { "askType = [marker_trade], id = [${it.id}], markerDenom = [${it.markerDenom}]" },
         markerShareSale = { "askType = [marker_share_sale], id = [${it.id}], markerDenom = [${it.markerDenom}], sharesToSell = [${it.sharesToSell}]" },
