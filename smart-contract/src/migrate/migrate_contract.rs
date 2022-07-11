@@ -1,4 +1,6 @@
-use crate::storage::contract_info::{get_contract_info, ContractInfo, CONTRACT_VERSION};
+use crate::storage::contract_info::{
+    get_contract_info, set_contract_info, ContractInfo, CONTRACT_VERSION,
+};
 use crate::types::core::error::ContractError;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{to_binary, DepsMut, Response};
@@ -6,11 +8,12 @@ use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
 use semver::Version;
 
 pub fn migrate_contract(
-    deps: &DepsMut<ProvenanceQuery>,
+    deps: DepsMut<ProvenanceQuery>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let mut contract_info = get_contract_info(deps.storage)?;
     check_valid_migration_versioning(&contract_info)?;
     contract_info.contract_version = CONTRACT_VERSION.to_string();
+    set_contract_info(deps.storage, &contract_info)?;
     Response::new()
         .add_attribute("action", "migrate_contract")
         .add_attribute("new_version", CONTRACT_VERSION)
@@ -44,8 +47,20 @@ mod tests {
     fn test_successful_migrate_without_options() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
+        let mut contract_info =
+            get_contract_info(deps.as_ref().storage).expect("contract info should load");
+        contract_info.contract_version = "0.0.1".to_string();
+        set_contract_info(deps.as_mut().storage, &contract_info)
+            .expect("contract info should be stored");
+        assert_eq!(
+            "0.0.1",
+            get_contract_info(deps.as_ref().storage)
+                .expect("contract info should load")
+                .contract_version,
+            "sanity check: expected contract version change to be persisted",
+        );
         let response =
-            migrate_contract(&deps.as_mut()).expect("expected a simple migrate to succeed");
+            migrate_contract(deps.as_mut()).expect("expected a simple migrate to succeed");
         assert!(
             response.messages.is_empty(),
             "migrations should never produce messages",
@@ -65,6 +80,12 @@ mod tests {
             single_attribute_for_key(&response, "new_version"),
             "expected the correct new_version attribute value to be produced",
         );
+        let contract_info =
+            get_contract_info(deps.as_ref().storage).expect("contract info should load");
+        assert_eq!(
+            CONTRACT_VERSION, contract_info.contract_version,
+            "the migration should change the contract version",
+        );
     }
 
     #[test]
@@ -76,7 +97,7 @@ mod tests {
         contract_info.contract_version = "999.999.999".to_string();
         set_contract_info(deps.as_mut().storage, &contract_info)
             .expect("expected contract info to be stored successfully");
-        let err = migrate_contract(&deps.as_mut())
+        let err = migrate_contract(deps.as_mut())
             .expect_err("an error should be produced if the contract is downgraded");
         match err {
             ContractError::InvalidMigration { message } => {
