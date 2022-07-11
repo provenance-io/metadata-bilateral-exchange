@@ -115,6 +115,14 @@ data class CreateAsk(
     ).let { funds ->
         askFee?.let { CoinUtil.combineFunds(funds, it) } ?: funds
     }
+
+    @JsonIgnore
+    internal fun getLoggingString(): String = mapAsk(
+        coinTrade = { "askType = [coin_trade], id = [${it.id}]" },
+        markerTrade = { "askType = [marker_trade], id = [${it.id}], markerDenom = [${it.markerDenom}]" },
+        markerShareSale = { "askType = [marker_share_sale], id = [${it.id}], markerDenom = [${it.markerDenom}], sharesToSell = [${it.sharesToSell}]" },
+        scopeTrade = { "askType = [scope_trade], id = [${it.id}], scopeAddress = [${it.scopeAddress}]" },
+    ).let { suffix -> "createAsk, $suffix" }
 }
 
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)

@@ -1,5 +1,6 @@
 package io.provenance.bilateral.execute
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
@@ -23,4 +24,7 @@ data class ExecuteMatch(
     val askId: String,
     val bidId: String,
     val acceptMismatchedBids: Boolean? = null,
-) : ContractExecuteMsg
+) : ContractExecuteMsg {
+    @JsonIgnore
+    internal fun getLoggingString(): String = "executeMatch, askId = [$askId], bidId = [$bidId], acceptMismatchedBids = [$acceptMismatchedBids]"
+}

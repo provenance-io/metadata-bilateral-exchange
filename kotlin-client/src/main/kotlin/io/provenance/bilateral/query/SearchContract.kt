@@ -1,5 +1,6 @@
 package io.provenance.bilateral.query
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.annotation.JsonValue
@@ -36,6 +37,14 @@ data class ContractSearchRequest(
 ) {
     internal fun searchAsks(): SearchAsks = SearchAsks(this)
     internal fun searchBids(): SearchBids = SearchBids(this)
+
+    @JsonIgnore
+    internal fun getLoggingString(): String = when (this.searchType) {
+        is ContractSearchType.All -> "[all]"
+        is ContractSearchType.Type -> "[type], type = [${this.searchType.valueType}]"
+        is ContractSearchType.Id -> "[id], id = [${this.searchType.id}]"
+        is ContractSearchType.Owner -> "[owner], owner = [${this.searchType.owner}]"
+    }.let { searchTypeString -> "searchType = $searchTypeString, pageSize = [${pageSize ?: "DEFAULT"}, pageNumber = [${pageNumber ?: "DEFAULT"}]" }
 }
 
 sealed interface ContractSearchType {

@@ -36,101 +36,137 @@ import io.provenance.client.protobuf.extensions.toAny
 import io.provenance.client.protobuf.extensions.toTxBody
 
 class BilateralContractClient private constructor(
-    val pbClient: PbClient,
-    val objectMapper: ObjectMapper,
+    private val pbClient: PbClient,
     private val addressResolver: ContractAddressResolver,
+    private val objectMapper: ObjectMapper,
+    private val logger: BilateralContractClientLogger,
 ) {
     companion object {
-        fun new(
-            pbClient: PbClient,
-            addressResolver: ContractAddressResolver,
-            objectMapper: ObjectMapper = ObjectMapperProvider.OBJECT_MAPPER,
-        ): BilateralContractClient = BilateralContractClient(
+        fun builder(pbClient: PbClient, addressResolver: ContractAddressResolver): BilateralContractClientBuilder =
+            BilateralContractClientBuilder(pbClient = pbClient, addressResolver = addressResolver)
+    }
+
+    class BilateralContractClientBuilder(
+        private val pbClient: PbClient,
+        private val addressResolver: ContractAddressResolver
+    ) {
+        private var objectMapper: ObjectMapper? = null
+        private var logger: BilateralContractClientLogger? = null
+
+        fun setObjectMapper(objectMapper: ObjectMapper) = apply { this.objectMapper = objectMapper }
+        fun setLogger(logger: BilateralContractClientLogger) = apply { this.logger = logger }
+
+        fun build(): BilateralContractClient = BilateralContractClient(
             pbClient = pbClient,
-            objectMapper = objectMapper,
             addressResolver = addressResolver,
+            objectMapper = objectMapper ?: ObjectMapperProvider.OBJECT_MAPPER,
+            logger = logger ?: BilateralContractClientLogger.Off,
         )
     }
 
     val contractAddress by lazy { addressResolver.getAddress(pbClient) }
 
-    fun getAsk(id: String): AskOrder = queryContract(query = GetAsk(id = id))
+    fun getAsk(id: String): AskOrder = queryContract(
+        query = GetAsk(id = id),
+        queryDescription = "getAsk, id = [$id]",
+    )
 
-    fun getAskOrNull(id: String): AskOrder? = queryContractOrNull(query = GetAsk(id = id))
+    fun getAskOrNull(id: String): AskOrder? = queryContractOrNull(
+        query = GetAsk(id = id),
+        queryDescription = "getAskOrNull, id = [$id]",
+    )
 
     fun getAskByCollateralId(collateralId: String): AskOrder = queryContract(
         query = GetAskByCollateralId(collateralId = collateralId),
+        queryDescription = "getAskByCollateralId, collateralId = [$collateralId]",
     )
 
     fun getAskByCollateralIdOrNull(collateralId: String): AskOrder? = queryContractOrNull(
         query = GetAskByCollateralId(collateralId = collateralId),
+        queryDescription = "getAskByCollateralIdOrNull, collateralId = [$collateralId]",
     )
 
-    fun getBid(id: String): BidOrder = queryContract(query = GetBid(id = id))
+    fun getBid(id: String): BidOrder = queryContract(
+        query = GetBid(id = id),
+        queryDescription = "getBid, id = [$id]",
+    )
 
-    fun getBidOrNull(id: String): BidOrder? = queryContractOrNull(query = GetBid(id = id))
+    fun getBidOrNull(id: String): BidOrder? = queryContractOrNull(
+        query = GetBid(id = id),
+        queryDescription = "getBidOrNull, id = [$id]",
+    )
 
     fun getMatchReport(askId: String, bidId: String): MatchReport = queryContract(
         query = GetMatchReport(
             askId = askId,
             bidId = bidId,
         ),
+        queryDescription = "getMatchReport, askId = [$askId], bidId = [$bidId]",
     )
 
-    fun searchAsks(searchRequest: ContractSearchRequest): ContractSearchResult<AskOrder> = queryContractWithReference(
+    fun searchAsks(searchRequest: ContractSearchRequest): ContractSearchResult<AskOrder> = queryContract(
         query = searchRequest.searchAsks(),
+        queryDescription = "searchAsks, ${searchRequest.getLoggingString()}",
         typeReference = object : TypeReference<ContractSearchResult<AskOrder>>() {},
     )
 
-    fun searchBids(searchRequest: ContractSearchRequest): ContractSearchResult<BidOrder> = queryContractWithReference(
+    fun searchBids(searchRequest: ContractSearchRequest): ContractSearchResult<BidOrder> = queryContract(
         query = searchRequest.searchBids(),
+        queryDescription = "searchBids, ${searchRequest.getLoggingString()}",
         typeReference = object : TypeReference<ContractSearchResult<BidOrder>>() {},
     )
 
-    fun getContractInfo(): ContractInfo = queryContract(query = GetContractInfo())
+    fun getContractInfo(): ContractInfo = queryContract(
+        query = GetContractInfo(),
+        queryDescription = "getContractInfo",
+    )
 
     fun createAsk(
         createAsk: CreateAsk,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions(),
+        options: BilateralBroadcastOptions = BilateralBroadcastOptions(),
     ): BroadcastTxResponse = executeContract(
         executeMsg = createAsk,
         signer = signer,
         options = options,
         funds = createAsk.getFunds(askFee = this.getContractInfo().askFee),
+        transactionDescription = createAsk.getLoggingString(),
     )
 
     fun createBid(
         createBid: CreateBid,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions(),
+        options: BilateralBroadcastOptions = BilateralBroadcastOptions(),
     ): BroadcastTxResponse = executeContract(
         executeMsg = createBid,
         signer = signer,
         options = options,
         funds = createBid.getFunds(bidFee = this.getContractInfo().bidFee),
+        transactionDescription = createBid.getLoggingString(),
     )
 
     fun cancelAsk(
         askId: String,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions(),
+        options: BilateralBroadcastOptions = BilateralBroadcastOptions(),
     ): BroadcastTxResponse = executeContract(
         executeMsg = CancelAsk(askId),
         signer = signer,
         options = options,
         funds = emptyList(),
+        transactionDescription = "cancelAsk, askId = [$askId]",
     )
 
     fun cancelBid(
         bidId: String,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions(),
+        options: BilateralBroadcastOptions = BilateralBroadcastOptions(),
     ): BroadcastTxResponse = executeContract(
         executeMsg = CancelBid(bidId),
         signer = signer,
         options = options,
         funds = emptyList(),
+        transactionDescription = "cancelBid, bidId = [$bidId]",
     )
 
     // IMPORTANT: The Signer used in this function must be the contract's admin account or the asker associated with the
@@ -138,24 +174,26 @@ class BilateralContractClient private constructor(
     fun executeMatch(
         executeMatch: ExecuteMatch,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions(),
+        options: BilateralBroadcastOptions = BilateralBroadcastOptions(),
     ): BroadcastTxResponse = executeContract(
         executeMsg = executeMatch,
         signer = signer,
         options = options,
         funds = emptyList(),
+        transactionDescription = executeMatch.getLoggingString(),
     )
 
     // IMPORTANT: The Signer used in this function must be the contract's admin account.
     fun updateSettings(
         updateSettings: UpdateSettings,
         signer: Signer,
-        options: BroadcastOptions = BroadcastOptions(),
+        options: BilateralBroadcastOptions = BilateralBroadcastOptions(),
     ): BroadcastTxResponse = executeContract(
         executeMsg = updateSettings,
         signer = signer,
         options = options,
         funds = emptyList(),
+        transactionDescription = updateSettings.getLoggingString(),
     )
 
     fun generateCreateAskMsg(
@@ -165,6 +203,7 @@ class BilateralContractClient private constructor(
         executeMsg = createAsk,
         senderAddress = senderAddress,
         funds = createAsk.getFunds(askFee = this.getContractInfo().askFee),
+        transactionDescription = createAsk.getLoggingString(),
     )
 
     fun generateCreateBidMsg(
@@ -174,6 +213,7 @@ class BilateralContractClient private constructor(
         executeMsg = createBid,
         senderAddress = senderAddress,
         funds = createBid.getFunds(bidFee = this.getContractInfo().bidFee),
+        transactionDescription = createBid.getLoggingString(),
     )
 
     fun generateCancelAskMsg(
@@ -183,6 +223,7 @@ class BilateralContractClient private constructor(
         executeMsg = CancelAsk(askId),
         senderAddress = senderAddress,
         funds = emptyList(),
+        transactionDescription = "cancelAsk, askId = [$askId]",
     )
 
     fun generateCancelBidMsg(
@@ -192,6 +233,7 @@ class BilateralContractClient private constructor(
         executeMsg = CancelBid(bidId),
         senderAddress = senderAddress,
         funds = emptyList(),
+        transactionDescription = "cancelBid, bidId = [$bidId]",
     )
 
     // IMPORTANT: The Signer used in this function must be the contract's admin account or the asker associated with the
@@ -203,6 +245,7 @@ class BilateralContractClient private constructor(
         executeMsg = executeMatch,
         senderAddress = senderAddress,
         funds = emptyList(),
+        transactionDescription = executeMatch.getLoggingString(),
     )
 
     // IMPORTANT: The Signer used in this function must be the contract's admin account.
@@ -213,6 +256,7 @@ class BilateralContractClient private constructor(
         executeMsg = updateSettings,
         senderAddress = senderAddress,
         funds = emptyList(),
+        transactionDescription = updateSettings.getLoggingString(),
     )
 
     /**
@@ -222,12 +266,23 @@ class BilateralContractClient private constructor(
         executeMsg: ContractExecuteMsg,
         senderAddress: String,
         funds: List<Coin>,
-    ): MsgExecuteContract = executeMsg.toExecuteMsg(
-        objectMapper = objectMapper,
-        contractAddress = contractAddress,
-        senderBech32Address = senderAddress,
-        funds = funds,
-    )
+        transactionDescription: String,
+        includeLogs: Boolean = true,
+    ): MsgExecuteContract {
+        if (includeLogs) {
+            logger.info("START: Generating tx for $transactionDescription")
+        }
+        return executeMsg.toExecuteMsg(
+            objectMapper = objectMapper,
+            contractAddress = contractAddress,
+            senderBech32Address = senderAddress,
+            funds = funds,
+        ).also {
+            if (includeLogs) {
+                logger.info("END: Generating tx for $transactionDescription")
+            }
+        }
+    }
 
     /**
      * Sends a ContractExecuteMsg to the resolved Metadata Bilateral Exchange contract address with the specified funds.
@@ -236,10 +291,18 @@ class BilateralContractClient private constructor(
     private fun executeContract(
         executeMsg: ContractExecuteMsg,
         signer: Signer,
-        options: BroadcastOptions,
+        options: BilateralBroadcastOptions,
         funds: List<Coin>,
+        transactionDescription: String,
     ): BroadcastTxResponse {
-        val msg = generateProtoExecuteMsg(executeMsg, signer.address(), funds)
+        logger.info("START: $transactionDescription")
+        val msg = generateProtoExecuteMsg(
+            executeMsg = executeMsg,
+            senderAddress = signer.address(),
+            funds = funds,
+            transactionDescription = transactionDescription,
+            includeLogs = false,
+        )
         return pbClient.estimateAndBroadcastTx(
             txBody = msg.toAny().toTxBody(),
             signers = listOf(
@@ -255,28 +318,71 @@ class BilateralContractClient private constructor(
             if (response.txResponse.code != 0) {
                 throw IllegalStateException("FAILED: ${response.txResponse.rawLog}")
             }
+            logger.info("END: $transactionDescription")
         }
     }
 
-    private fun <T : ContractQueryMsg> getQueryResponseBytes(query: T): ByteArray = pbClient.wasmClient.queryWasm(
-        QueryOuterClass.QuerySmartContractStateRequest.newBuilder().also { req ->
-            req.address = contractAddress
-            req.queryData = query.toJsonByteString(objectMapper)
-        }.build()
-    ).data.toByteArray()
-
-    private inline fun <T: ContractQueryMsg, reified U: Any> queryContractOrNull(query: T): U? =
-        getQueryResponseBytes(query).let { bytes -> objectMapper.readValue(bytes, U::class.java) }
-
-    private inline fun <T : ContractQueryMsg, reified U : Any> queryContract(query: T): U =
-        queryContractOrNull(query) ?: throw NullContractResultException("Got null response from the Metadata Bilateral Exchange contract for query")
-
     /**
-     * Allows a type reference to be passed in, ensuring that generic types within response values can be properly
-     * deserialized by Jackson using simple byte input.
+     * Dynamic search function allowing for multiple behaviors in search responses and error handling, as configured
+     * by each individual call.
+     *
+     * @param query The query to use as the JSON input to the contract.
+     * @param queryDescription A description of the query for output logging.
+     * @param throwExceptions If true, exceptions that occur in the request serialization/deserialization process will
+     * be thrown.  If false, exceptions will be logged, but null will be returned.
+     * @param typeReference An optional parameter that allows a response that requires complex deserialization with
+     * generic type inference to be deserialized properly.  This is not relevant for must queries, but complex response
+     * types that include lists of values or other generic parameters need this instead of a class reference for proper
+     * deserialization inference.
      */
-    private fun <T : ContractQueryMsg, U : Any> queryContractWithReference(
+    private inline fun <T : ContractQueryMsg, reified U : Any> queryContractInternal(
         query: T,
-        typeReference: TypeReference<U>,
-    ): U = getQueryResponseBytes(query).let { bytes -> objectMapper.readValue(bytes, typeReference) }
+        queryDescription: String,
+        throwExceptions: Boolean,
+        typeReference: TypeReference<U>?,
+    ): U? = try {
+        logger.info("START: $queryDescription")
+        val responseDataBytes = pbClient.wasmClient.queryWasm(
+            QueryOuterClass.QuerySmartContractStateRequest.newBuilder().also { req ->
+                req.address = contractAddress
+                req.queryData = query.toJsonByteString(objectMapper)
+            }.build()
+        ).data.toByteArray()
+        if (typeReference != null) {
+            objectMapper.readValue(responseDataBytes, typeReference)
+        } else {
+            objectMapper.readValue(responseDataBytes, U::class.java)
+        }.also {
+            logger.info("END: $queryDescription")
+        }
+    } catch (e: Exception) {
+        if (throwExceptions) {
+            throw e
+        } else {
+            logger.error("ERROR: $queryDescription", e)
+            null
+        }
+    }
+
+    private inline fun <T : ContractQueryMsg, reified U : Any> queryContractOrNull(
+        query: T,
+        queryDescription: String,
+        typeReference: TypeReference<U>? = null,
+    ): U? = queryContractInternal(
+        query = query,
+        queryDescription = queryDescription,
+        throwExceptions = false,
+        typeReference = typeReference,
+    )
+
+    private inline fun <T : ContractQueryMsg, reified U : Any> queryContract(
+        query: T,
+        queryDescription: String,
+        typeReference: TypeReference<U>? = null,
+    ): U = queryContractInternal(
+        query = query,
+        queryDescription = queryDescription,
+        throwExceptions = true,
+        typeReference = typeReference,
+    ) ?: throw NullContractResultException("Got null response from the Metadata Bilateral Exchange contract for query")
 }

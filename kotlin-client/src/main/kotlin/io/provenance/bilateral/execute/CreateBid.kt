@@ -111,6 +111,14 @@ data class CreateBid(val bid: Bid, val descriptor: RequestDescriptor?) : Contrac
     ).let { funds ->
         bidFee?.let { CoinUtil.combineFunds(funds, bidFee) } ?: funds
     }
+
+    @JsonIgnore
+    internal fun getLoggingString(): String = mapBid(
+        coinTrade = { "bidType = [coin_trade], id = [${it.id}]" },
+        markerTrade = { "bidType = [marker_trade], id = [${it.id}], markerDenom = [${it.markerDenom}]" },
+        markerShareSale = { "bidType = [marker_share_sale], id = [${it.id}], markerDenom = [${it.markerDenom}], shareCount = [${it.shareCount}]" },
+        scopeTrade = { "bidType = [scope_trade], id = [${it.id}], scopeAddress = [${it.scopeAddress}]" },
+    ).let { suffix -> "createBid, $suffix" }
 }
 
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)

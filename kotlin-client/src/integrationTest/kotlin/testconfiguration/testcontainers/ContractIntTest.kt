@@ -1,6 +1,7 @@
 package testconfiguration.testcontainers
 
 import io.provenance.bilateral.client.BilateralContractClient
+import io.provenance.bilateral.client.BilateralContractClientLogger
 import io.provenance.bilateral.util.ContractAddressResolver
 import io.provenance.client.grpc.GasEstimationMethod
 import io.provenance.client.grpc.PbClient
@@ -37,10 +38,15 @@ abstract class ContractIntTest {
         lateinit var contractInfo: ContractInstantiationResult
 
         val bilateralClient by lazy {
-            BilateralContractClient.new(
+            BilateralContractClient.builder(
                 pbClient = pbClient,
                 addressResolver = ContractAddressResolver.ProvidedAddress(contractInfo.contractAddress)
-            )
+            ).setLogger(
+                BilateralContractClientLogger.Custom(
+                    infoLogger = { message -> logger.info(message) },
+                    errorLogger = { message, e -> logger.error(message, e) },
+                )
+            ).build()
         }
     }
 

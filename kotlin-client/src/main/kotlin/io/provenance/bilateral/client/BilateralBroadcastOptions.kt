@@ -3,7 +3,7 @@ package io.provenance.bilateral.client
 import cosmos.auth.v1beta1.Auth.BaseAccount
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastMode
 
-data class BroadcastOptions(
+data class BilateralBroadcastOptions(
     val broadcastMode: BroadcastMode = BroadcastMode.BROADCAST_MODE_BLOCK,
     val sequenceOffset: Int = 0,
     val gasAdjustment: Double? = null,

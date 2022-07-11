@@ -4,8 +4,8 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
-import io.provenance.bilateral.serialization.CosmWasmUTCTimestampToOffsetDateTimeDeserializer
 import io.provenance.bilateral.serialization.CosmWasmUTCOffsetDateTimeToTimestampSerializer
+import io.provenance.bilateral.serialization.CosmWasmUTCTimestampToOffsetDateTimeDeserializer
 import java.time.OffsetDateTime
 
 /**
