@@ -335,7 +335,7 @@ class BilateralContractClient private constructor(
      * types that include lists of values or other generic parameters need this instead of a class reference for proper
      * deserialization inference.
      */
-    private inline fun <T : ContractQueryMsg, reified U : Any> queryContractInternal(
+    private inline fun <T : ContractQueryMsg, reified U : Any> queryContractBase(
         query: T,
         queryDescription: String,
         throwExceptions: Boolean,
@@ -368,7 +368,7 @@ class BilateralContractClient private constructor(
         query: T,
         queryDescription: String,
         typeReference: TypeReference<U>? = null,
-    ): U? = queryContractInternal(
+    ): U? = queryContractBase(
         query = query,
         queryDescription = queryDescription,
         throwExceptions = false,
@@ -379,7 +379,7 @@ class BilateralContractClient private constructor(
         query: T,
         queryDescription: String,
         typeReference: TypeReference<U>? = null,
-    ): U = queryContractInternal(
+    ): U = queryContractBase(
         query = query,
         queryDescription = queryDescription,
         throwExceptions = true,
