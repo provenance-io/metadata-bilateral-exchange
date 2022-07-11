@@ -103,12 +103,26 @@ class BilateralContractClient private constructor(
         typeReference = object : TypeReference<ContractSearchResult<AskOrder>>() {},
     )
 
+    fun searchAsksOrNull(searchRequest: ContractSearchRequest): ContractSearchResult<AskOrder>? = queryContractOrNull(
+        query = searchRequest.searchAsks(),
+        typeReference = object : TypeReference<ContractSearchResult<AskOrder>>() {},
+    )
+
     fun searchBids(searchRequest: ContractSearchRequest): ContractSearchResult<BidOrder> = queryContract(
         query = searchRequest.searchBids(),
         typeReference = object : TypeReference<ContractSearchResult<BidOrder>>() {},
     )
 
+    fun searchBidsOrNull(searchRequest: ContractSearchRequest): ContractSearchResult<BidOrder>? = queryContractOrNull(
+        query = searchRequest.searchBids(),
+        typeReference = object : TypeReference<ContractSearchResult<BidOrder>>() {},
+    )
+
     fun getContractInfo(): ContractInfo = queryContract(
+        query = GetContractInfo(),
+    )
+
+    fun getContractInfoOrNull(): ContractInfo? = queryContract(
         query = GetContractInfo(),
     )
 
