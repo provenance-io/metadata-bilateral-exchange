@@ -50,7 +50,7 @@ pub fn insert_bid_order(
     bid_order: &BidOrder,
 ) -> Result<(), ContractError> {
     let state = bid_orders();
-    if let Ok(existing_bid) = state.load(storage, bid_order.get_pk()) {
+    if let Ok(existing_bid) = state.load(storage, bid_order.id.as_bytes()) {
         return ContractError::storage_error(format!(
             "a bid with id [{}] for owner [{}] already exists",
             existing_bid.id,
@@ -59,8 +59,14 @@ pub fn insert_bid_order(
         .to_err();
     }
     state
-        .replace(storage, bid_order.get_pk(), Some(bid_order), None)?
+        .replace(storage, bid_order.id.as_bytes(), Some(bid_order), None)?
         .to_ok()
+}
+
+pub fn may_get_bid_order_by_id<S: Into<String>>(storage: &dyn Storage, id: S) -> Option<BidOrder> {
+    bid_orders()
+        .may_load(storage, id.into().as_bytes())
+        .unwrap_or(None)
 }
 
 pub fn get_bid_order_by_id<S: Into<String>>(
@@ -86,6 +92,7 @@ pub fn delete_bid_order_by_id<S: Into<String>>(
 
 #[cfg(test)]
 mod tests {
+    use crate::storage::ask_order_storage::may_get_ask_order_by_id;
     use crate::storage::bid_order_storage::{
         delete_bid_order_by_id, get_bid_order_by_id, insert_bid_order,
     };
@@ -113,6 +120,30 @@ mod tests {
     }
 
     #[test]
+    fn test_may_get_bid_order_by_id() {
+        let mut deps = mock_dependencies(&[]);
+        let order = BidOrder::new_unchecked(
+            "bid",
+            Addr::unchecked("bidder"),
+            BidCollateral::marker_trade(Addr::unchecked("marker"), "marker", &[]),
+            None,
+        );
+        assert!(
+            may_get_ask_order_by_id(deps.as_ref().storage, &order.id).is_none(),
+            "expected a get for the bid order to return None when the order does not exist in storage",
+        );
+        insert_bid_order(deps.as_mut().storage, &order)
+            .expect("expected inserting a bid order to succeed");
+        let stored_order = get_bid_order_by_id(deps.as_ref().storage, &order.id)
+            .expect("expected getting a bid order by id to succeed after it has been stored");
+        assert_eq!(
+            order,
+            stored_order,
+            "expected the stored order to be retrieved as an identical copy to the originally stored value",
+        );
+    }
+
+    #[test]
     fn test_get_bid_order_by_id() {
         let mut deps = mock_dependencies(&[]);
         let order = BidOrder::new_unchecked(
@@ -121,7 +152,7 @@ mod tests {
             BidCollateral::marker_trade(Addr::unchecked("marker"), "marker", &[]),
             None,
         );
-        get_bid_order_by_id(deps.as_ref().storage, &order.id).expect_err("expected a get for the bid order by id to faiil when the order does not exist in storage");
+        get_bid_order_by_id(deps.as_ref().storage, &order.id).expect_err("expected a get for the bid order by id to fail when the order does not exist in storage");
         insert_bid_order(deps.as_mut().storage, &order)
             .expect("expected inserting a bid order to succeed");
         let stored_order = get_bid_order_by_id(deps.as_ref().storage, &order.id)

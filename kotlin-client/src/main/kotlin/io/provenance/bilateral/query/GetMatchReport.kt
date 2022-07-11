@@ -9,4 +9,6 @@ import io.provenance.bilateral.interfaces.ContractQueryMsg
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("get_match_report")
-data class GetMatchReport(val askId: String, val bidId: String) : ContractQueryMsg
+data class GetMatchReport(val askId: String, val bidId: String) : ContractQueryMsg {
+    override fun toLoggingString(): String = "getMatchReport, askId = [$askId], bidId = [$bidId]"
+}

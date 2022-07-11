@@ -35,4 +35,9 @@ data class UpdateSettings(val update: Body) : ContractExecuteMsg {
             update = Body(newAdminAddress, askFee, bidFee),
         )
     }
+
+    override fun toLoggingString(): String = "updateSettings, " +
+        "newAdminAddress = [${update.newAdminAddress}], " +
+        "askFee = [${update.askFee?.let { "new value" } ?: "cleared"}], " +
+        "bidFee = [${update.bidFee?.let { "new value" } ?: "cleared"}]"
 }

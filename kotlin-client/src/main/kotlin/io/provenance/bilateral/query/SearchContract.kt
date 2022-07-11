@@ -1,11 +1,15 @@
 package io.provenance.bilateral.query
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.annotation.JsonValue
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
+import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import io.provenance.bilateral.interfaces.ContractQueryMsg
+import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
+import java.math.BigInteger
 
 /**
  * See ContractSearchType for JSON payloads for each different type of ask search.
@@ -13,7 +17,9 @@ import io.provenance.bilateral.interfaces.ContractQueryMsg
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("search_asks")
-data class SearchAsks(val search: ContractSearchRequest) : ContractQueryMsg
+data class SearchAsks(val search: ContractSearchRequest) : ContractQueryMsg {
+    override fun toLoggingString(): String = "searchAsks, ${search.getLoggingSuffix()}"
+}
 
 /**
  * See ContractSearchType for JSON payloads for each different type of bid search.
@@ -21,30 +27,28 @@ data class SearchAsks(val search: ContractSearchRequest) : ContractQueryMsg
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("search_bids")
-data class SearchBids(val search: ContractSearchRequest) : ContractQueryMsg
+data class SearchBids(val search: ContractSearchRequest) : ContractQueryMsg {
+    override fun toLoggingString(): String = "searchBids, ${search.getLoggingSuffix()}"
+}
 
 @JsonNaming(SnakeCaseStrategy::class)
 data class ContractSearchRequest(
     val searchType: ContractSearchType,
-    val pageSize: String? = null,
-    val pageNumber: String? = null,
+    @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
+    val pageSize: BigInteger? = null,
+    @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
+    val pageNumber: BigInteger? = null,
 ) {
-    companion object {
-        fun newSearchAsks(
-            searchType: ContractSearchType,
-            pageSize: Int? = null,
-            pageNumber: Int? = null,
-        ): SearchAsks = ContractSearchRequest(searchType, pageSize?.toString(), pageNumber?.toString()).searchAsks()
+    internal fun searchAsks(): SearchAsks = SearchAsks(this)
+    internal fun searchBids(): SearchBids = SearchBids(this)
 
-        fun newSearchBids(
-            searchType: ContractSearchType,
-            pageSize: Int? = null,
-            pageNumber: Int? = null,
-        ): SearchBids = ContractSearchRequest(searchType, pageSize?.toString(), pageNumber?.toString()).searchBids()
-    }
-
-    fun searchAsks(): SearchAsks = SearchAsks(this)
-    fun searchBids(): SearchBids = SearchBids(this)
+    @JsonIgnore
+    internal fun getLoggingSuffix(): String = when (this.searchType) {
+        is ContractSearchType.All -> "[all]"
+        is ContractSearchType.Type -> "[type], type = [${this.searchType.valueType}]"
+        is ContractSearchType.Id -> "[id], id = [${this.searchType.id}]"
+        is ContractSearchType.Owner -> "[owner], owner = [${this.searchType.owner}]"
+    }.let { searchTypeString -> "searchType = $searchTypeString, pageSize = [${pageSize ?: "DEFAULT"}, pageNumber = [${pageNumber ?: "DEFAULT"}]" }
 }
 
 sealed interface ContractSearchType {

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
+import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import io.provenance.bilateral.execute.Ask.CoinTradeAsk
 import io.provenance.bilateral.execute.Ask.MarkerShareSaleAsk
@@ -13,7 +14,9 @@ import io.provenance.bilateral.execute.Ask.ScopeTradeAsk
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.models.RequestDescriptor
 import io.provenance.bilateral.models.ShareSaleType
+import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
 import io.provenance.bilateral.util.CoinUtil
+import java.math.BigInteger
 
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
@@ -58,7 +61,7 @@ data class CreateAsk(
         fun newMarkerShareSale(
             id: String,
             markerDenom: String,
-            sharesToSell: String,
+            sharesToSell: BigInteger,
             quotePerShare: List<Coin>,
             shareSaleType: ShareSaleType,
             descriptor: RequestDescriptor? = null,
@@ -112,6 +115,13 @@ data class CreateAsk(
     ).let { funds ->
         askFee?.let { CoinUtil.combineFunds(funds, it) } ?: funds
     }
+
+    override fun toLoggingString(): String = mapAsk(
+        coinTrade = { "askType = [coin_trade], id = [${it.id}]" },
+        markerTrade = { "askType = [marker_trade], id = [${it.id}], markerDenom = [${it.markerDenom}]" },
+        markerShareSale = { "askType = [marker_share_sale], id = [${it.id}], markerDenom = [${it.markerDenom}], sharesToSell = [${it.sharesToSell}]" },
+        scopeTrade = { "askType = [scope_trade], id = [${it.id}], scopeAddress = [${it.scopeAddress}]" },
+    ).let { suffix -> "createAsk, $suffix" }
 }
 
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
@@ -139,7 +149,8 @@ sealed interface Ask {
     data class MarkerShareSaleAsk(
         val id: String,
         val markerDenom: String,
-        val sharesToSell: String,
+        @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
+        val sharesToSell: BigInteger,
         val quotePerShare: List<Coin>,
         val shareSaleType: ShareSaleType,
     ) : Ask

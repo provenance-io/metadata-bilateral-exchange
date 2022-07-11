@@ -1,16 +1,15 @@
-use crate::storage::ask_order_storage::get_ask_order_by_id;
+use crate::storage::ask_order_storage::may_get_ask_order_by_id;
 use crate::types::core::error::ContractError;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{to_binary, Binary, Deps};
 use provwasm_std::ProvenanceQuery;
 
 pub fn query_ask(deps: Deps<ProvenanceQuery>, id: String) -> Result<Binary, ContractError> {
-    to_binary(&get_ask_order_by_id(deps.storage, id)?)?.to_ok()
+    to_binary(&may_get_ask_order_by_id(deps.storage, id))?.to_ok()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::contract::query;
     use crate::storage::ask_order_storage::insert_ask_order;
     use crate::test::mock_instantiate::default_instantiate;
@@ -20,7 +19,7 @@ mod tests {
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
     use cosmwasm_std::testing::mock_env;
-    use cosmwasm_std::{coins, Addr};
+    use cosmwasm_std::{coins, from_binary, Addr};
     use provwasm_mocks::mock_dependencies;
 
     #[test]
@@ -55,9 +54,12 @@ mod tests {
         )
         .expect("expected the query to execute successfully");
 
+        let deserialized_ask_order = from_binary::<Option<AskOrder>>(&query_ask_response)
+            .expect("binary deserialization to an optional ask order should succeed")
+            .expect("the optional ask order should successfully unwrap to an ask order");
         assert_eq!(
-            query_ask_response,
-            to_binary(&ask_order).expect("expected binary serialization to succeed for ask order"),
+            ask_order, deserialized_ask_order,
+            "the deserialized value should equate to the inserted value",
         );
     }
 }

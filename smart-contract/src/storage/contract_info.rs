@@ -54,13 +54,19 @@ pub fn get_contract_info(store: &dyn Storage) -> StdResult<ContractInfo> {
     CONTRACT_INFO.load(store)
 }
 
+pub fn may_get_contract_info(store: &dyn Storage) -> Option<ContractInfo> {
+    CONTRACT_INFO.may_load(store).unwrap_or(None)
+}
+
 #[cfg(test)]
 mod tests {
     use provwasm_mocks::mock_dependencies;
 
     use crate::storage::contract_info::{
-        get_contract_info, set_contract_info, ContractInfo, CONTRACT_TYPE, CONTRACT_VERSION,
+        get_contract_info, may_get_contract_info, set_contract_info, ContractInfo, CONTRACT_TYPE,
+        CONTRACT_VERSION,
     };
+    use crate::test::mock_instantiate::default_instantiate;
     use cosmwasm_std::{coins, Addr};
 
     #[test]
@@ -94,5 +100,19 @@ mod tests {
             }
             result => panic!("unexpected error: {:?}", result),
         }
+    }
+
+    #[test]
+    fn test_may_get_contract_info() {
+        let mut deps = mock_dependencies(&[]);
+        assert!(
+            may_get_contract_info(deps.as_ref().storage).is_none(),
+            "contract info should not load when it has not yet been stored",
+        );
+        default_instantiate(deps.as_mut().storage);
+        assert!(
+            may_get_contract_info(deps.as_ref().storage).is_some(),
+            "contract info should be available after instantiation",
+        );
     }
 }

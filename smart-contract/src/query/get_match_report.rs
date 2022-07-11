@@ -2,8 +2,9 @@ use crate::storage::ask_order_storage::get_ask_order_by_id;
 use crate::storage::bid_order_storage::get_bid_order_by_id;
 use crate::types::core::error::ContractError;
 use crate::types::request::match_report::MatchReport;
+use crate::util::extensions::ResultExtensions;
 use crate::validation::execute_match_validation::validate_match;
-use cosmwasm_std::{Binary, Deps};
+use cosmwasm_std::{to_binary, Binary, Deps};
 use provwasm_std::ProvenanceQuery;
 
 pub fn get_match_report(
@@ -14,13 +15,26 @@ pub fn get_match_report(
     let ask_order_result = get_ask_order_by_id(deps.storage, &ask_id);
     let bid_order_result = get_bid_order_by_id(deps.storage, &bid_id);
     if ask_order_result.is_err() || bid_order_result.is_err() {
-        return MatchReport::new_missing_order(
+        let error_message = if ask_order_result.is_ok() {
+            format!("BidOrder [{}] was missing from contract storage", &bid_id)
+        } else if bid_order_result.is_ok() {
+            format!("AskOrder [{}] was missing from contract storage", &ask_id)
+        } else {
+            format!(
+                "AskOrder [{}] and BidOrder [{}] were missing from contract storage",
+                &ask_id, &bid_id
+            )
+        };
+        return to_binary(&MatchReport {
             ask_id,
             bid_id,
-            ask_order_result.is_ok(),
-            bid_order_result.is_ok(),
-        )?
-        .to_binary();
+            ask_exists: ask_order_result.is_ok(),
+            bid_exists: bid_order_result.is_ok(),
+            standard_match_possible: false,
+            quote_mismatch_match_possible: false,
+            error_messages: vec![error_message],
+        })?
+        .to_ok();
     }
     let ask_order = ask_order_result.unwrap();
     let bid_order = bid_order_result.unwrap();
@@ -36,14 +50,16 @@ pub fn get_match_report(
             e
         ))
     }
-    MatchReport::new_existing_orders(
+    to_binary(&MatchReport {
         ask_id,
         bid_id,
-        standard_match_result.is_ok(),
-        quote_mismatch_result.is_ok(),
-        &error_messages,
-    )
-    .to_binary()
+        ask_exists: true,
+        bid_exists: true,
+        standard_match_possible: standard_match_result.is_ok(),
+        quote_mismatch_match_possible: quote_mismatch_result.is_ok(),
+        error_messages,
+    })?
+    .to_ok()
 }
 
 #[cfg(test)]

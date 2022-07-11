@@ -57,7 +57,7 @@ pub fn insert_ask_order(
     ask_order: &AskOrder,
 ) -> Result<(), ContractError> {
     let state = ask_orders();
-    if let Ok(existing_ask) = state.load(storage, ask_order.get_pk()) {
+    if let Ok(existing_ask) = state.load(storage, ask_order.id.as_bytes()) {
         return ContractError::storage_error(format!(
             "an ask with id [{}] for owner [{}] already exists",
             existing_ask.id,
@@ -73,7 +73,7 @@ pub fn update_ask_order(
     ask_order: &AskOrder,
 ) -> Result<(), ContractError> {
     let state = ask_orders();
-    if state.load(storage, ask_order.get_pk()).is_ok() {
+    if state.load(storage, ask_order.id.as_bytes()).is_ok() {
         delete_ask_order_by_id(storage, &ask_order.id)?;
         store_ask_order(storage, ask_order)
     } else {
@@ -87,8 +87,14 @@ pub fn update_ask_order(
 
 fn store_ask_order(storage: &mut dyn Storage, ask_order: &AskOrder) -> Result<(), ContractError> {
     ask_orders()
-        .replace(storage, ask_order.get_pk(), Some(ask_order), None)?
+        .replace(storage, ask_order.id.as_bytes(), Some(ask_order), None)?
         .to_ok()
+}
+
+pub fn may_get_ask_order_by_id<S: Into<String>>(storage: &dyn Storage, id: S) -> Option<AskOrder> {
+    ask_orders()
+        .may_load(storage, id.into().as_bytes())
+        .unwrap_or(None)
 }
 
 pub fn get_ask_order_by_id<S: Into<String>>(
@@ -101,25 +107,16 @@ pub fn get_ask_order_by_id<S: Into<String>>(
     })
 }
 
-pub fn get_ask_order_by_collateral_id<S: Into<String>>(
+pub fn may_get_ask_order_by_collateral_id<S: Into<String>>(
     storage: &dyn Storage,
     collateral_id: S,
-) -> Result<AskOrder, ContractError> {
-    let collateral_id = collateral_id.into();
-    if let Ok(Some(ask)) = ask_orders()
+) -> Option<AskOrder> {
+    ask_orders()
         .idx
         .collateral_index
-        .item(storage, collateral_id.clone())
-        .map(|option| option.map(|(_, ask)| ask))
-    {
-        ask.to_ok()
-    } else {
-        ContractError::storage_error(format!(
-            "failed to find AskOrder by collateral id [{}]",
-            collateral_id
-        ))
-        .to_err()
-    }
+        .item(storage, collateral_id.into())
+        .map(|record| record.map(|(_, option)| option))
+        .unwrap_or(None)
 }
 
 pub fn delete_ask_order_by_id<S: Into<String>>(
@@ -136,14 +133,13 @@ pub fn delete_ask_order_by_id<S: Into<String>>(
 #[cfg(test)]
 mod tests {
     use crate::storage::ask_order_storage::{
-        delete_ask_order_by_id, get_ask_order_by_collateral_id, get_ask_order_by_id,
-        insert_ask_order, update_ask_order,
+        delete_ask_order_by_id, get_ask_order_by_id, insert_ask_order,
+        may_get_ask_order_by_collateral_id, may_get_ask_order_by_id, update_ask_order,
     };
     use crate::test::mock_marker::DEFAULT_MARKER_DENOM;
     use crate::test::request_helpers::{
         mock_ask_marker_share_sale, mock_ask_marker_trade, mock_ask_order, mock_ask_scope_trade,
     };
-    use crate::types::core::error::ContractError;
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::ask_types::ask_order::AskOrder;
     use crate::types::request::share_sale_type::ShareSaleType;
@@ -220,36 +216,51 @@ mod tests {
     }
 
     #[test]
-    fn test_get_ask_order_by_collateral_id() {
+    fn test_may_get_ask_order_by_id() {
+        let mut deps = mock_dependencies(&[]);
+        let order = AskOrder::new_unchecked(
+            "ask",
+            Addr::unchecked("asker"),
+            AskCollateral::scope_trade("scope", &coins(100, "nhash")),
+            None,
+        );
+        assert!(
+            may_get_ask_order_by_id(deps.as_ref().storage, &order.id).is_none(),
+            "ask order should fail to load because no order exists with the given id",
+        );
+        insert_ask_order(deps.as_mut().storage, &order)
+            .expect("expected inserting an ask order to succeed");
+        let stored_order = may_get_ask_order_by_id(deps.as_ref().storage, &order.id)
+            .expect("expected getting an ask order by id to succeed after it has been stored");
+        assert_eq!(
+            order,
+            stored_order,
+            "expected the stored order to be retrieved as an identical copy to the originally stored value",
+        );
+    }
+
+    #[test]
+    fn test_may_get_ask_order_by_collateral_id() {
         let mut deps = mock_dependencies(&[]);
         let coin_trade_order = AskOrder {
             id: "coin_trade_ask".to_string(),
             ..mock_ask_order(AskCollateral::coin_trade(&[], &[]))
         };
         let mut test_collateral_id = |ask_order: AskOrder, expected_id: &str, ask_type: &str| {
-            match get_ask_order_by_collateral_id(deps.as_ref().storage, expected_id)
-                .expect_err("expected an error when the ask was not in storage")
-            {
-                ContractError::StorageError { message } => {
-                    assert_eq!(
-                        format!("failed to find AskOrder by collateral id [{}]", expected_id),
-                        message,
-                        "expected the correct error message when not finding an ask order of type [{}]",
-                        ask_type,
-                    )
-                }
-                e => panic!("unexpected error: {:?}", e),
-            };
+            assert_eq!(
+                None,
+                may_get_ask_order_by_collateral_id(deps.as_ref().storage, expected_id),
+                "expected the ask order to not be found by collateral id before it is inserted",
+            );
             insert_ask_order(deps.as_mut().storage, &ask_order)
                 .unwrap_or_else(|_| panic!("expected the {}'s insert to succeed", ask_type));
             assert_eq!(
                 ask_order,
-                get_ask_order_by_collateral_id(deps.as_ref().storage, expected_id).unwrap_or_else(
-                    |_| panic!(
+                may_get_ask_order_by_collateral_id(deps.as_ref().storage, expected_id)
+                    .unwrap_or_else(|| panic!(
                         "expected the {}'s collateral id search to respond without error",
                         ask_type
-                    )
-                ),
+                    )),
                 "expected {}'s collateral id to be available ask the collateral id",
                 ask_type,
             );

@@ -23,4 +23,6 @@ data class ExecuteMatch(
     val askId: String,
     val bidId: String,
     val acceptMismatchedBids: Boolean? = null,
-) : ContractExecuteMsg
+) : ContractExecuteMsg {
+    override fun toLoggingString(): String = "executeMatch, askId = [$askId], bidId = [$bidId], acceptMismatchedBids = [$acceptMismatchedBids]"
+}

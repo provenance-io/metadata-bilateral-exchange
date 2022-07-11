@@ -78,6 +78,6 @@ pub fn migrate(
     msg: MigrateMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     match msg {
-        MigrateMsg::ContractUpgrade {} => migrate_contract(&deps),
+        MigrateMsg::ContractUpgrade {} => migrate_contract(deps),
     }
 }
