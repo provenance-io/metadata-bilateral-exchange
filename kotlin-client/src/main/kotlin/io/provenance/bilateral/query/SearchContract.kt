@@ -5,10 +5,12 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.annotation.JsonValue
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import io.provenance.bilateral.interfaces.ContractQueryMsg
 import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
+import io.provenance.bilateral.serialization.CosmWasmUintToBigIntegerDeserializer
 import java.math.BigInteger
 
 /**
@@ -87,9 +89,12 @@ sealed interface ContractSearchType {
 @JsonNaming(SnakeCaseStrategy::class)
 data class ContractSearchResult<T>(
     val results: List<T>,
-    val pageNumber: Int,
-    val pageSize: Int,
-    val totalPages: Int,
+    @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
+    val pageNumber: BigInteger,
+    @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
+    val pageSize: BigInteger,
+    @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
+    val totalPages: BigInteger,
 )
 
 enum class BilateralRequestType(val contractName: String) {
