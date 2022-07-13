@@ -71,7 +71,7 @@ pub fn update_bid_order(
         store_bid_order(storage, bid_order)
     } else {
         ContractError::storage_error(format!(
-            "attempted to replace bid with id [{}] in storage, but no biid with that id existed",
+            "attempted to replace bid with id [{}] in storage, but no bid with that id existed",
             &bid_order.id,
         ))
         .to_err()
@@ -156,7 +156,7 @@ mod tests {
         update_bid_order(deps.as_mut().storage, &order)
             .expect("expected updating a bid order to itself to succeed");
         order.id = "bid2".to_string();
-        update_bid_order(deps.as_mut().storage, &order).expect_err("expected updating a bbid order after changiing its id to fail because it no longer has the same PK");
+        update_bid_order(deps.as_mut().storage, &order).expect_err("expected updating a bid order after changing its id to fail because it no longer has the same PK");
     }
 
     #[test]
