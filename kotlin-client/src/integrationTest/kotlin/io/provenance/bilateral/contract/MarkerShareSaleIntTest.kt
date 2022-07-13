@@ -5,6 +5,8 @@ import io.provenance.bilateral.execute.Bid.MarkerShareSaleBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
+import io.provenance.bilateral.execute.UpdateAsk
+import io.provenance.bilateral.execute.UpdateBid
 import io.provenance.bilateral.models.RequestDescriptor
 import io.provenance.bilateral.models.ShareSaleType
 import io.provenance.marker.v1.Access
@@ -13,6 +15,7 @@ import org.junit.jupiter.api.Test
 import testconfiguration.accounts.BilateralAccounts
 import testconfiguration.extensions.getBalance
 import testconfiguration.extensions.getMarkerAccount
+import testconfiguration.extensions.testGetMarkerShareSale
 import testconfiguration.functions.assertAskExists
 import testconfiguration.functions.assertAskIsDeleted
 import testconfiguration.functions.assertBidExists
@@ -30,6 +33,8 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class MarkerShareSaleIntTest : ContractIntTest() {
     private companion object : KLogging()
@@ -71,8 +76,18 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             ),
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
         )
-        bilateralClient.createAsk(createAsk, BilateralAccounts.askerAccount)
+        val createAskResponse = bilateralClient.createAsk(createAsk, BilateralAccounts.askerAccount)
         bilateralClient.assertAskExists(askUuid.toString())
+        assertEquals(
+            expected = askUuid.toString(),
+            actual = createAskResponse.askId,
+            message = "The create ask response should include the correct ask id",
+        )
+        assertEquals(
+            expected = bilateralClient.getAsk(createAskResponse.askId),
+            actual = createAskResponse.askOrder,
+            message = "The create ask response should include the created ask order",
+        )
         assertEquals(
             expected = contractInfo.contractAddress,
             actual = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Only a single account should have marker permissions once the ask is created").address,
@@ -102,18 +117,46 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             ),
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
         )
-        bilateralClient.createBid(
+        val createBidResponse = bilateralClient.createBid(
             createBid = createBid,
             signer = BilateralAccounts.bidderAccount,
         )
         bilateralClient.assertBidExists(bidUuid.toString())
+        assertEquals(
+            expected = bidUuid.toString(),
+            actual = createBidResponse.bidId,
+            message = "The create bid response should include the correct bid id",
+        )
+        assertEquals(
+            expected = bilateralClient.getBid(bidUuid.toString()),
+            actual = createBidResponse.bidOrder,
+            message = "The create bid response should include the created bid order",
+        )
         assertEquals(
             expected = 0L,
             actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
             message = "The bidder's denom [$bidderDenom] should be held in escrow when the bid is created",
         )
         val executeMatch = ExecuteMatch(askUuid.toString(), bidUuid.toString())
-        bilateralClient.executeMatch(executeMatch, BilateralAccounts.adminAccount)
+        val executeMatchResponse = bilateralClient.executeMatch(executeMatch, BilateralAccounts.adminAccount)
+        assertEquals(
+            expected = askUuid.toString(),
+            actual = executeMatchResponse.askId,
+            message = "The execute match response should include the proper ask id",
+        )
+        assertEquals(
+            expected = bidUuid.toString(),
+            actual = executeMatchResponse.bidId,
+            message = "The execute match response should include the proper bid id",
+        )
+        assertTrue(
+            actual = executeMatchResponse.askDeleted,
+            message = "The response should indicate that the ask was deleted",
+        )
+        assertTrue(
+            actual = executeMatchResponse.bidDeleted,
+            message = "The response should indicate that the bid was deleted",
+        )
         bilateralClient.assertAskIsDeleted(askUuid.toString())
         bilateralClient.assertBidIsDeleted(bidUuid.toString())
         assertEquals(
@@ -183,9 +226,19 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             ),
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
         )
-        bilateralClient.createAsk(
+        val createAskResponse = bilateralClient.createAsk(
             createAsk = createAsk,
             signer = BilateralAccounts.askerAccount,
+        )
+        assertEquals(
+            expected = askUuid.toString(),
+            actual = createAskResponse.askId,
+            message = "The create ask response should include the correct ask id",
+        )
+        assertEquals(
+            expected = bilateralClient.getAsk(createAskResponse.askId),
+            actual = createAskResponse.askOrder,
+            message = "The create ask response should include the created ask order",
         )
         bilateralClient.assertAskExists(askUuid.toString())
         assertEquals(
@@ -208,9 +261,19 @@ class MarkerShareSaleIntTest : ContractIntTest() {
                 ),
                 descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
             )
-            bilateralClient.createBid(
+            val createBidResponse = bilateralClient.createBid(
                 createBid = createBid,
                 signer = BilateralAccounts.bidderAccount,
+            )
+            assertEquals(
+                expected = bidUuid.toString(),
+                actual = createBidResponse.bidId,
+                message = "The create bid response should include the correct bid id",
+            )
+            assertEquals(
+                expected = bilateralClient.getBid(createBidResponse.bidId),
+                actual = createBidResponse.bidOrder,
+                message = "The create bid response should include the created bid order",
             )
             bilateralClient.assertBidExists(bidUuid.toString())
             expectedBidderDenomHoldings -= sharePurchaseCount.toLong()
@@ -220,8 +283,22 @@ class MarkerShareSaleIntTest : ContractIntTest() {
                 message = "Expected the proper amount of denom [$bidderDenom] to be taken from the bidder as the quote",
             )
             val executeMatch = ExecuteMatch(askUuid.toString(), bidUuid.toString())
-            bilateralClient.executeMatch(executeMatch = executeMatch, signer = BilateralAccounts.adminAccount)
+            val executeMatchResponse = bilateralClient.executeMatch(executeMatch = executeMatch, signer = BilateralAccounts.adminAccount)
             bilateralClient.assertBidIsDeleted(bidUuid.toString())
+            assertEquals(
+                expected = askUuid.toString(),
+                actual = executeMatchResponse.askId,
+                message = "The execute match response should include the correct ask id",
+            )
+            assertEquals(
+                expected = bidUuid.toString(),
+                actual = executeMatchResponse.bidId,
+                message = "The execute match response should include the correct bid id",
+            )
+            assertTrue(
+                actual = executeMatchResponse.bidDeleted,
+                message = "The execute match response should indicate that the bid was deleted",
+            )
             expectedBidderMarkerHoldings += sharePurchaseCount.toLong()
             expectedAskerDenomHoldings += sharePurchaseCount.toLong()
             assertEquals(
@@ -240,6 +317,15 @@ class MarkerShareSaleIntTest : ContractIntTest() {
                     expected = contractInfo.contractAddress,
                     actual = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("A single access grant should exist on the marker").address,
                     message = "Expected the contract to still hold access to the marker after the sale is completed and the threshold has not yet been hit",
+                )
+                assertFalse(
+                    actual = executeMatchResponse.askDeleted,
+                    message = "The execute match response should indicate that the ask was not deleted because the sale is not over",
+                )
+            } else {
+                assertTrue(
+                    actual = executeMatchResponse.askDeleted,
+                    message = "The execute match response should indicate that the ask was deleted because the sale is over",
                 )
             }
         }
@@ -301,7 +387,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
         assertSucceeds("An ask should be allowed when the marker has the correct permission structure") {
             bilateralClient.createAsk(createAsk, BilateralAccounts.askerAccount)
         }
-        bilateralClient.assertAskExists(askUuid.toString())
+        val askOrder = bilateralClient.assertAskExists(askUuid.toString())
         val beforeCancelGrant = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Only a single permission should exist in the marker after successfully creating an ask")
         assertEquals(
             expected = contractInfo.contractAddress,
@@ -327,7 +413,17 @@ class MarkerShareSaleIntTest : ContractIntTest() {
                 signer = BilateralAccounts.askerAccount,
             )
         }
-        bilateralClient.cancelAsk(askUuid.toString(), BilateralAccounts.askerAccount)
+        val response = bilateralClient.cancelAsk(askUuid.toString(), BilateralAccounts.askerAccount)
+        assertEquals(
+            expected = askUuid.toString(),
+            actual = response.askId,
+            message = "The correct ask id should be included in the response",
+        )
+        assertEquals(
+            expected = askOrder,
+            actual = response.cancelledAskOrder,
+            message = "The cancelled ask order should be included in the response",
+        )
         bilateralClient.assertAskIsDeleted(askUuid.toString())
         val afterCancelGrant = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Only a single permission should exist on the marker after cancelling the ask")
         assertEquals(
@@ -361,18 +457,217 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             ),
         )
         bilateralClient.createBid(createBid, BilateralAccounts.bidderAccount)
-        bilateralClient.assertBidExists(bidUuid.toString())
+        val bidOrder = bilateralClient.assertBidExists(bidUuid.toString())
         assertEquals(
             expected = 0L,
             actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
             message = "All bidder denom [$bidderDenom] should be held in contract escrow after creating the bid",
         )
-        bilateralClient.cancelBid(bidUuid.toString(), BilateralAccounts.bidderAccount)
+        val response = bilateralClient.cancelBid(bidUuid.toString(), BilateralAccounts.bidderAccount)
         bilateralClient.assertBidIsDeleted(bidUuid.toString())
+        assertEquals(
+            expected = bidUuid.toString(),
+            actual = response.bidId,
+            message = "Expected the correct bid id to be included in the response",
+        )
+        assertEquals(
+            expected = bidOrder,
+            actual = response.cancelledBidOrder,
+            message = "Expected the cancelled bid order to be included in the response",
+        )
         assertEquals(
             expected = 100L,
             actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
             message = "All bidder denom [$bidderDenom] should be returned to the bidder after cancelling the bid",
         )
+    }
+
+    @Test
+    fun testUpdateAsk() {
+        val markerDenom = "updateasksingletx"
+        val shareCount = 100L
+        val shareSaleAmount = 50.toBigInteger()
+        val markerPermissions = listOf(Access.ACCESS_ADMIN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = BilateralAccounts.askerAccount,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = BilateralAccounts.askerAccount,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val quoteDenom = "updateasksingletxsharesalequote"
+        val askUuid = UUID.randomUUID()
+        assertSucceeds("Creating the marker share sale ask should succeed") {
+            bilateralClient.createAsk(
+                createAsk = CreateAsk(
+                    ask = MarkerShareSaleAsk(
+                        id = askUuid.toString(),
+                        markerDenom = markerDenom,
+                        sharesToSell = shareSaleAmount,
+                        quotePerShare = newCoins(100, quoteDenom),
+                        shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+                signer = BilateralAccounts.askerAccount,
+            )
+        }
+        bilateralClient.assertAskExists(askUuid.toString())
+        val response = assertSucceeds("Updating the marker share sale ask should succeed") {
+            bilateralClient.updateAsk(
+                updateAsk = UpdateAsk(
+                    ask = MarkerShareSaleAsk(
+                        id = askUuid.toString(),
+                        markerDenom = markerDenom,
+                        sharesToSell = shareSaleAmount + BigInteger.TEN,
+                        quotePerShare = newCoins(5000, quoteDenom),
+                        shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+                signer = BilateralAccounts.askerAccount,
+            )
+        }
+        assertEquals(
+            expected = askUuid.toString(),
+            actual = response.askId,
+            message = "The response should include the correct ask id",
+        )
+        assertEquals(
+            expected = bilateralClient.getAsk(response.askId),
+            actual = response.updatedAskOrder,
+            message = "The response should include the updated ask order",
+        )
+        bilateralClient.assertAskExists(askUuid.toString())
+        assertEquals(
+            expected = newCoins(5000, quoteDenom),
+            actual = response.updatedAskOrder.testGetMarkerShareSale().quotePerShare,
+            message = "Expected the ask's quote per share to be properly updated",
+        )
+        bilateralClient.cancelAsk(askUuid.toString(), BilateralAccounts.askerAccount)
+        bilateralClient.assertAskIsDeleted(askUuid.toString())
+    }
+
+    @Test
+    fun testUpdateBid() {
+        val markerDenom = "updatebidsingletx"
+        val shareCount = 100L
+        val shareSaleAmount = 50.toBigInteger()
+        val markerPermissions = listOf(Access.ACCESS_ADMIN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = BilateralAccounts.askerAccount,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = BilateralAccounts.askerAccount,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val quoteDenom = "updateasksingletxsharesalequote"
+        val quoteDenom2 = "updateasksingletxsharesalequote2"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(1000, quoteDenom),
+            receiverAddress = BilateralAccounts.bidderAccount.address(),
+        )
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(1000, quoteDenom2),
+            receiverAddress = BilateralAccounts.bidderAccount.address(),
+        )
+        val askUuid = UUID.randomUUID()
+        assertSucceeds("Creating the marker share sale ask should succeed") {
+            bilateralClient.createAsk(
+                createAsk = CreateAsk(
+                    ask = MarkerShareSaleAsk(
+                        id = askUuid.toString(),
+                        markerDenom = markerDenom,
+                        sharesToSell = shareSaleAmount,
+                        quotePerShare = newCoins(100, quoteDenom),
+                        shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+                signer = BilateralAccounts.askerAccount,
+            )
+        }
+        bilateralClient.assertAskExists(askUuid.toString())
+        val bidUuid = UUID.randomUUID()
+        assertSucceeds("Creating a bid should succeed") {
+            bilateralClient.createBid(
+                createBid = CreateBid(
+                    bid = MarkerShareSaleBid(
+                        id = bidUuid.toString(),
+                        markerDenom = markerDenom,
+                        shareCount = shareSaleAmount,
+                        quote = newCoins(50, quoteDenom),
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+                signer = BilateralAccounts.bidderAccount,
+            )
+        }
+        bilateralClient.assertBidExists(bidUuid.toString())
+        assertEquals(
+            expected = 950,
+            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), quoteDenom),
+            message = "The correct quote amount should be taken from the bidder's account",
+        )
+        val response = assertSucceeds("Updating a bid should succeed") {
+            bilateralClient.updateBid(
+                updateBid = UpdateBid(
+                    bid = MarkerShareSaleBid(
+                        id = bidUuid.toString(),
+                        markerDenom = markerDenom,
+                        shareCount = shareSaleAmount,
+                        quote = newCoins(999, quoteDenom2),
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+                signer = BilateralAccounts.bidderAccount,
+            )
+        }
+        assertEquals(
+            expected = bidUuid.toString(),
+            actual = response.bidId,
+            message = "The response should include the correct bid id",
+        )
+        assertEquals(
+            expected = bilateralClient.getBid(response.bidId),
+            actual = response.updatedBidOrder,
+            message = "The response should include the updated bid order",
+        )
+        bilateralClient.assertBidExists(bidUuid.toString())
+        assertEquals(
+            expected = newCoins(999, quoteDenom2),
+            actual = response.updatedBidOrder.testGetMarkerShareSale().quote,
+            message = "Expected the bid's quote to be properly updated",
+        )
+        assertEquals(
+            expected = 1000,
+            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), quoteDenom),
+            message = "The bidder's quote should be fully refunded from the original bid",
+        )
+        assertEquals(
+            expected = 1,
+            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), quoteDenom2),
+            message = "The bidder's quote2 should be debited down by the appropriate amount",
+        )
+        bilateralClient.cancelAsk(askUuid.toString(), BilateralAccounts.askerAccount)
+        bilateralClient.assertAskIsDeleted(askUuid.toString())
+        bilateralClient.cancelBid(bidUuid.toString(), BilateralAccounts.bidderAccount)
+        bilateralClient.assertBidIsDeleted(bidUuid.toString())
     }
 }

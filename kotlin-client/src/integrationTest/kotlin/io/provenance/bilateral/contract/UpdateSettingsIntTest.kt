@@ -20,9 +20,24 @@ class UpdateSettingsIntTest : ContractIntTest() {
         assertFails("An update not originating from the admin should be rejected") {
             bilateralClient.updateSettings(firstUpdateSettings, BilateralAccounts.askerAccount)
         }
-        assertSucceeds("A valid update sent from the admin should succeed") {
+        val firstResponse = assertSucceeds("A valid update sent from the admin should succeed") {
             bilateralClient.updateSettings(firstUpdateSettings, BilateralAccounts.adminAccount)
         }
+        assertEquals(
+            expected = BilateralAccounts.askerAccount.address(),
+            actual = firstResponse.newAdminAddress,
+            message = "The new admin address should be in the response",
+        )
+        assertEquals(
+            expected = "100askcoin",
+            actual = firstResponse.newAskFee,
+            message = "The new ask fee should be in the response",
+        )
+        assertEquals(
+            expected = "100bidcoin",
+            actual = firstResponse.newBidFee,
+            message = "The new bid fee should be in the response",
+        )
         assertContractInfoValuesWereChanged(firstUpdateSettings)
         // Put everything back to normal
         val secondUpdateSettings = UpdateSettings.new(
@@ -33,9 +48,24 @@ class UpdateSettingsIntTest : ContractIntTest() {
         assertFails("An update not originating from the asker should be rejected") {
             bilateralClient.updateSettings(secondUpdateSettings, BilateralAccounts.adminAccount)
         }
-        assertSucceeds("A valid update sent from the asker should succeed") {
+        val secondResponse = assertSucceeds("A valid update sent from the asker should succeed") {
             bilateralClient.updateSettings(secondUpdateSettings, BilateralAccounts.askerAccount)
         }
+        assertEquals(
+            expected = BilateralAccounts.adminAccount.address(),
+            actual = secondResponse.newAdminAddress,
+            message = "The new new admin address should be in the response",
+        )
+        assertEquals(
+            expected = "none",
+            actual = secondResponse.newAskFee,
+            message = "The new ask fee should be none, indicating that it was cleared",
+        )
+        assertEquals(
+            expected = "none",
+            actual = secondResponse.newBidFee,
+            message = "The new bid fee should be none, indicating that it was cleared",
+        )
         assertContractInfoValuesWereChanged(secondUpdateSettings)
     }
 
