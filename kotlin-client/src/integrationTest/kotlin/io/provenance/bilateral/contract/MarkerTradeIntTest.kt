@@ -1,5 +1,7 @@
 package io.provenance.bilateral.contract
 
+import io.provenance.bilateral.execute.Ask.MarkerTradeAsk
+import io.provenance.bilateral.execute.Bid.MarkerTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -52,10 +54,12 @@ class MarkerTradeIntTest : ContractIntTest() {
             receiverAddress = BilateralAccounts.bidderAccount.address(),
         )
         val askUuid = UUID.randomUUID()
-        val createAsk = CreateAsk.newMarkerTrade(
-            id = askUuid.toString(),
-            markerDenom = markerDenom,
-            quotePerShare = newCoins(15, bidderDenom),
+        val createAsk = CreateAsk(
+            ask = MarkerTradeAsk(
+                id = askUuid.toString(),
+                markerDenom = markerDenom,
+                quotePerShare = newCoins(15, bidderDenom),
+            ),
             descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
         )
         bilateralClient.createAsk(createAsk = createAsk, signer = BilateralAccounts.askerAccount)
@@ -68,10 +72,12 @@ class MarkerTradeIntTest : ContractIntTest() {
             message = "The contract should remove access for the asker from the marker after receiving it",
         )
         val bidUuid = UUID.randomUUID()
-        val createBid = CreateBid.newMarkerTrade(
-            id = bidUuid.toString(),
-            markerDenom = markerDenom,
-            quote = newCoins(150, bidderDenom),
+        val createBid = CreateBid(
+            bid = MarkerTradeBid(
+                id = bidUuid.toString(),
+                markerDenom = markerDenom,
+                quote = newCoins(150, bidderDenom),
+            ),
             descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
         )
         bilateralClient.createBid(
@@ -123,10 +129,12 @@ class MarkerTradeIntTest : ContractIntTest() {
             permissions = markerPermissions,
         )
         val askUuid = UUID.randomUUID()
-        val createAsk = CreateAsk.newMarkerTrade(
-            id = askUuid.toString(),
-            markerDenom = markerDenom,
-            quotePerShare = newCoins(10, "nhash"),
+        val createAsk = CreateAsk(
+            ask = MarkerTradeAsk(
+                id = askUuid.toString(),
+                markerDenom = markerDenom,
+                quotePerShare = newCoins(10, "nhash"),
+            ),
         )
         assertFails("When the contract is not an admin on the marker, creating the ask should fail") {
             bilateralClient.createAsk(createAsk = createAsk, signer = BilateralAccounts.askerAccount)
@@ -143,10 +151,12 @@ class MarkerTradeIntTest : ContractIntTest() {
         bilateralClient.assertAskExists(askUuid.toString())
         assertFails("When the contract already has a marker held, a new ask should not be able to be posted for the same marker") {
             bilateralClient.createAsk(
-                createAsk = CreateAsk.newMarkerTrade(
-                    id = UUID.randomUUID().toString(),
-                    markerDenom = markerDenom,
-                    quotePerShare = newCoins(150, "nhash"),
+                createAsk = CreateAsk(
+                    ask = MarkerTradeAsk(
+                        id = UUID.randomUUID().toString(),
+                        markerDenom = markerDenom,
+                        quotePerShare = newCoins(150, "nhash"),
+                    ),
                 ),
                 signer = BilateralAccounts.askerAccount,
             )
@@ -181,10 +191,12 @@ class MarkerTradeIntTest : ContractIntTest() {
             receiverAddress = BilateralAccounts.bidderAccount.address(),
         )
         val bidUuid = UUID.randomUUID()
-        val createBid = CreateBid.newMarkerTrade(
-            id = bidUuid.toString(),
-            markerDenom = bidderDenom,
-            quote = newCoins(99, bidderDenom),
+        val createBid = CreateBid(
+            bid = MarkerTradeBid(
+                id = bidUuid.toString(),
+                markerDenom = bidderDenom,
+                quote = newCoins(99, bidderDenom),
+            ),
         )
         bilateralClient.createBid(createBid, BilateralAccounts.bidderAccount)
         bilateralClient.assertBidExists(bidUuid.toString())

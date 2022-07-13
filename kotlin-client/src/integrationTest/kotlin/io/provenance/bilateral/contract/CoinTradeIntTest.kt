@@ -1,5 +1,7 @@
 package io.provenance.bilateral.contract
 
+import io.provenance.bilateral.execute.Ask.CoinTradeAsk
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -43,10 +45,12 @@ class CoinTradeIntTest : ContractIntTest() {
         val quote = newCoins(1000, bidderDenom)
         val base = newCoins(1000, askerDenom)
         val askUuid = UUID.randomUUID()
-        val createAsk = CreateAsk.newCoinTrade(
-            id = askUuid.toString(),
-            base = base,
-            quote = quote,
+        val createAsk = CreateAsk(
+            ask = CoinTradeAsk(
+                id = askUuid.toString(),
+                base = base,
+                quote = quote,
+            ),
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
@@ -66,10 +70,12 @@ class CoinTradeIntTest : ContractIntTest() {
             message = "The asker account's entire coin balance should be held in escrow after creating an ask",
         )
         val bidUuid = UUID.randomUUID()
-        val createBid = CreateBid.newCoinTrade(
-            id = bidUuid.toString(),
-            base = base,
-            quote = quote,
+        val createBid = CreateBid(
+            bid = CoinTradeBid(
+                id = bidUuid.toString(),
+                base = base,
+                quote = quote,
+            ),
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
@@ -140,10 +146,12 @@ class CoinTradeIntTest : ContractIntTest() {
         val bidQuote = newCoins(1000, bidderDenom)
         val base = newCoins(1000, askerDenom)
         val askUuid = UUID.randomUUID()
-        val createAsk = CreateAsk.newCoinTrade(
-            id = askUuid.toString(),
-            base = base,
-            quote = askQuote,
+        val createAsk = CreateAsk(
+            ask = CoinTradeAsk(
+                id = askUuid.toString(),
+                base = base,
+                quote = askQuote,
+            ),
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
@@ -163,10 +171,12 @@ class CoinTradeIntTest : ContractIntTest() {
             message = "The asker account's entire coin balance should be held in escrow after creating an ask",
         )
         val bidUuid = UUID.randomUUID()
-        val createBid = CreateBid.newCoinTrade(
-            id = bidUuid.toString(),
-            base = base,
-            quote = bidQuote,
+        val createBid = CreateBid(
+            bid = CoinTradeBid(
+                id = bidUuid.toString(),
+                base = base,
+                quote = bidQuote,
+            ),
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
@@ -234,10 +244,12 @@ class CoinTradeIntTest : ContractIntTest() {
         )
         val askUuid = UUID.randomUUID()
         bilateralClient.createAsk(
-            createAsk = CreateAsk.newCoinTrade(
-                id = askUuid.toString(),
-                quote = newCoins(150, "nhash"),
-                base = newCoins(100, askerDenom),
+            createAsk = CreateAsk(
+                ask = CoinTradeAsk(
+                    id = askUuid.toString(),
+                    quote = newCoins(150, "nhash"),
+                    base = newCoins(100, askerDenom),
+                ),
             ),
             signer = BilateralAccounts.askerAccount,
         )
@@ -269,10 +281,12 @@ class CoinTradeIntTest : ContractIntTest() {
         )
         val bidUuid = UUID.randomUUID()
         bilateralClient.createBid(
-            createBid = CreateBid.newCoinTrade(
-                id = bidUuid.toString(),
-                quote = newCoins(100, bidderDenom),
-                base = newCoins(150, "nhash"),
+            createBid = CreateBid(
+                bid = CoinTradeBid(
+                    id = bidUuid.toString(),
+                    quote = newCoins(100, bidderDenom),
+                    base = newCoins(150, "nhash"),
+                ),
             ),
             signer = BilateralAccounts.bidderAccount
         )

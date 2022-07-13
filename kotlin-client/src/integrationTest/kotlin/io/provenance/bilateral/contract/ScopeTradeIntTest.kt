@@ -1,5 +1,7 @@
 package io.provenance.bilateral.contract
 
+import io.provenance.bilateral.execute.Ask.ScopeTradeAsk
+import io.provenance.bilateral.execute.Bid.ScopeTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -43,20 +45,24 @@ class ScopeTradeIntTest : ContractIntTest() {
             receiverAddress = BilateralAccounts.bidderAccount.address(),
         )
         val askUuid = UUID.randomUUID()
-        val createAsk = CreateAsk.newScopeTrade(
-            id = askUuid.toString(),
-            scopeAddress = MetadataAddress.forScope(scopeUuid).toString(),
-            quote = newCoins(500, bidderDenom),
+        val createAsk = CreateAsk(
+            ask = ScopeTradeAsk(
+                id = askUuid.toString(),
+                scopeAddress = MetadataAddress.forScope(scopeUuid).toString(),
+                quote = newCoins(500, bidderDenom),
+            ),
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
         )
         logger.info("Creating scope trade ask [$askUuid]")
         bilateralClient.createAsk(createAsk, BilateralAccounts.askerAccount)
         bilateralClient.assertAskExists(askUuid.toString())
         val bidUuid = UUID.randomUUID()
-        val createBid = CreateBid.newScopeTrade(
-            id = bidUuid.toString(),
-            scopeAddress = MetadataAddress.forScope(scopeUuid).toString(),
-            quote = newCoins(500, bidderDenom),
+        val createBid = CreateBid(
+            bid = ScopeTradeBid(
+                id = bidUuid.toString(),
+                scopeAddress = MetadataAddress.forScope(scopeUuid).toString(),
+                quote = newCoins(500, bidderDenom),
+            ),
             descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
         )
         logger.info("Creating scope trade bid [$bidUuid]")
@@ -104,10 +110,12 @@ class ScopeTradeIntTest : ContractIntTest() {
             valueOwnerAddress = contractInfo.contractAddress,
         )
         val askUuid = UUID.randomUUID()
-        val createAsk = CreateAsk.newScopeTrade(
-            id = askUuid.toString(),
-            scopeAddress = MetadataAddress.forScope(scopeUuid).toString(),
-            quote = newCoins(5000, "nhash"),
+        val createAsk = CreateAsk(
+            ask = ScopeTradeAsk(
+                id = askUuid.toString(),
+                scopeAddress = MetadataAddress.forScope(scopeUuid).toString(),
+                quote = newCoins(5000, "nhash"),
+            ),
         )
         bilateralClient.createAsk(createAsk, BilateralAccounts.askerAccount)
         bilateralClient.assertAskExists(askUuid.toString())
@@ -136,10 +144,12 @@ class ScopeTradeIntTest : ContractIntTest() {
             receiverAddress = BilateralAccounts.bidderAccount.address(),
         )
         val bidUuid = UUID.randomUUID()
-        val createBid = CreateBid.newScopeTrade(
-            id = bidUuid.toString(),
-            scopeAddress = MetadataAddress.forScope(UUID.randomUUID()).toString(),
-            quote = newCoins(10000, bidderDenom),
+        val createBid = CreateBid(
+            bid = ScopeTradeBid(
+                id = bidUuid.toString(),
+                scopeAddress = MetadataAddress.forScope(UUID.randomUUID()).toString(),
+                quote = newCoins(10000, bidderDenom),
+            ),
         )
         bilateralClient.createBid(createBid, BilateralAccounts.bidderAccount)
         bilateralClient.assertBidExists(bidUuid.toString())

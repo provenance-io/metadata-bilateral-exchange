@@ -1,23 +1,15 @@
 use crate::storage::ask_order_storage::{get_ask_order_by_id, insert_ask_order};
 use crate::types::core::error::ContractError;
-use crate::types::request::ask_types::ask::{
-    Ask, CoinTradeAsk, MarkerShareSaleAsk, MarkerTradeAsk, ScopeTradeAsk,
-};
-use crate::types::request::ask_types::ask_collateral::AskCollateral;
-use crate::types::request::ask_types::ask_order::AskOrder;
+use crate::types::request::ask_types::ask::Ask;
 use crate::types::request::request_descriptor::RequestDescriptor;
 use crate::util::cosmos_utilities::get_send_amount;
+use crate::util::create_ask_order_utilities::{
+    create_ask_order, AskCreationType, AskOrderCreationResponse,
+};
 use crate::util::extensions::ResultExtensions;
-use crate::util::provenance_utilities::{
-    check_scope_owners, format_coin_display, get_single_marker_coin_holding,
-};
-use crate::util::request_fee::{generate_request_fee, RequestFeeDetail};
-use crate::validation::marker_exchange_validation::validate_marker_for_ask;
-use cosmwasm_std::{to_binary, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Response};
-use provwasm_std::{
-    revoke_marker_access, AccessGrant, MarkerAccess, ProvenanceMsg, ProvenanceQuerier,
-    ProvenanceQuery,
-};
+use crate::util::provenance_utilities::format_coin_display;
+use cosmwasm_std::{to_binary, DepsMut, Env, MessageInfo, Response};
+use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
 
 pub fn create_ask(
     deps: DepsMut<ProvenanceQuery>,
@@ -31,213 +23,35 @@ pub fn create_ask(
     if get_ask_order_by_id(deps.storage, ask.get_id()).is_ok() {
         return ContractError::existing_id("ask", ask.get_id()).to_err();
     }
-    // TODO: Refactor this after provwasm fees are available. That will deeply simplify the fee charge process
-    let RequestFeeDetail {
-        fee_send_msg,
-        funds_after_fee,
-    } = generate_request_fee("ask fee", &deps.as_ref(), &info, |c| &c.ask_fee)?;
-    let ask_creation_data = match &ask {
-        Ask::CoinTrade(coin_ask) => create_coin_trade_ask_collateral(&funds_after_fee, coin_ask),
-        Ask::MarkerTrade(marker_ask) => {
-            create_marker_trade_ask_collateral(&deps, &info, &env, &funds_after_fee, marker_ask)
-        }
-        Ask::MarkerShareSale(marker_share_sale) => create_marker_share_sale_ask_collateral(
-            &deps,
-            &info,
-            &env,
-            &funds_after_fee,
-            marker_share_sale,
-        ),
-        Ask::ScopeTrade(scope_trade) => {
-            create_scope_trade_ask_collateral(&deps, &env, &funds_after_fee, scope_trade)
-        }
-    }?;
-    let ask_order = AskOrder::new(
-        ask.get_id(),
-        info.sender,
-        ask_creation_data.collateral,
-        descriptor,
-    )?;
+    let AskOrderCreationResponse {
+        ask_order,
+        messages,
+        ask_fee_msg,
+    } = create_ask_order(&deps, &env, &info, ask, descriptor, AskCreationType::New)?;
     insert_ask_order(deps.storage, &ask_order)?;
     let response = Response::new()
-        .add_messages(ask_creation_data.messages)
+        .add_messages(messages)
         .add_attribute("action", "create_ask")
-        .add_attribute("ask_id", ask.get_id())
+        .add_attribute("ask_id", &ask_order.id)
         .set_data(to_binary(&ask_order)?);
-    if let Some(fee_send_msg) = fee_send_msg {
+    if let Some(ask_fee_msg) = ask_fee_msg {
         response
             .add_attribute(
                 "ask_fee_paid",
-                format_coin_display(&get_send_amount(&fee_send_msg)?),
+                format_coin_display(&get_send_amount(&ask_fee_msg)?),
             )
-            .add_message(fee_send_msg)
+            .add_message(ask_fee_msg)
     } else {
         response
     }
     .to_ok()
 }
 
-struct AskCreationData {
-    pub collateral: AskCollateral,
-    pub messages: Vec<CosmosMsg<ProvenanceMsg>>,
-}
-
-// create ask entrypoint
-fn create_coin_trade_ask_collateral(
-    base_funds: &[Coin],
-    coin_trade: &CoinTradeAsk,
-) -> Result<AskCreationData, ContractError> {
-    if base_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "coin trade ask requests should include enough funds for ask fee + base",
-        )
-        .to_err();
-    }
-    if coin_trade.id.is_empty() {
-        return ContractError::missing_field("id").to_err();
-    }
-    if coin_trade.quote.is_empty() {
-        return ContractError::missing_field("quote").to_err();
-    }
-
-    AskCreationData {
-        collateral: AskCollateral::coin_trade(base_funds, &coin_trade.quote),
-        messages: vec![],
-    }
-    .to_ok()
-}
-
-fn create_marker_trade_ask_collateral(
-    deps: &DepsMut<ProvenanceQuery>,
-    info: &MessageInfo,
-    env: &Env,
-    base_funds: &[Coin],
-    marker_trade: &MarkerTradeAsk,
-) -> Result<AskCreationData, ContractError> {
-    if !base_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "marker trade ask requests should not include funds greater than the amount needed for ask fees",
-        )
-        .to_err();
-    }
-    let marker =
-        ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.marker_denom)?;
-    validate_marker_for_ask(
-        &marker,
-        &info.sender,
-        &env.contract.address,
-        &[MarkerAccess::Admin],
-        None,
-    )?;
-    let mut messages: Vec<CosmosMsg<ProvenanceMsg>> = vec![];
-    for permission in marker
-        .permissions
-        .iter()
-        .filter(|perm| perm.address != env.contract.address)
-    {
-        messages.push(revoke_marker_access(
-            &marker.denom,
-            permission.clone().address,
-        )?);
-    }
-    AskCreationData {
-        collateral: AskCollateral::marker_trade(
-            marker.address.clone(),
-            &marker.denom,
-            get_single_marker_coin_holding(&marker)?.amount.u128(),
-            &marker_trade.quote_per_share,
-            &marker
-                .permissions
-                .into_iter()
-                .filter(|perm| perm.address != env.contract.address)
-                .collect::<Vec<AccessGrant>>(),
-        ),
-        messages,
-    }
-    .to_ok()
-}
-
-fn create_marker_share_sale_ask_collateral(
-    deps: &DepsMut<ProvenanceQuery>,
-    info: &MessageInfo,
-    env: &Env,
-    base_funds: &[Coin],
-    marker_share_sale: &MarkerShareSaleAsk,
-) -> Result<AskCreationData, ContractError> {
-    if !base_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "marker share sale ask requests should not include funds greater than the amount needed for ask fees",
-        )
-        .to_err();
-    }
-    let marker = ProvenanceQuerier::new(&deps.querier)
-        .get_marker_by_denom(&marker_share_sale.marker_denom)?;
-    validate_marker_for_ask(
-        &marker,
-        &info.sender,
-        &env.contract.address,
-        &[MarkerAccess::Admin, MarkerAccess::Withdraw],
-        Some(marker_share_sale.shares_to_sell.u128()),
-    )?;
-    let mut messages: Vec<CosmosMsg<ProvenanceMsg>> = vec![];
-    for permission in marker
-        .permissions
-        .iter()
-        .filter(|perm| perm.address != env.contract.address)
-    {
-        messages.push(revoke_marker_access(
-            &marker.denom,
-            permission.clone().address,
-        )?);
-    }
-    AskCreationData {
-        collateral: AskCollateral::marker_share_sale(
-            marker.address.clone(),
-            &marker.denom,
-            marker_share_sale.shares_to_sell.u128(),
-            marker_share_sale.shares_to_sell.u128(),
-            &marker_share_sale.quote_per_share,
-            &marker
-                .permissions
-                .into_iter()
-                .filter(|perm| perm.address != env.contract.address)
-                .collect::<Vec<AccessGrant>>(),
-            marker_share_sale.share_sale_type.to_owned(),
-        ),
-        messages,
-    }
-    .to_ok()
-}
-
-fn create_scope_trade_ask_collateral(
-    deps: &DepsMut<ProvenanceQuery>,
-    env: &Env,
-    base_funds: &[Coin],
-    scope_trade: &ScopeTradeAsk,
-) -> Result<AskCreationData, ContractError> {
-    if !base_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "scope trade ask requests should not include funds greater than the amount needed for ask fees",
-        )
-        .to_err();
-    }
-    check_scope_owners(
-        &ProvenanceQuerier::new(&deps.querier).get_scope(&scope_trade.scope_address)?,
-        Some(&env.contract.address),
-        Some(&env.contract.address),
-    )?;
-    AskCreationData {
-        collateral: AskCollateral::scope_trade(&scope_trade.scope_address, &scope_trade.quote),
-        messages: vec![],
-    }
-    .to_ok()
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::contract::execute;
-    use crate::storage::ask_order_storage::get_ask_order_by_id;
+    use crate::execute::create_ask::create_ask;
+    use crate::storage::ask_order_storage::{get_ask_order_by_id, insert_ask_order};
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::mock_instantiate::{
         default_instantiate, test_instantiate, TestInstantiate, DEFAULT_ADMIN_ADDRESS,
@@ -247,14 +61,21 @@ mod tests {
     };
     use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ID};
     use crate::test::request_helpers::set_ask_fee;
+    use crate::types::core::error::ContractError;
     use crate::types::core::msg::ExecuteMsg;
-    use crate::types::request::request_descriptor::AttributeRequirement;
+    use crate::types::request::ask_types::ask::Ask;
+    use crate::types::request::ask_types::ask_collateral::AskCollateral;
+    use crate::types::request::ask_types::ask_order::AskOrder;
+    use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
     use crate::types::request::share_sale_type::ShareSaleType;
+    use crate::util::provenance_utilities::format_coin_display;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{coin, coins, from_binary, Addr, BankMsg, Storage};
+    use cosmwasm_std::{
+        coin, coins, from_binary, Addr, BankMsg, Coin, CosmosMsg, Response, Storage,
+    };
     use provwasm_mocks::mock_dependencies;
-    use provwasm_std::{MarkerMsgParams, ProvenanceMsgParams};
+    use provwasm_std::{MarkerMsgParams, ProvenanceMsg, ProvenanceMsgParams};
 
     #[test]
     fn test_coin_trade_with_valid_data() {

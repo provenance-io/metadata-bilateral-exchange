@@ -74,6 +74,15 @@ impl BidCollateral {
             _ => ContractError::invalid_type("expected scope trade bid collateral").to_err(),
         }
     }
+
+    pub fn get_quote(&self) -> Vec<Coin> {
+        match self {
+            BidCollateral::CoinTrade(c) => c.quote.to_owned(),
+            BidCollateral::MarkerTrade(c) => c.quote.to_owned(),
+            BidCollateral::MarkerShareSale(c) => c.quote.to_owned(),
+            BidCollateral::ScopeTrade(c) => c.quote.to_owned(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

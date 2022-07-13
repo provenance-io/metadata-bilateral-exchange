@@ -30,12 +30,7 @@ pub fn cancel_bid(
     if info.sender != bid_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
         return ContractError::unauthorized().to_err();
     }
-    let coin_to_send = match &bid_order.collateral {
-        BidCollateral::CoinTrade(collateral) => collateral.quote.to_owned(),
-        BidCollateral::MarkerTrade(collateral) => collateral.quote.to_owned(),
-        BidCollateral::MarkerShareSale(collateral) => collateral.quote.to_owned(),
-        BidCollateral::ScopeTrade(collateral) => collateral.quote.to_owned(),
-    };
+    let coin_to_send = bid_order.collateral.get_quote();
     // Remove the bid order from storage now that it is no longer needed
     delete_bid_order_by_id(deps.storage, &id)?;
     Response::new()

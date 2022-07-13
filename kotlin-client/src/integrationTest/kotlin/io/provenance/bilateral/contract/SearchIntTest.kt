@@ -1,6 +1,8 @@
 package io.provenance.bilateral.contract
 
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastMode
+import io.provenance.bilateral.execute.Ask.CoinTradeAsk
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.models.AttributeRequirement
@@ -30,10 +32,12 @@ class SearchIntTest : ContractIntTest() {
         val msgs = (0..9).map {
             val askUuid = UUID.randomUUID()
             askUuids += askUuid
-            val createAsk = CreateAsk.newCoinTrade(
-                id = askUuid.toString(),
-                quote = newCoins(100, "nhash"),
-                base = newCoins(100, "nhash"),
+            val createAsk = CreateAsk(
+                ask = CoinTradeAsk(
+                    id = askUuid.toString(),
+                    quote = newCoins(100, "nhash"),
+                    base = newCoins(100, "nhash"),
+                ),
                 descriptor = RequestDescriptor(
                     description = "Description",
                     effectiveTime = OffsetDateTime.now(),
@@ -41,7 +45,7 @@ class SearchIntTest : ContractIntTest() {
                         attributes = listOf("a.pb", "b.pb"),
                         type = AttributeRequirementType.ALL,
                     )
-                )
+                ),
             )
             bilateralClient.generateCreateAskMsg(createAsk, BilateralAccounts.askerAccount.address())
         }
@@ -100,10 +104,12 @@ class SearchIntTest : ContractIntTest() {
         val msgs = (0..9).map {
             val bidUuid = UUID.randomUUID()
             bidUuids += bidUuid
-            val createBid = CreateBid.newCoinTrade(
-                id = bidUuid.toString(),
-                quote = newCoins(100, "nhash"),
-                base = newCoins(100, "nhash"),
+            val createBid = CreateBid(
+                bid = CoinTradeBid(
+                    id = bidUuid.toString(),
+                    quote = newCoins(100, "nhash"),
+                    base = newCoins(100, "nhash"),
+                ),
                 descriptor = RequestDescriptor(
                     description = "Description",
                     effectiveTime = OffsetDateTime.now(),

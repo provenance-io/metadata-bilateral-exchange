@@ -8,18 +8,20 @@ use provwasm_std::{Marker, MarkerAccess, MarkerStatus};
 
 pub fn validate_marker_for_ask(
     marker: &Marker,
-    original_owner_address: &Addr,
+    original_owner_address: Option<&Addr>,
     contract_address: &Addr,
     expected_contract_permissions: &[MarkerAccess],
     shares_sold: Option<u128>,
 ) -> Result<(), ContractError> {
-    if !marker_has_admin(marker, original_owner_address) {
-        return ContractError::invalid_marker(format!(
-            "expected sender [{}] to have admin privileges on marker [{}]",
-            original_owner_address.as_str(),
-            marker.denom,
-        ))
-        .to_err();
+    if let Some(original_owner_address) = original_owner_address {
+        if !marker_has_admin(marker, original_owner_address) {
+            return ContractError::invalid_marker(format!(
+                "expected sender [{}] to have admin privileges on marker [{}]",
+                original_owner_address.as_str(),
+                marker.denom,
+            ))
+            .to_err();
+        }
     }
     if !marker_has_permissions(marker, contract_address, expected_contract_permissions) {
         return ContractError::invalid_marker(format!(
@@ -76,7 +78,7 @@ mod tests {
         let marker = MockMarker::new_owned_marker("asker");
         validate_marker_for_ask(
             &marker,
-            &Addr::unchecked("asker"),
+            Some(&Addr::unchecked("asker")),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin, MarkerAccess::Withdraw],
             None,
@@ -85,12 +87,26 @@ mod tests {
     }
 
     #[test]
+    fn test_validation_passes_for_contract_owned_marker_with_original_owner_omitted() {
+        // new_marker is owned by the contract's address ONLY
+        let marker = MockMarker::new_marker();
+        validate_marker_for_ask(
+            &marker,
+            None,
+            &Addr::unchecked(MOCK_CONTRACT_ADDR),
+            &[MarkerAccess::Admin, MarkerAccess::Withdraw],
+            None,
+        )
+            .expect("expected validation to pass for a contract-owned marker, omitting the owner address check");
+    }
+
+    #[test]
     fn test_owner_missing_permissions() {
         // new_marker only includes contract permissions, which excludes the owner
         let marker = MockMarker::new_marker();
         let err = validate_marker_for_ask(
             &marker,
-            &Addr::unchecked("asker"),
+            Some(&Addr::unchecked("asker")),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin, MarkerAccess::Withdraw],
             None,
@@ -117,7 +133,7 @@ mod tests {
         .to_marker();
         let err = validate_marker_for_ask(
             &marker,
-            &Addr::unchecked("asker"),
+            Some(&Addr::unchecked("asker")),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin],
             None,
@@ -145,7 +161,7 @@ mod tests {
         .to_marker();
         let err = validate_marker_for_ask(
             &marker,
-            &Addr::unchecked("asker"),
+            Some(&Addr::unchecked("asker")),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin, MarkerAccess::Withdraw],
             None,
@@ -169,7 +185,7 @@ mod tests {
         .to_marker();
         let err = validate_marker_for_ask(
             &marker,
-            &Addr::unchecked("asker"),
+            Some(&Addr::unchecked("asker")),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin, MarkerAccess::Withdraw],
             None,
@@ -193,7 +209,7 @@ mod tests {
         .to_marker();
         let err = validate_marker_for_ask(
             &marker,
-            &Addr::unchecked("asker"),
+            Some(&Addr::unchecked("asker")),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin, MarkerAccess::Withdraw],
             Some(11),

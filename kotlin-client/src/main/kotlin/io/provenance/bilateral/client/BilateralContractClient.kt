@@ -12,6 +12,8 @@ import io.provenance.bilateral.execute.CancelBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
+import io.provenance.bilateral.execute.UpdateAsk
+import io.provenance.bilateral.execute.UpdateBid
 import io.provenance.bilateral.execute.UpdateSettings
 import io.provenance.bilateral.extensions.attribute
 import io.provenance.bilateral.extensions.attributeOrNull
@@ -27,6 +29,8 @@ import io.provenance.bilateral.models.executeresponse.CancelBidResponse
 import io.provenance.bilateral.models.executeresponse.CreateAskResponse
 import io.provenance.bilateral.models.executeresponse.CreateBidResponse
 import io.provenance.bilateral.models.executeresponse.ExecuteMatchResponse
+import io.provenance.bilateral.models.executeresponse.UpdateAskResponse
+import io.provenance.bilateral.models.executeresponse.UpdateBidResponse
 import io.provenance.bilateral.models.executeresponse.UpdateSettingsResponse
 import io.provenance.bilateral.query.ContractSearchRequest
 import io.provenance.bilateral.query.ContractSearchResult
@@ -145,11 +149,27 @@ class BilateralContractClient private constructor(
         executeMsg = createAsk,
         signer = signer,
         options = options,
-        funds = createAsk.getFunds(askFee = this.getContractInfo().askFee),
+        funds = createAsk.ask.mapToFunds(askFee = this.getContractInfo().askFee),
     ).let { (event, data) ->
         CreateAskResponse(
             askId = event.attribute("ask_id"),
             askOrder = deserializeResponseData(data),
+        )
+    }
+
+    fun updateAsk(
+        updateAsk: UpdateAsk,
+        signer: Signer,
+        options: BilateralBroadcastOptions = BilateralBroadcastOptions(),
+    ): UpdateAskResponse = executeContract(
+        executeMsg = updateAsk,
+        signer = signer,
+        options = options,
+        funds = updateAsk.ask.mapToFunds(),
+    ).let { (event, data) ->
+        UpdateAskResponse(
+            askId = event.attribute("ask_id"),
+            updatedAskOrder = deserializeResponseData(data),
         )
     }
 
@@ -161,11 +181,27 @@ class BilateralContractClient private constructor(
         executeMsg = createBid,
         signer = signer,
         options = options,
-        funds = createBid.getFunds(bidFee = this.getContractInfo().bidFee),
+        funds = createBid.bid.mapToFunds(bidFee = this.getContractInfo().bidFee),
     ).let { (event, data) ->
         CreateBidResponse(
             bidId = event.attribute("bid_id"),
             bidOrder = deserializeResponseData(data),
+        )
+    }
+
+    fun updateBid(
+        updateBid: UpdateBid,
+        signer: Signer,
+        options: BilateralBroadcastOptions = BilateralBroadcastOptions(),
+    ): UpdateBidResponse = executeContract(
+        executeMsg = updateBid,
+        signer = signer,
+        options = options,
+        funds = updateBid.bid.mapToFunds(),
+    ).let { (event, data) ->
+        UpdateBidResponse(
+            bidId = event.attribute("bid_id"),
+            updatedBidOrder = deserializeResponseData(data),
         )
     }
 
@@ -245,7 +281,16 @@ class BilateralContractClient private constructor(
     ): MsgExecuteContract = generateProtoExecuteMsg(
         executeMsg = createAsk,
         senderAddress = senderAddress,
-        funds = createAsk.getFunds(askFee = this.getContractInfo().askFee),
+        funds = createAsk.ask.mapToFunds(askFee = this.getContractInfo().askFee),
+    )
+
+    fun generateUpdateAskMsg(
+        updateAsk: UpdateAsk,
+        senderAddress: String,
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = updateAsk,
+        senderAddress = senderAddress,
+        funds = updateAsk.ask.mapToFunds(),
     )
 
     fun generateCreateBidMsg(
@@ -254,7 +299,16 @@ class BilateralContractClient private constructor(
     ): MsgExecuteContract = generateProtoExecuteMsg(
         executeMsg = createBid,
         senderAddress = senderAddress,
-        funds = createBid.getFunds(bidFee = this.getContractInfo().bidFee),
+        funds = createBid.bid.mapToFunds(bidFee = this.getContractInfo().bidFee),
+    )
+
+    fun generateUpdateBidMsg(
+        updateBid: UpdateBid,
+        senderAddress: String,
+    ): MsgExecuteContract = generateProtoExecuteMsg(
+        executeMsg = updateBid,
+        senderAddress = senderAddress,
+        funds = updateBid.bid.mapToFunds(),
     )
 
     fun generateCancelAskMsg(

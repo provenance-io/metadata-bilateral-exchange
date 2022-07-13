@@ -9,10 +9,10 @@ import io.provenance.bilateral.models.RequestDescriptor
 
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
-@JsonTypeName("create_ask")
-data class CreateAsk(
-    val ask: Ask,
+@JsonTypeName("update_bid")
+data class UpdateBid(
+    val bid: Bid,
     val descriptor: RequestDescriptor? = null,
 ) : ContractExecuteMsg {
-    override fun toLoggingString(): String = "createAsk, ${ask.toLoggingStringSuffix()}"
+    override fun toLoggingString(): String = "updateBid, ${bid.toLoggingStringSuffix()}"
 }

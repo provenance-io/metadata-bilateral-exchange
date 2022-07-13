@@ -3,6 +3,8 @@ use crate::execute::cancel_bid::cancel_bid;
 use crate::execute::create_ask::create_ask;
 use crate::execute::create_bid::create_bid;
 use crate::execute::execute_match::execute_match;
+use crate::execute::update_ask::update_ask;
+use crate::execute::update_bid::update_bid;
 use crate::execute::update_settings::update_settings;
 use crate::instantiate::instantiate_contract::instantiate_contract;
 use crate::migrate::migrate_contract::migrate_contract;
@@ -39,7 +41,9 @@ pub fn execute(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     match msg {
         ExecuteMsg::CreateAsk { ask, descriptor } => create_ask(deps, env, info, ask, descriptor),
+        ExecuteMsg::UpdateAsk { ask, descriptor } => update_ask(deps, env, info, ask, descriptor),
         ExecuteMsg::CreateBid { bid, descriptor } => create_bid(deps, info, bid, descriptor),
+        ExecuteMsg::UpdateBid { bid, descriptor } => update_bid(deps, info, bid, descriptor),
         ExecuteMsg::CancelAsk { id } => cancel_ask(deps, env, info, id),
         ExecuteMsg::CancelBid { id } => cancel_bid(deps, info, id),
         ExecuteMsg::ExecuteMatch {
