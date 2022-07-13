@@ -53,7 +53,7 @@ mod tests {
         default_instantiate, test_instantiate, TestInstantiate, DEFAULT_ADMIN_ADDRESS,
     };
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM};
-    use crate::test::mock_scope::DEFAULT_SCOPE_ID;
+    use crate::test::mock_scope::DEFAULT_SCOPE_ADDR;
     use crate::test::request_helpers::{mock_bid_order, set_bid_fee};
     use crate::types::core::error::ContractError;
     use crate::types::core::msg::ExecuteMsg;
@@ -536,7 +536,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "nhash")),
-            Bid::new_scope_trade("", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect_err("an error should occur when the bid id is missing");
@@ -565,7 +565,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &[]),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect_err("an error should occur when no quote funds are provided");
@@ -577,7 +577,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "nhash")),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::all::<String>(&[]),
@@ -599,7 +599,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "bidfee")),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         ).expect_err("an error should occur when enough funds for the fee are provided but not enough for the quote");
         assert!(
@@ -897,7 +897,7 @@ mod tests {
                     coins(150, "nhash")
                 },
             ),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(descriptor.clone()),
         )
         .expect("expected the scope trade to successfully execute");
@@ -910,7 +910,7 @@ mod tests {
         );
         let collateral = bid_order.collateral.unwrap_scope_trade();
         assert_eq!(
-            DEFAULT_SCOPE_ID, collateral.scope_address,
+            DEFAULT_SCOPE_ADDR, collateral.scope_address,
             "the correct scope address should be set in the bid collateral",
         );
         assert_eq!(

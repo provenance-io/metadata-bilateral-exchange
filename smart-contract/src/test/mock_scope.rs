@@ -2,7 +2,7 @@ use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
 use cosmwasm_std::Addr;
 use provwasm_std::{Party, PartyType, Scope};
 
-pub const DEFAULT_SCOPE_ID: &str = "scope";
+pub const DEFAULT_SCOPE_ADDR: &str = "scope";
 pub const DEFAULT_SCOPE_SPEC_ID: &str = "scope-spec";
 pub const DEFAULT_SCOPE_OWNER_ADDR: &str = MOCK_CONTRACT_ADDR;
 
@@ -16,7 +16,7 @@ pub struct MockScope {
 impl Default for MockScope {
     fn default() -> Self {
         Self {
-            scope_id: DEFAULT_SCOPE_ID.to_string(),
+            scope_id: DEFAULT_SCOPE_ADDR.to_string(),
             specification_id: DEFAULT_SCOPE_SPEC_ID.to_string(),
             owners: vec![Party {
                 address: Addr::unchecked(DEFAULT_SCOPE_OWNER_ADDR),
@@ -28,7 +28,7 @@ impl Default for MockScope {
     }
 }
 impl MockScope {
-    pub fn new_with_owner<S: Into<String>>(owner_address: S) -> Scope {
+    pub fn new_mock_scope_with_owner<S: Into<String>>(owner_address: S) -> MockScope {
         let owner_address = owner_address.into();
         Self {
             owners: vec![Party {
@@ -38,7 +38,10 @@ impl MockScope {
             value_owner_address: Addr::unchecked(owner_address),
             ..Self::default()
         }
-        .to_scope()
+    }
+
+    pub fn new_with_owner<S: Into<String>>(owner_address: S) -> Scope {
+        Self::new_mock_scope_with_owner(owner_address).to_scope()
     }
 
     pub fn to_scope(self) -> Scope {

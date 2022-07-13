@@ -51,7 +51,7 @@ mod tests {
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::mock_instantiate::{default_instantiate, DEFAULT_ADMIN_ADDRESS};
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_DENOM};
-    use crate::test::mock_scope::DEFAULT_SCOPE_ID;
+    use crate::test::mock_scope::DEFAULT_SCOPE_ADDR;
     use crate::test::request_helpers::mock_bid_order;
     use crate::types::core::error::ContractError;
     use crate::types::request::bid_types::bid::Bid;
@@ -238,7 +238,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &[coin(10, "bitcoin"), coin(10, "nhash")]),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect("expected bid creation to succeed");

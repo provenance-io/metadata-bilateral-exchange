@@ -59,7 +59,7 @@ mod tests {
     use crate::test::mock_marker::{
         MockMarker, DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM, DEFAULT_MARKER_HOLDINGS,
     };
-    use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ID};
+    use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ADDR};
     use crate::test::request_helpers::set_ask_fee;
     use crate::types::core::error::ContractError;
     use crate::types::core::msg::ExecuteMsg;
@@ -441,7 +441,7 @@ mod tests {
     fn test_scope_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
-        let mut ask = Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(100, "nhash"));
+        let mut ask = Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, "nhash"));
         let err = create_ask(
             deps.as_mut(),
             mock_env(),
@@ -511,7 +511,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &coins(101, "askfee")),
-            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(100, "nhash")),
+            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, "nhash")),
             None,
         )
         .expect_err("an error should occur when a scope trade overpays the ask fee");
@@ -922,7 +922,7 @@ mod tests {
                     vec![]
                 },
             ),
-            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(100, "nhash")),
+            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, "nhash")),
             Some(descriptor.clone()),
         )
         .expect("expected the ask to be created successfully");
@@ -975,7 +975,7 @@ mod tests {
         );
         let collateral = ask_order.collateral.unwrap_scope_trade();
         assert_eq!(
-            DEFAULT_SCOPE_ID, collateral.scope_address,
+            DEFAULT_SCOPE_ADDR, collateral.scope_address,
             "the proper scope address should be set in the ask order's collateral",
         );
         assert_eq!(

@@ -299,7 +299,7 @@ mod tests {
     use crate::test::error_helpers::assert_validation_error_message;
     use crate::test::mock_instantiate::{default_instantiate, DEFAULT_ADMIN_ADDRESS};
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_DENOM, DEFAULT_MARKER_HOLDINGS};
-    use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ID};
+    use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ADDR};
     use crate::test::request_helpers::{mock_ask_order, mock_bid_order, mock_bid_scope_trade};
     use crate::types::core::error::ContractError;
     use crate::types::request::ask_types::ask::Ask;
@@ -392,7 +392,7 @@ mod tests {
             }
             e => panic!("unexpected error: {:?}", e),
         };
-        let bid_order = mock_bid_order(mock_bid_scope_trade(DEFAULT_SCOPE_ID, &[]));
+        let bid_order = mock_bid_order(mock_bid_scope_trade(DEFAULT_SCOPE_ADDR, &[]));
         insert_bid_order(deps.as_mut().storage, &bid_order)
             .expect("expected bid order insert to succeed");
         let err = execute_match(
@@ -1159,7 +1159,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(420, "quote")),
+            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(420, "quote")),
             None,
         )
         .expect("the ask should be created successfully");
@@ -1172,7 +1172,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &bid_quote),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect("the bid should be created successfully");

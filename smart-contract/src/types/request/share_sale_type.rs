@@ -1,6 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+const SINGLE_TRANSACTION_NAME: &str = "single_transaction";
+const MULTIPLE_TRANSACTIONS_NAME: &str = "multiple_transactions";
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ShareSaleType {
@@ -18,4 +21,13 @@ pub enum ShareSaleType {
     /// remaining.  Multiple bids can come in and incrementally buy shares from the marker.  Once
     /// the threshold of 10 remaining shares is hit, the ask will be automatically deleted.
     MultipleTransactions,
+}
+impl ShareSaleType {
+    pub fn get_name(&self) -> String {
+        match self {
+            ShareSaleType::SingleTransaction => SINGLE_TRANSACTION_NAME,
+            ShareSaleType::MultipleTransactions => MULTIPLE_TRANSACTIONS_NAME,
+        }
+        .to_string()
+    }
 }

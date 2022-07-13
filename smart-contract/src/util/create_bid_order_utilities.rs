@@ -43,11 +43,11 @@ pub fn create_bid_order(
             create_coin_trade_collateral(creation_type, &funds_after_fee, coin_trade)
         }
         Bid::MarkerTrade(marker_trade) => {
-            create_marker_trade_collateral(creation_type, &deps, &funds_after_fee, marker_trade)
+            create_marker_trade_collateral(creation_type, deps, &funds_after_fee, marker_trade)
         }
         Bid::MarkerShareSale(marker_share_sale) => create_marker_share_sale_collateral(
             creation_type,
-            &deps,
+            deps,
             &funds_after_fee,
             marker_share_sale,
         ),

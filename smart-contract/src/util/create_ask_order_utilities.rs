@@ -48,7 +48,7 @@ pub fn create_ask_order(
         messages,
     } = match &ask {
         Ask::CoinTrade(coin_ask) => {
-            create_coin_trade_ask_collateral(creation_type, &info, &funds_after_fee, coin_ask)
+            create_coin_trade_ask_collateral(creation_type, info, &funds_after_fee, coin_ask)
         }
         Ask::MarkerTrade(marker_ask) => create_marker_trade_ask_collateral(
             creation_type,
@@ -162,11 +162,13 @@ fn create_marker_trade_ask_collateral(
         &[MarkerAccess::Admin],
         None,
     )?;
-    let messages = match creation_type {
+    let messages = match &creation_type {
         AskCreationType::New => {
             get_marker_permission_revoke_messages(&marker, &env.contract.address)?
         }
-        AskCreationType::Update { existing_ask_order } => {
+        AskCreationType::Update {
+            ref existing_ask_order,
+        } => {
             check_ask_type(
                 &existing_ask_order.id,
                 &existing_ask_order.ask_type,
@@ -192,11 +194,18 @@ fn create_marker_trade_ask_collateral(
             &marker.denom,
             get_single_marker_coin_holding(&marker)?.amount.u128(),
             &marker_trade.quote_per_share,
-            &marker
-                .permissions
-                .into_iter()
-                .filter(|perm| perm.address != env.contract.address)
-                .collect::<Vec<AccessGrant>>(),
+            &match &creation_type {
+                AskCreationType::New => marker
+                    .permissions
+                    .into_iter()
+                    .filter(|perm| perm.address != env.contract.address)
+                    .collect::<Vec<AccessGrant>>(),
+                AskCreationType::Update { existing_ask_order } => existing_ask_order
+                    .collateral
+                    .get_marker_trade()?
+                    .removed_permissions
+                    .to_owned(),
+            },
         ),
         messages,
     }
@@ -231,11 +240,13 @@ fn create_marker_share_sale_ask_collateral(
         &[MarkerAccess::Admin, MarkerAccess::Withdraw],
         Some(marker_share_sale.shares_to_sell.u128()),
     )?;
-    let messages = match creation_type {
+    let messages = match &creation_type {
         AskCreationType::New => {
             get_marker_permission_revoke_messages(&marker, &env.contract.address)?
         }
-        AskCreationType::Update { existing_ask_order } => {
+        AskCreationType::Update {
+            ref existing_ask_order,
+        } => {
             check_ask_type(
                 &existing_ask_order.id,
                 &existing_ask_order.ask_type,
@@ -252,6 +263,16 @@ fn create_marker_share_sale_ask_collateral(
                     )
                 ).to_err();
             }
+            if existing_collateral.sale_type != marker_share_sale.share_sale_type {
+                return ContractError::invalid_update(
+                    format!(
+                        "marker share sale with id [{}] cannot change share sale type with an update. current [{}], proposed [{}]",
+                        existing_ask_order.id,
+                        existing_collateral.sale_type.get_name(),
+                        marker_share_sale.share_sale_type.get_name(),
+                    )
+                ).to_err();
+            }
             vec![]
         }
     };
@@ -262,11 +283,18 @@ fn create_marker_share_sale_ask_collateral(
             marker_share_sale.shares_to_sell.u128(),
             marker_share_sale.shares_to_sell.u128(),
             &marker_share_sale.quote_per_share,
-            &marker
-                .permissions
-                .into_iter()
-                .filter(|perm| perm.address != env.contract.address)
-                .collect::<Vec<AccessGrant>>(),
+            &match &creation_type {
+                AskCreationType::New => marker
+                    .permissions
+                    .into_iter()
+                    .filter(|perm| perm.address != env.contract.address)
+                    .collect::<Vec<AccessGrant>>(),
+                AskCreationType::Update { existing_ask_order } => existing_ask_order
+                    .collateral
+                    .get_marker_share_sale()?
+                    .removed_permissions
+                    .to_owned(),
+            },
             marker_share_sale.share_sale_type.to_owned(),
         ),
         messages,

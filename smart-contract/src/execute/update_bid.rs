@@ -49,14 +49,14 @@ mod tests {
     use crate::test::error_helpers::{assert_missing_field_error, assert_validation_error_message};
     use crate::test::mock_instantiate::default_instantiate;
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM};
-    use crate::test::mock_scope::DEFAULT_SCOPE_ID;
+    use crate::test::mock_scope::DEFAULT_SCOPE_ADDR;
     use crate::types::core::error::ContractError;
     use crate::types::request::bid_types::bid::Bid;
     use crate::types::request::bid_types::bid_order::BidOrder;
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
     use cosmwasm_std::testing::mock_info;
-    use cosmwasm_std::{coins, BankMsg, Coin, CosmosMsg, Response};
+    use cosmwasm_std::{coins, from_binary, BankMsg, Coin, CosmosMsg, Response};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::ProvenanceMsg;
 
@@ -70,10 +70,11 @@ mod tests {
             Bid::new_coin_trade("bid_id", &coins(100, "base")),
             None,
         )
-        .expect_err("an error should occur when an existing bid does not exist");
+        .expect_err("an error should occur when the target bid does not exist");
         assert!(
             matches!(err, ContractError::StorageError { .. }),
-            "a storage error should occur when an existing bid is not found by id",
+            "a storage error should occur when an existing bid is not found by id, but got: {:?}",
+            err,
         );
     }
 
@@ -177,7 +178,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "quote")),
-            Bid::new_scope_trade("bid_id_2", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id_2", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect("the bid should be created successfully");
@@ -533,7 +534,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(11, "quote")),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect("expected the bid to be created");
@@ -544,7 +545,7 @@ mod tests {
         let response = update_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(111, "quote")),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(descriptor.clone()),
         )
         .expect("the bid update should be successful");
@@ -562,7 +563,7 @@ mod tests {
             "the correct quote should be set on the bid",
         );
         assert_eq!(
-            DEFAULT_SCOPE_ID, collateral.scope_address,
+            DEFAULT_SCOPE_ADDR, collateral.scope_address,
             "the correct scope address should be set on the bid",
         );
     }
@@ -574,7 +575,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "quote")),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect("the bid should be created successfully");
@@ -589,7 +590,7 @@ mod tests {
         let err = update_bid(
             deps.as_mut(),
             mock_info("bidder", &[]),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect_err("an error should occur when no quote funds are provided");
@@ -608,7 +609,7 @@ mod tests {
         let err = update_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "quote")),
-            Bid::new_scope_trade("bid_id_2", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id_2", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect_err("an error should occur when trying to change the bid type");
@@ -624,7 +625,7 @@ mod tests {
         let err = update_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(123, "quote")),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::all::<String>(&[]),
@@ -688,6 +689,16 @@ mod tests {
         assert_eq!(
             expected_descriptor, bid_order.descriptor,
             "the bid order's descriptor should be the expected value",
+        );
+        let data_bid_order = if let Some(ref data) = &response.data {
+            from_binary::<BidOrder>(data)
+                .expect("the response data should deserialize as a bid order")
+        } else {
+            panic!("the response data should be set");
+        };
+        assert_eq!(
+            bid_order, data_bid_order,
+            "the updated bid order should be included in the response data",
         );
         bid_order
     }
