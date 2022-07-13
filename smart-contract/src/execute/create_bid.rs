@@ -2,10 +2,10 @@ use crate::storage::bid_order_storage::{get_bid_order_by_id, insert_bid_order};
 use crate::types::core::error::ContractError;
 use crate::types::request::bid_types::bid::Bid;
 use crate::types::request::request_descriptor::RequestDescriptor;
+use crate::util::cosmos_utilities::get_send_amount;
 use crate::util::create_bid_order_utilities::{
     create_bid_order, BidCreationType, BidOrderCreationResponse,
 };
-use crate::util::cosmos_utilities::get_send_amount;
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::format_coin_display;
 use cosmwasm_std::{to_binary, DepsMut, MessageInfo, Response};
@@ -304,7 +304,7 @@ mod tests {
         match err {
             ContractError::MissingField { field } => {
                 assert_eq!(
-                    "denom", field,
+                    "marker_denom", field,
                     "expected the denom field to be the missing field",
                 );
             }
@@ -391,7 +391,10 @@ mod tests {
         .expect_err("an error should  occur when the denom is blank");
         match err {
             ContractError::MissingField { field } => {
-                assert_eq!("denom", field, "the missing field should be the denom",);
+                assert_eq!(
+                    "marker_denom", field,
+                    "the missing field should be the denom",
+                );
             }
             e => panic!("unexpected error: {:?}", e),
         };

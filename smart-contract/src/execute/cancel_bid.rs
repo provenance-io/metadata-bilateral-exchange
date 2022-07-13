@@ -1,7 +1,6 @@
 use crate::storage::bid_order_storage::{delete_bid_order_by_id, get_bid_order_by_id};
 use crate::storage::contract_info::get_contract_info;
 use crate::types::core::error::ContractError;
-use crate::types::request::bid_types::bid_collateral::BidCollateral;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{to_binary, BankMsg, DepsMut, MessageInfo, Response};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuery};

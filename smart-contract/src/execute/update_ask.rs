@@ -17,6 +17,9 @@ pub fn update_ask(
     descriptor: Option<RequestDescriptor>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let existing_ask_order = get_ask_order_by_id(deps.storage, ask.get_id())?;
+    if info.sender != existing_ask_order.owner {
+        return ContractError::unauthorized().to_err();
+    }
     let AskOrderCreationResponse {
         ask_order,
         messages,

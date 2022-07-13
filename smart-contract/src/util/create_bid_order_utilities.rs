@@ -103,7 +103,7 @@ fn create_marker_trade_collateral(
         return ContractError::missing_field("id").to_err();
     }
     if marker_trade.marker_denom.is_empty() {
-        return ContractError::missing_field("denom").to_err();
+        return ContractError::missing_field("marker_denom").to_err();
     }
     if quote_funds.is_empty() {
         return ContractError::invalid_funds_provided(
@@ -137,7 +137,7 @@ fn create_marker_share_sale_collateral(
         return ContractError::missing_field("id").to_err();
     }
     if marker_share_sale.marker_denom.is_empty() {
-        return ContractError::missing_field("denom").to_err();
+        return ContractError::missing_field("marker_denom").to_err();
     }
     if marker_share_sale.share_count.is_zero() {
         return ContractError::validation_error(&[
