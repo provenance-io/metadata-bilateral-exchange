@@ -44,6 +44,8 @@ import kotlin.test.assertEquals
 
 abstract class ContractIntTest {
     companion object : KLogging() {
+        private const val CLEANUP_PREFIX: String = "[TESTCLEANUP]:"
+
         private var containerIsStarted: Boolean = false
 
         private val container: ProvenanceTestContainer = ProvenanceTestContainer()
@@ -115,29 +117,28 @@ abstract class ContractIntTest {
 
     @BeforeTest
     fun beforeTest() {
-        val formatEntryDisplay: (size: Int) -> String = { size -> if (size != 1) "entries" else "entry" }
         if (createdAsks.isNotEmpty()) {
-            logger.info("Cleaning up ask data: ${createdAsks.size} ${formatEntryDisplay(createdAsks.size)}")
+            logger.info("$CLEANUP_PREFIX Cleaning up ask data: ${entryCountDisplay(createdAsks)}")
             createdAsks.clear()
         }
+        var tokens = mutableListOf<Char>()
         if (createdBids.isNotEmpty()) {
-            logger.info("Cleaning up bid data: ${createdBids.size} ${formatEntryDisplay(createdBids.size)}")
+            logger.info("$CLEANUP_PREFIX Cleaning up bid data: ${entryCountDisplay(createdBids)}")
             createdBids.clear()
         }
     }
 
     @AfterTest
     fun afterTest() {
-        val logPrefix = "[TESTCLEANUP]:"
         createdAsks.values.forEach { createdAsk ->
-            logger.info("$logPrefix Cancelling ask [${createdAsk.askId}]")
+            logger.info("$CLEANUP_PREFIX Cancelling ask [${createdAsk.askId}]")
             bilateralClient.cancelAsk(askId = createdAsk.askId, signer = createdAsk.signer)
-            logger.info("$logPrefix Cancelled ask [${createdAsk.askId}]")
+            logger.info("$CLEANUP_PREFIX Cancelled ask [${createdAsk.askId}]")
         }
         createdBids.values.forEach { createdBid ->
-            logger.info("$logPrefix Cancelling bid [${createdBid.bidId}]")
+            logger.info("$CLEANUP_PREFIX Cancelling bid [${createdBid.bidId}]")
             bilateralClient.cancelBid(bidId = createdBid.bidId, signer = createdBid.signer)
-            logger.info("$logPrefix Cancelled bid [${createdBid.bidId}]")
+            logger.info("$CLEANUP_PREFIX Cancelled bid [${createdBid.bidId}]")
         }
     }
 
@@ -287,6 +288,8 @@ abstract class ContractIntTest {
             bilateralClient.assertBidExists(executeMatch.bidId)
         }
     }
+
+    private fun entryCountDisplay(map: Map<*, *>): String = "${map.size} ${if (map.size == 1) "entry" else "entries"}"
 }
 
 private data class CreatedAsk(
