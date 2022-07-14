@@ -2,6 +2,7 @@ package io.provenance.bilateral.client
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
+import cosmos.base.abci.v1beta1.Abci.TxResponse
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import cosmwasm.wasm.v1.QueryOuterClass
 import cosmwasm.wasm.v1.Tx.MsgExecuteContract
@@ -17,6 +18,7 @@ import io.provenance.bilateral.execute.UpdateBid
 import io.provenance.bilateral.execute.UpdateSettings
 import io.provenance.bilateral.extensions.attribute
 import io.provenance.bilateral.extensions.attributeOrNull
+import io.provenance.bilateral.extensions.responseDataToJsonBytes
 import io.provenance.bilateral.extensions.singleWasmEvent
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.interfaces.ContractQueryMsg
@@ -47,7 +49,6 @@ import io.provenance.client.grpc.Signer
 import io.provenance.client.protobuf.extensions.queryWasm
 import io.provenance.client.protobuf.extensions.toAny
 import io.provenance.client.protobuf.extensions.toTxBody
-import org.bouncycastle.util.encoders.Hex
 import tendermint.abci.Types.Event
 
 class BilateralContractClient private constructor(
@@ -137,7 +138,7 @@ class BilateralContractClient private constructor(
         query = GetContractInfo(),
     )
 
-    fun getContractInfoOrNull(): ContractInfo? = queryContract(
+    fun getContractInfoOrNull(): ContractInfo? = queryContractOrNull(
         query = GetContractInfo(),
     )
 
@@ -384,7 +385,7 @@ class BilateralContractClient private constructor(
         signer: Signer,
         options: BilateralBroadcastOptions,
         funds: List<Coin>,
-    ): Pair<Event, String> {
+    ): Pair<Event, TxResponse> {
         val transactionDescription = executeMsg.toLoggingString()
         logger.info("START: $transactionDescription")
         val msg = generateProtoExecuteMsg(
@@ -405,7 +406,7 @@ class BilateralContractClient private constructor(
             mode = options.broadcastMode,
             gasAdjustment = options.gasAdjustment,
         )
-            .let { response -> response.singleWasmEvent() to response.txResponse.data }
+            .let { response -> response.singleWasmEvent() to response.txResponse }
             .also { logger.info("END: $transactionDescription") }
     }
 
@@ -469,14 +470,9 @@ class BilateralContractClient private constructor(
         typeReference = typeReference,
     ) ?: throw NullContractResultException("Got null response from the Metadata Bilateral Exchange contract for query")
 
-    private inline fun <reified T : Any> deserializeResponseData(data: String): T = try {
-        // TODO: Cosmos (or maybe CosmWasm) is including some garbage protobuf data in front of the json data after
-        // TODO: decoding from hex.  Find a better way to trim off the unneeded data at the ByteArray level versus just
-        // TODO: dropping all characters before the opening JSON brace
-        val dataString = String(Hex.decode(data))
-            .let { dataString -> dataString.drop(dataString.indexOfFirst { it == '{' }) }
-        objectMapper.readValue(dataString, T::class.java)
+    private inline fun <reified T : Any> deserializeResponseData(response: TxResponse): T = try {
+        objectMapper.readValue(response.responseDataToJsonBytes(), T::class.java)
     } catch (e: Exception) {
-        throw ProvenanceEventParsingException("Failed to parse [${T::class.qualifiedName}] from response data", e)
+        throw ProvenanceEventParsingException("Failed to parse [${T::class.qualifiedName}] from response data: ${response.data}", e)
     }
 }
