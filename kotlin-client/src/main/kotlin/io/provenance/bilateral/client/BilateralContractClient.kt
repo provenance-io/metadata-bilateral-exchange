@@ -18,7 +18,7 @@ import io.provenance.bilateral.execute.UpdateBid
 import io.provenance.bilateral.execute.UpdateSettings
 import io.provenance.bilateral.extensions.attribute
 import io.provenance.bilateral.extensions.attributeOrNull
-import io.provenance.bilateral.extensions.responseDataToJsonBytes
+import io.provenance.bilateral.extensions.executeContractDataToJsonBytes
 import io.provenance.bilateral.extensions.singleWasmEvent
 import io.provenance.bilateral.interfaces.ContractExecuteMsg
 import io.provenance.bilateral.interfaces.ContractQueryMsg
@@ -471,7 +471,7 @@ class BilateralContractClient private constructor(
     ) ?: throw NullContractResultException("Got null response from the Metadata Bilateral Exchange contract for query")
 
     private inline fun <reified T : Any> deserializeResponseData(response: TxResponse): T = try {
-        objectMapper.readValue(response.responseDataToJsonBytes(), T::class.java)
+        objectMapper.readValue(response.executeContractDataToJsonBytes(), T::class.java)
     } catch (e: Exception) {
         throw ProvenanceEventParsingException("Failed to parse [${T::class.qualifiedName}] from response data: ${response.data}", e)
     }

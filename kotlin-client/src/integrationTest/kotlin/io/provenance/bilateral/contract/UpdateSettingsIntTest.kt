@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test
 import testconfiguration.accounts.BilateralAccounts
 import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.newCoins
-import testconfiguration.testcontainers.ContractIntTest
+import testconfiguration.ContractIntTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 

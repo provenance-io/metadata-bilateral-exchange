@@ -11,19 +11,14 @@ import io.provenance.bilateral.models.AttributeRequirement
 import io.provenance.bilateral.models.AttributeRequirementType
 import io.provenance.bilateral.models.RequestDescriptor
 import org.junit.jupiter.api.Test
-import testconfiguration.accounts.BilateralAccounts
 import testconfiguration.extensions.getBalance
 import testconfiguration.extensions.getBalanceMap
 import testconfiguration.extensions.testGetCoinTrade
-import testconfiguration.functions.assertAskExists
-import testconfiguration.functions.assertAskIsDeleted
-import testconfiguration.functions.assertBidExists
-import testconfiguration.functions.assertBidIsDeleted
 import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.giveTestDenom
 import testconfiguration.functions.newCoin
 import testconfiguration.functions.newCoins
-import testconfiguration.testcontainers.ContractIntTest
+import testconfiguration.ContractIntTest
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -39,105 +34,62 @@ class CoinTradeIntTest : ContractIntTest() {
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, askerDenom),
-            receiverAddress = BilateralAccounts.askerAccount.address(),
+            receiverAddress = asker.address(),
         )
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, bidderDenom),
-            receiverAddress = BilateralAccounts.bidderAccount.address(),
+            receiverAddress = bidder.address(),
         )
         val quote = newCoins(1000, bidderDenom)
         val base = newCoins(1000, askerDenom)
         val askUuid = UUID.randomUUID()
-        val createAsk = CreateAsk(
-            ask = CoinTradeAsk(
-                id = askUuid.toString(),
-                base = base,
-                quote = quote,
-            ),
-            descriptor = RequestDescriptor(
-                description = "Example description",
-                effectiveTime = OffsetDateTime.now(),
-                attributeRequirement = AttributeRequirement.new(listOf("a.pb", "b.pb"), AttributeRequirementType.NONE),
-            )
-        )
-        val createAskResponse = assertSucceeds("Ask should be created without error") {
-            bilateralClient.createAsk(
-                createAsk = createAsk,
-                signer = BilateralAccounts.askerAccount,
+        assertSucceeds("Ask should be created without error") {
+            createAsk(
+                CreateAsk(
+                    ask = CoinTradeAsk(
+                        id = askUuid.toString(),
+                        base = base,
+                        quote = quote,
+                    ),
+                    descriptor = RequestDescriptor(
+                        description = "Example description",
+                        effectiveTime = OffsetDateTime.now(),
+                        attributeRequirement = AttributeRequirement.new(listOf("a.pb", "b.pb"), AttributeRequirementType.NONE),
+                    )
+                )
             )
         }
         assertEquals(
-            expected = askUuid.toString(),
-            actual = createAskResponse.askId,
-            message = "Expected the ask response to include the correct ask id",
-        )
-        assertEquals(
-            expected = bilateralClient.getAsk(createAskResponse.askId),
-            actual = createAskResponse.askOrder,
-            message = "Expected the returned ask order to be the value stored in the contract",
-        )
-        bilateralClient.assertAskExists(askUuid.toString())
-        assertEquals(
             expected = 0,
-            actual = pbClient.getBalance(BilateralAccounts.askerAccount.address(), askerDenom),
+            actual = pbClient.getBalance(asker.address(), askerDenom),
             message = "The asker account's entire coin balance should be held in escrow after creating an ask",
         )
         val bidUuid = UUID.randomUUID()
-        val createBid = CreateBid(
-            bid = CoinTradeBid(
-                id = bidUuid.toString(),
-                base = base,
-                quote = quote,
-            ),
-            descriptor = RequestDescriptor(
-                description = "Example description",
-                effectiveTime = OffsetDateTime.now(),
-                attributeRequirement = AttributeRequirement.new(listOf("c.pb"), AttributeRequirementType.NONE),
-            ),
-        )
-        val createBidResponse = assertSucceeds("Bid should be created without error") {
-            bilateralClient.createBid(
-                createBid = createBid,
-                signer = BilateralAccounts.bidderAccount,
+        assertSucceeds("Bid should be created without error") {
+            createBid(
+                createBid = CreateBid(
+                    bid = CoinTradeBid(
+                        id = bidUuid.toString(),
+                        base = base,
+                        quote = quote,
+                    ),
+                    descriptor = RequestDescriptor(
+                        description = "Example description",
+                        effectiveTime = OffsetDateTime.now(),
+                        attributeRequirement = AttributeRequirement.new(listOf("c.pb"), AttributeRequirementType.NONE),
+                    ),
+                )
             )
         }
-        assertEquals(
-            expected = bidUuid.toString(),
-            actual = createBidResponse.bidId,
-            message = "Expected the response for the bid order to include the correct id",
-        )
-        assertEquals(
-            expected = bilateralClient.getBid(createBidResponse.bidId),
-            actual = createBidResponse.bidOrder,
-            message = "Expected the returned bid order to be the value stored in the contract",
-        )
-        bilateralClient.assertBidExists(bidUuid.toString())
         assertEquals(
             expected = 0,
-            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
             message = "The bidder account's entire coin balance should be held in escrow after creating a bid",
         )
-        val executeMatch = ExecuteMatch(
-            askId = askUuid.toString(),
-            bidId = bidUuid.toString(),
-        )
         val executeMatchResponse = assertSucceeds("Match should be executed without error") {
-            bilateralClient.executeMatch(
-                executeMatch = executeMatch,
-                signer = BilateralAccounts.adminAccount,
-            )
+            executeMatch(executeMatch = ExecuteMatch(askId = askUuid.toString(), bidId = bidUuid.toString()))
         }
-        assertEquals(
-            expected = askUuid.toString(),
-            actual = executeMatchResponse.askId,
-            message = "Expected the ask id in the match response to be correct",
-        )
-        assertEquals(
-            expected = bidUuid.toString(),
-            actual = executeMatchResponse.bidId,
-            message = "Expected the bid id in the match response to be correct",
-        )
         assertTrue(
             actual = executeMatchResponse.askDeleted,
             message = "Expected the response to indicate that the ask was deleted",
@@ -146,9 +98,7 @@ class CoinTradeIntTest : ContractIntTest() {
             actual = executeMatchResponse.bidDeleted,
             message = "Expected the response to indicate that the bid was deleted",
         )
-        bilateralClient.assertAskIsDeleted(askUuid.toString())
-        bilateralClient.assertBidIsDeleted(bidUuid.toString())
-        val askerBalances = pbClient.getBalanceMap(BilateralAccounts.askerAccount.address())
+        val askerBalances = pbClient.getBalanceMap(asker.address())
         assertNull(
             actual = askerBalances[askerDenom],
             message = "The asker should no longer have any [$askerDenom] because it should have been sent to the bidder",
@@ -158,7 +108,7 @@ class CoinTradeIntTest : ContractIntTest() {
             actual = askerBalances[bidderDenom],
             message = "The asker should have received all of the bidder's [$bidderDenom]",
         )
-        val bidderBalances = pbClient.getBalanceMap(BilateralAccounts.bidderAccount.address())
+        val bidderBalances = pbClient.getBalanceMap(bidder.address())
         assertNull(
             actual = bidderBalances[bidderDenom],
             message = "The bidder should no longer have any [$bidderDenom] because it should have been sent to the asker",
@@ -177,84 +127,70 @@ class CoinTradeIntTest : ContractIntTest() {
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, askerDenom),
-            receiverAddress = BilateralAccounts.askerAccount.address(),
+            receiverAddress = asker.address(),
         )
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, bidderDenom),
-            receiverAddress = BilateralAccounts.bidderAccount.address(),
+            receiverAddress = bidder.address(),
         )
         val askQuote = newCoins(1000, "someotherthing")
         val bidQuote = newCoins(1000, bidderDenom)
         val base = newCoins(1000, askerDenom)
         val askUuid = UUID.randomUUID()
-        val createAsk = CreateAsk(
-            ask = CoinTradeAsk(
-                id = askUuid.toString(),
-                base = base,
-                quote = askQuote,
-            ),
-            descriptor = RequestDescriptor(
-                description = "Example description",
-                effectiveTime = OffsetDateTime.now(),
-                attributeRequirement = AttributeRequirement.new(listOf("a.pb", "b.pb"), AttributeRequirementType.NONE),
-            ),
-        )
         assertSucceeds("Ask should be created without error") {
-            bilateralClient.createAsk(
-                createAsk = createAsk,
-                signer = BilateralAccounts.askerAccount,
+            createAsk(
+                createAsk = CreateAsk(
+                    ask = CoinTradeAsk(
+                        id = askUuid.toString(),
+                        base = base,
+                        quote = askQuote,
+                    ),
+                    descriptor = RequestDescriptor(
+                        description = "Example description",
+                        effectiveTime = OffsetDateTime.now(),
+                        attributeRequirement = AttributeRequirement.new(listOf("a.pb", "b.pb"), AttributeRequirementType.NONE),
+                    ),
+                )
             )
         }
-        bilateralClient.assertAskExists(askUuid.toString())
         assertEquals(
             expected = 0,
-            actual = pbClient.getBalance(BilateralAccounts.askerAccount.address(), askerDenom),
+            actual = pbClient.getBalance(asker.address(), askerDenom),
             message = "The asker account's entire coin balance should be held in escrow after creating an ask",
         )
         val bidUuid = UUID.randomUUID()
-        val createBid = CreateBid(
-            bid = CoinTradeBid(
-                id = bidUuid.toString(),
-                base = base,
-                quote = bidQuote,
-            ),
-            descriptor = RequestDescriptor(
-                description = "Example description",
-                effectiveTime = OffsetDateTime.now(),
-                attributeRequirement = AttributeRequirement.new(listOf("c.pb"), AttributeRequirementType.NONE),
-            ),
-        )
         assertSucceeds("Bid should be created without error") {
-            bilateralClient.createBid(
-                createBid = createBid,
-                signer = BilateralAccounts.bidderAccount,
+            createBid(
+                createBid = CreateBid(
+                    bid = CoinTradeBid(
+                        id = bidUuid.toString(),
+                        base = base,
+                        quote = bidQuote,
+                    ),
+                    descriptor = RequestDescriptor(
+                        description = "Example description",
+                        effectiveTime = OffsetDateTime.now(),
+                        attributeRequirement = AttributeRequirement.new(listOf("c.pb"), AttributeRequirementType.NONE),
+                    ),
+                )
             )
         }
-        bilateralClient.assertBidExists(bidUuid.toString())
         assertEquals(
             expected = 0,
-            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
             message = "The bidder account's entire coin balance should be held in escrow after creating a bid",
         )
         val executeMatch = ExecuteMatch(askUuid.toString(), bidUuid.toString())
         assertFails("Match should fail because the quotes don't match") {
-            bilateralClient.executeMatch(
-                executeMatch = executeMatch,
-                signer = BilateralAccounts.adminAccount,
-            )
+            executeMatch(executeMatch = executeMatch)
         }
-        bilateralClient.assertAskExists(askUuid.toString())
-        bilateralClient.assertBidExists(bidUuid.toString())
-        assertSucceeds("Match should succeed because it was manually allowed") {
-            bilateralClient.executeMatch(
-                executeMatch = executeMatch.copy(acceptMismatchedBids = true),
-                signer = BilateralAccounts.adminAccount,
-            )
+        val matchResponse = assertSucceeds("Match should succeed because it was manually allowed") {
+            executeMatch(executeMatch = executeMatch.copy(acceptMismatchedBids = true))
         }
-        bilateralClient.assertAskIsDeleted(askUuid.toString())
-        bilateralClient.assertBidIsDeleted(bidUuid.toString())
-        val askerBalances = pbClient.getBalanceMap(BilateralAccounts.askerAccount.address())
+        assertTrue(actual = matchResponse.askDeleted, message = "The ask should be deleted")
+        assertTrue(actual = matchResponse.bidDeleted, message = "The bid should be deleted")
+        val askerBalances = pbClient.getBalanceMap(asker.address())
         assertNull(
             actual = askerBalances[askerDenom],
             message = "The asker should no longer have any [$askerDenom] because it should have been sent to the bidder",
@@ -264,7 +200,7 @@ class CoinTradeIntTest : ContractIntTest() {
             actual = askerBalances[bidderDenom],
             message = "The asker should have received all of the bidder's [$bidderDenom]",
         )
-        val bidderBalances = pbClient.getBalanceMap(BilateralAccounts.bidderAccount.address())
+        val bidderBalances = pbClient.getBalanceMap(bidder.address())
         assertNull(
             actual = bidderBalances[bidderDenom],
             message = "The bidder should no longer have any [$bidderDenom] because it should have been sent to the asker",
@@ -282,43 +218,32 @@ class CoinTradeIntTest : ContractIntTest() {
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(amount = 100, denom = askerDenom),
-            receiverAddress = BilateralAccounts.askerAccount.address(),
+            receiverAddress = asker.address(),
         )
         val askUuid = UUID.randomUUID()
-        bilateralClient.createAsk(
+        val createResponse = createAsk(
             createAsk = CreateAsk(
                 ask = CoinTradeAsk(
                     id = askUuid.toString(),
                     quote = newCoins(150, "nhash"),
                     base = newCoins(100, askerDenom),
                 ),
-            ),
-            signer = BilateralAccounts.askerAccount,
+            )
         )
-        val askOrder = bilateralClient.assertAskExists(askUuid.toString())
         assertEquals(
             expected = 0L,
-            actual = pbClient.getBalance(BilateralAccounts.askerAccount.address(), askerDenom),
+            actual = pbClient.getBalance(asker.address(), askerDenom),
             message = "The base should be withdrawn from the asker's account",
         )
-        val response = bilateralClient.cancelAsk(
-            askId = askUuid.toString(),
-            signer = BilateralAccounts.askerAccount,
-        )
+        val cancelResponse = cancelAsk(askUuid.toString())
         assertEquals(
-            expected = askUuid.toString(),
-            actual = response.askId,
-            message = "The correct ask id should be returned in the response",
-        )
-        assertEquals(
-            expected = askOrder,
-            actual = response.cancelledAskOrder,
+            expected = createResponse.askOrder,
+            actual = cancelResponse.cancelledAskOrder,
             message = "The cancelled ask order should be included in the response",
         )
-        bilateralClient.assertAskIsDeleted(askUuid.toString())
         assertEquals(
             expected = 100L,
-            actual = pbClient.getBalance(BilateralAccounts.askerAccount.address(), askerDenom),
+            actual = pbClient.getBalance(asker.address(), askerDenom),
             message = "After cancelling an ask, the base should be returned to the asker",
         )
     }
@@ -329,10 +254,10 @@ class CoinTradeIntTest : ContractIntTest() {
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(amount = 100, denom = bidderDenom),
-            receiverAddress = BilateralAccounts.bidderAccount.address(),
+            receiverAddress = bidder.address(),
         )
         val bidUuid = UUID.randomUUID()
-        bilateralClient.createBid(
+        val createResponse = createBid(
             createBid = CreateBid(
                 bid = CoinTradeBid(
                     id = bidUuid.toString(),
@@ -340,32 +265,21 @@ class CoinTradeIntTest : ContractIntTest() {
                     base = newCoins(150, "nhash"),
                 ),
             ),
-            signer = BilateralAccounts.bidderAccount
         )
-        val bidOrder = bilateralClient.assertBidExists(bidUuid.toString())
         assertEquals(
             expected = 0L,
-            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
             message = "The quote should be withdrawn from the bidder's account",
         )
-        val response = bilateralClient.cancelBid(
-            bidId = bidUuid.toString(),
-            signer = BilateralAccounts.bidderAccount,
-        )
+        val cancelResponse = cancelBid(bidId = bidUuid.toString())
         assertEquals(
-            expected = bidUuid.toString(),
-            actual = response.bidId,
-            message = "The correct bid id should be returned in the response",
-        )
-        assertEquals(
-            expected = bidOrder,
-            actual = response.cancelledBidOrder,
+            expected = createResponse.bidOrder,
+            actual = cancelResponse.cancelledBidOrder,
             message = "The cancelled bid order should be included in the response",
         )
-        bilateralClient.assertBidIsDeleted(bidUuid.toString())
         assertEquals(
             expected = 100L,
-            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidderDenom),
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
             message = "After canceling a bid, the quote should be returned to the bidder",
         )
     }
@@ -378,16 +292,16 @@ class CoinTradeIntTest : ContractIntTest() {
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, baseDenom),
-            receiverAddress = BilateralAccounts.askerAccount.address(),
+            receiverAddress = asker.address(),
         )
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, base2Denom),
-            receiverAddress = BilateralAccounts.askerAccount.address(),
+            receiverAddress = asker.address(),
         )
         val askUuid = UUID.randomUUID()
         assertSucceeds("Initial ask should be created without error") {
-            bilateralClient.createAsk(
+            createAsk(
                 createAsk = CreateAsk(
                     ask = CoinTradeAsk(
                         id = askUuid.toString(),
@@ -395,17 +309,15 @@ class CoinTradeIntTest : ContractIntTest() {
                         quote = newCoins(100, quoteDenom),
                     ),
                 ),
-                signer = BilateralAccounts.askerAccount,
             )
         }
-        bilateralClient.assertAskExists(askUuid.toString())
         assertEquals(
             expected = 900,
-            actual = pbClient.getBalance(BilateralAccounts.askerAccount.address(), baseDenom),
+            actual = pbClient.getBalance(asker.address(), baseDenom),
             message = "The asker's account should have been debited of its base denom",
         )
-        val response = assertSucceeds("Update ask should succeed without error") {
-            bilateralClient.updateAsk(
+        val updateResponse = assertSucceeds("Update ask should succeed without error") {
+            updateAsk(
                 updateAsk = UpdateAsk(
                     ask = CoinTradeAsk(
                         id = askUuid.toString(),
@@ -413,21 +325,9 @@ class CoinTradeIntTest : ContractIntTest() {
                         quote = newCoins(200, quoteDenom),
                     )
                 ),
-                signer = BilateralAccounts.askerAccount,
             )
         }
-        bilateralClient.assertAskExists(askUuid.toString())
-        assertEquals(
-            expected = askUuid.toString(),
-            actual = response.askId,
-            message = "The update response should include the correct ask id",
-        )
-        assertEquals(
-            expected = bilateralClient.getAsk(response.askId),
-            actual = response.updatedAskOrder,
-            message = "The update response should include the updated ask order",
-        )
-        val updatedCollateral = response.updatedAskOrder.testGetCoinTrade()
+        val updatedCollateral = updateResponse.updatedAskOrder.testGetCoinTrade()
         assertEquals(
             expected = newCoins(600, base2Denom),
             actual = updatedCollateral.base,
@@ -440,16 +340,25 @@ class CoinTradeIntTest : ContractIntTest() {
         )
         assertEquals(
             expected = 1000,
-            actual = pbClient.getBalance(BilateralAccounts.askerAccount.address(), baseDenom),
+            actual = pbClient.getBalance(asker.address(), baseDenom),
             message = "The asker's base denom should have been refunded from the initial ask, restoring their balance to max",
         )
         assertEquals(
             expected = 400,
-            actual = pbClient.getBalance(BilateralAccounts.askerAccount.address(), base2Denom),
+            actual = pbClient.getBalance(asker.address(), base2Denom),
             message = "The asker's account should have been debited of its base2 denom",
         )
-        bilateralClient.cancelAsk(askUuid.toString(), BilateralAccounts.askerAccount)
-        bilateralClient.assertAskIsDeleted(askUuid.toString())
+        val cancelResponse = cancelAsk(askUuid.toString())
+        assertEquals(
+            expected = updateResponse.updatedAskOrder,
+            actual = cancelResponse.cancelledAskOrder,
+            message = "The cancel response should include the cancelled ask order",
+        )
+        assertEquals(
+            expected = 1000,
+            actual = pbClient.getBalance(asker.address(), base2Denom),
+            message = "After cancelling the updated order, the asker should have all of its base2Denom amount from a refund",
+        )
     }
 
     @Test
@@ -460,16 +369,16 @@ class CoinTradeIntTest : ContractIntTest() {
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, quoteDenom),
-            receiverAddress = BilateralAccounts.bidderAccount.address(),
+            receiverAddress = bidder.address(),
         )
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, quote2Denom),
-            receiverAddress = BilateralAccounts.bidderAccount.address(),
+            receiverAddress = bidder.address(),
         )
         val bidUuid = UUID.randomUUID()
         assertSucceeds("Initial ask should be created without error") {
-            bilateralClient.createBid(
+            createBid(
                 createBid = CreateBid(
                     bid = CoinTradeBid(
                         id = bidUuid.toString(),
@@ -477,17 +386,15 @@ class CoinTradeIntTest : ContractIntTest() {
                         base = newCoins(100, baseDenom),
                     ),
                 ),
-                signer = BilateralAccounts.bidderAccount,
             )
         }
-        bilateralClient.assertBidExists(bidUuid.toString())
         assertEquals(
             expected = 900,
-            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), quoteDenom),
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
             message = "The bidder's account should have been debited of its quote denom",
         )
-        val response = assertSucceeds("Update bid should succeed without error") {
-            bilateralClient.updateBid(
+        val updateResponse = assertSucceeds("Update bid should succeed without error") {
+            updateBid(
                 updateBid = UpdateBid(
                     bid = CoinTradeBid(
                         id = bidUuid.toString(),
@@ -495,21 +402,9 @@ class CoinTradeIntTest : ContractIntTest() {
                         base = newCoins(200, baseDenom),
                     )
                 ),
-                signer = BilateralAccounts.bidderAccount,
             )
         }
-        bilateralClient.assertBidExists(bidUuid.toString())
-        assertEquals(
-            expected = bidUuid.toString(),
-            actual = response.bidId,
-            message = "The update response should include the correct bid id",
-        )
-        assertEquals(
-            expected = bilateralClient.getBid(response.bidId),
-            actual = response.updatedBidOrder,
-            message = "The update response should include the correct bid order",
-        )
-        val updatedCollateral = response.updatedBidOrder.testGetCoinTrade()
+        val updatedCollateral = updateResponse.updatedBidOrder.testGetCoinTrade()
         assertEquals(
             expected = newCoins(600, quote2Denom),
             actual = updatedCollateral.quote,
@@ -522,15 +417,24 @@ class CoinTradeIntTest : ContractIntTest() {
         )
         assertEquals(
             expected = 1000,
-            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), quoteDenom),
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
             message = "The bidder's quote denom should have been refunded from the initial bid, restoring their balance to max",
         )
         assertEquals(
             expected = 400,
-            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), quote2Denom),
+            actual = pbClient.getBalance(bidder.address(), quote2Denom),
             message = "The bidder's account should have been debited of its quote2 denom",
         )
-        bilateralClient.cancelBid(bidUuid.toString(), BilateralAccounts.bidderAccount)
-        bilateralClient.assertBidIsDeleted(bidUuid.toString())
+        val cancelResponse = cancelBid(bidUuid.toString(), bidder)
+        assertEquals(
+            expected = updateResponse.updatedBidOrder,
+            actual = cancelResponse.cancelledBidOrder,
+            message = "The cancel response should include the cancelled bid order",
+        )
+        assertEquals(
+            expected = 1000,
+            actual = pbClient.getBalance(bidder.address(), quote2Denom),
+            message = "After cancelling the updated order, the bidder should have all of its quote2Denom amount from a refund",
+        )
     }
 }

@@ -5,13 +5,8 @@ import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import org.junit.jupiter.api.Test
-import testconfiguration.accounts.BilateralAccounts
-import testconfiguration.functions.assertAskExists
-import testconfiguration.functions.assertAskIsDeleted
-import testconfiguration.functions.assertBidExists
-import testconfiguration.functions.assertBidIsDeleted
 import testconfiguration.functions.newCoins
-import testconfiguration.testcontainers.ContractIntTest
+import testconfiguration.ContractIntTest
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -20,7 +15,7 @@ class MatchReportIntTest : ContractIntTest() {
     @Test
     fun testSimpleMatchReport() {
         val askId = UUID.randomUUID().toString()
-        bilateralClient.createAsk(
+        createAsk(
             createAsk = CreateAsk(
                 ask = CoinTradeAsk(
                     id = askId,
@@ -28,11 +23,9 @@ class MatchReportIntTest : ContractIntTest() {
                     base = newCoins(100, "nhash"),
                 ),
             ),
-            signer = BilateralAccounts.askerAccount,
         )
-        bilateralClient.assertAskExists(askId)
         val bidId = UUID.randomUUID().toString()
-        bilateralClient.createBid(
+        createBid(
             createBid = CreateBid(
                 bid = CoinTradeBid(
                     id = bidId,
@@ -40,9 +33,7 @@ class MatchReportIntTest : ContractIntTest() {
                     base = newCoins(100, "nhash"),
                 ),
             ),
-            signer = BilateralAccounts.bidderAccount,
         )
-        bilateralClient.assertBidExists(bidId)
         val matchReport = bilateralClient.getMatchReport(askId, bidId)
         assertEquals(
             expected = askId,
@@ -74,10 +65,5 @@ class MatchReportIntTest : ContractIntTest() {
             actual = matchReport.errorMessages.isEmpty(),
             message = "The report should not include any error messages, but found: ${matchReport.errorMessages}",
         )
-        // Cleanup outstanding ask and bid
-        bilateralClient.cancelAsk(askId, BilateralAccounts.askerAccount)
-        bilateralClient.assertAskIsDeleted(askId)
-        bilateralClient.cancelBid(bidId, BilateralAccounts.bidderAccount)
-        bilateralClient.assertBidIsDeleted(bidId)
     }
 }
