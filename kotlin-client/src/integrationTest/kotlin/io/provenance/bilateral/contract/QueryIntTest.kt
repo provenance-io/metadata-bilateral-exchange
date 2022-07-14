@@ -1,5 +1,7 @@
 package io.provenance.bilateral.contract
 
+import io.provenance.bilateral.execute.Ask.CoinTradeAsk
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import org.junit.jupiter.api.Test
@@ -24,19 +26,20 @@ class QueryIntTest : ContractIntTest() {
         bilateralClient.getAskOrNull("some id or something").assertNull("The OrNull variant of getAsk should return null for a missing id")
         bilateralClient.getAskByCollateralIdOrNull("fakeid").assertNull("The OrNull variant of getAskByCollateralId should return null for a missing id")
         val coinTradeAskUuid = UUID.randomUUID()
-        val ask = CreateAsk.newCoinTrade(
-            id = coinTradeAskUuid.toString(),
-            quote = newCoins(100, "nhash"),
-            base = newCoins(150, "nhash"),
-            descriptor = null,
+        val createAsk = CreateAsk(
+            ask = CoinTradeAsk(
+                id = coinTradeAskUuid.toString(),
+                quote = newCoins(100, "nhash"),
+                base = newCoins(150, "nhash"),
+            ),
         )
-        bilateralClient.createAsk(ask, BilateralAccounts.askerAccount)
-        bilateralClient.assertAskExists(ask.getId())
-        bilateralClient.getAskOrNull(ask.getId()).assertNotNull("Ask should exist when fetched by nullable request")
+        bilateralClient.createAsk(createAsk, BilateralAccounts.askerAccount)
+        bilateralClient.assertAskExists(createAsk.ask.mapToId())
+        bilateralClient.getAskOrNull(createAsk.ask.mapToId()).assertNotNull("Ask should exist when fetched by nullable request")
         assertSucceeds("Expected the ask to be available by collateral id") { bilateralClient.getAskByCollateralId(coinTradeAskUuid.toString()) }
         bilateralClient.getAskByCollateralIdOrNull(coinTradeAskUuid.toString()).assertNotNull("ask should not be null when fetching by collateral id")
-        bilateralClient.cancelAsk(ask.getId(), BilateralAccounts.askerAccount)
-        bilateralClient.assertAskIsDeleted(ask.getId())
+        bilateralClient.cancelAsk(createAsk.ask.mapToId(), BilateralAccounts.askerAccount)
+        bilateralClient.assertAskIsDeleted(createAsk.ask.mapToId())
     }
 
     @Test
@@ -44,16 +47,17 @@ class QueryIntTest : ContractIntTest() {
         assertFails("A missing id should cause an exception for getBid") { bilateralClient.getBid("some fake bid") }
         bilateralClient.getBidOrNull("some id or whatever").assertNull("The OrNull variant of getBid should return null for a missing id")
         val coinTradeBidUuid = UUID.randomUUID()
-        val bid = CreateBid.newCoinTrade(
-            id = coinTradeBidUuid.toString(),
-            quote = newCoins(100, "nhash"),
-            base = newCoins(150, "nhash"),
-            descriptor = null,
+        val createBid = CreateBid(
+            bid = CoinTradeBid(
+                id = coinTradeBidUuid.toString(),
+                quote = newCoins(100, "nhash"),
+                base = newCoins(150, "nhash"),
+            ),
         )
-        bilateralClient.createBid(bid, BilateralAccounts.bidderAccount)
-        bilateralClient.assertBidExists(bid.getId())
-        bilateralClient.getBidOrNull(bid.getId()).assertNotNull("Bid should exist when fetched by nullable request")
-        bilateralClient.cancelBid(bid.getId(), BilateralAccounts.bidderAccount)
-        bilateralClient.assertBidIsDeleted(bid.getId())
+        bilateralClient.createBid(createBid, BilateralAccounts.bidderAccount)
+        bilateralClient.assertBidExists(createBid.bid.mapToId())
+        bilateralClient.getBidOrNull(createBid.bid.mapToId()).assertNotNull("Bid should exist when fetched by nullable request")
+        bilateralClient.cancelBid(createBid.bid.mapToId(), BilateralAccounts.bidderAccount)
+        bilateralClient.assertBidIsDeleted(createBid.bid.mapToId())
     }
 }

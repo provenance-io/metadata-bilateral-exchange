@@ -27,6 +27,9 @@ pub enum ContractError {
     #[error("Invalid type encountered: {explanation}")]
     InvalidType { explanation: String },
 
+    #[error("Invalid update: {explanation}")]
+    InvalidUpdate { explanation: String },
+
     #[error("Missing field: {field:?}")]
     MissingField { field: String },
 
@@ -89,6 +92,12 @@ impl ContractError {
 
     pub fn invalid_type<S: Into<String>>(explanation: S) -> ContractError {
         ContractError::InvalidType {
+            explanation: explanation.into(),
+        }
+    }
+
+    pub fn invalid_update<S: Into<String>>(explanation: S) -> ContractError {
+        ContractError::InvalidUpdate {
             explanation: explanation.into(),
         }
     }

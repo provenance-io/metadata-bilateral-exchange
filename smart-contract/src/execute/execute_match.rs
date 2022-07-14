@@ -103,16 +103,15 @@ pub fn execute_match(
         .add_attribute("action", "execute")
         .add_attribute("ask_id", &ask_order.id)
         .add_attribute("bid_id", &bid_order.id)
+        .add_attribute("ask_deleted", execute_result.ask_deleted.to_string())
+        .add_attribute("bid_deleted", execute_result.bid_deleted.to_string())
         .to_ok()
 }
 
 struct ExecuteResults {
     pub messages: Vec<CosmosMsg<ProvenanceMsg>>,
-}
-impl ExecuteResults {
-    fn new(messages: Vec<CosmosMsg<ProvenanceMsg>>) -> Self {
-        Self { messages }
-    }
+    pub ask_deleted: bool,
+    pub bid_deleted: bool,
 }
 
 fn execute_coin_trade(
@@ -125,16 +124,20 @@ fn execute_coin_trade(
     // Remove ask and bid - this transaction has concluded
     delete_ask_order_by_id(deps.storage, &ask_order.id)?;
     delete_bid_order_by_id(deps.storage, &bid_order.id)?;
-    ExecuteResults::new(vec![
-        CosmosMsg::Bank(BankMsg::Send {
-            to_address: ask_order.owner.to_string(),
-            amount: bid_collateral.quote.to_owned(),
-        }),
-        CosmosMsg::Bank(BankMsg::Send {
-            to_address: bid_order.owner.to_string(),
-            amount: ask_collateral.base.to_owned(),
-        }),
-    ])
+    ExecuteResults {
+        messages: vec![
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: ask_order.owner.to_string(),
+                amount: bid_collateral.quote.to_owned(),
+            }),
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: bid_order.owner.to_string(),
+                amount: ask_collateral.base.to_owned(),
+            }),
+        ],
+        ask_deleted: true,
+        bid_deleted: true,
+    }
     .to_ok()
 }
 
@@ -179,7 +182,12 @@ fn execute_marker_trade(
     // Remove ask and bid - this transaction has concluded
     delete_ask_order_by_id(deps.storage, &ask_order.id)?;
     delete_bid_order_by_id(deps.storage, &bid_order.id)?;
-    ExecuteResults::new(messages).to_ok()
+    ExecuteResults {
+        messages,
+        ask_deleted: true,
+        bid_deleted: true,
+    }
+    .to_ok()
 }
 
 fn execute_marker_share_sale(
@@ -214,9 +222,12 @@ fn execute_marker_share_sale(
         delete_ask_order_by_id(deps.storage, &ask_order.id)?;
         ().to_ok()
     };
-    match ask_collateral.sale_type {
+    let ask_deleted = match ask_collateral.sale_type {
         // Single transaction sales should always terminate immediately after the sale completes
-        ShareSaleType::SingleTransaction => terminate_sale()?,
+        ShareSaleType::SingleTransaction => {
+            terminate_sale()?;
+            true
+        }
         ShareSaleType::MultipleTransactions => {
             // Validation will prevent this value from ever becoming less than zero from the sale,
             // so this is a safe operation
@@ -225,6 +236,7 @@ fn execute_marker_share_sale(
             // If all listed shares are now sold, terminate the sale
             if shares_remaining_after_sale == 0 {
                 terminate_sale()?;
+                true
             } else {
                 let mut ask_order = ask_order.to_owned();
                 let mut ask_collateral = ask_collateral.to_owned();
@@ -232,12 +244,18 @@ fn execute_marker_share_sale(
                 ask_order.collateral = AskCollateral::MarkerShareSale(ask_collateral);
                 // Replace the ask order in storage with an updated remaining_shares value
                 update_ask_order(deps.storage, &ask_order)?;
+                false
             }
         }
-    }
+    };
     // Regardless of sale type scenario, the bid is always deleted after successful execution
     delete_bid_order_by_id(deps.storage, &bid_order.id)?;
-    ExecuteResults::new(messages).to_ok()
+    ExecuteResults {
+        messages,
+        ask_deleted,
+        bid_deleted: true,
+    }
+    .to_ok()
 }
 
 fn execute_scope_trade(
@@ -262,7 +280,12 @@ fn execute_scope_trade(
     // Remove the ask and bid orders now that the trade has been finalized
     delete_ask_order_by_id(deps.storage, &ask_order.id)?;
     delete_bid_order_by_id(deps.storage, &bid_order.id)?;
-    ExecuteResults::new(messages).to_ok()
+    ExecuteResults {
+        messages,
+        ask_deleted: true,
+        bid_deleted: true,
+    }
+    .to_ok()
 }
 
 #[cfg(test)]
@@ -276,7 +299,7 @@ mod tests {
     use crate::test::error_helpers::assert_validation_error_message;
     use crate::test::mock_instantiate::{default_instantiate, DEFAULT_ADMIN_ADDRESS};
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_DENOM, DEFAULT_MARKER_HOLDINGS};
-    use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ID};
+    use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ADDR};
     use crate::test::request_helpers::{mock_ask_order, mock_bid_order, mock_bid_scope_trade};
     use crate::types::core::error::ContractError;
     use crate::types::request::ask_types::ask::Ask;
@@ -369,7 +392,7 @@ mod tests {
             }
             e => panic!("unexpected error: {:?}", e),
         };
-        let bid_order = mock_bid_order(mock_bid_scope_trade(DEFAULT_SCOPE_ID, &[]));
+        let bid_order = mock_bid_order(mock_bid_scope_trade(DEFAULT_SCOPE_ADDR, &[]));
         insert_bid_order(deps.as_mut().storage, &bid_order)
             .expect("expected bid order insert to succeed");
         let err = execute_match(
@@ -518,7 +541,7 @@ mod tests {
         response: &Response<ProvenanceMsg>,
     ) {
         assert_eq!(
-            3,
+            5,
             response.attributes.len(),
             "the correct number of attributes should be produced in the response",
         );
@@ -536,6 +559,16 @@ mod tests {
             "bid_id",
             single_attribute_for_key(response, "bid_id"),
             "the correct bid_id attribute value should be produced",
+        );
+        assert_eq!(
+            "true",
+            single_attribute_for_key(response, "ask_deleted"),
+            "the correct ask_deleted value should be produced",
+        );
+        assert_eq!(
+            "true",
+            single_attribute_for_key(response, "bid_deleted"),
+            "the correct bid_deleted value should be produced",
         );
         get_ask_order_by_id(storage, "ask_id").expect_err("ask should be missing from storage");
         get_bid_order_by_id(storage, "bid_id").expect_err("bid should be missing from storage");
@@ -918,7 +951,7 @@ mod tests {
         )
         .expect("the match should execute successfully");
         assert_eq!(
-            3,
+            5,
             response.attributes.len(),
             "the correct number of attributes should be produced in the response",
         );
@@ -936,6 +969,16 @@ mod tests {
             "bid_id_1",
             single_attribute_for_key(&response, "bid_id"),
             "the correct bid_id attribute value should be produced",
+        );
+        assert_eq!(
+            "false",
+            single_attribute_for_key(&response, "ask_deleted"),
+            "the ask should not be deleted when the multi share tx still has shares remaining",
+        );
+        assert_eq!(
+            "true",
+            single_attribute_for_key(&response, "bid_deleted"),
+            "the bid should always be deleted after a marker share sale match",
         );
         let ask_order = get_ask_order_by_id(deps.as_ref().storage, "ask_id")
             .expect("ask should remain in storage");
@@ -1116,7 +1159,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ID, &coins(420, "quote")),
+            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(420, "quote")),
             None,
         )
         .expect("the ask should be created successfully");
@@ -1129,7 +1172,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &bid_quote),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect("the bid should be created successfully");

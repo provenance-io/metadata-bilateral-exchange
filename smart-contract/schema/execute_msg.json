@@ -75,10 +75,70 @@
     {
       "type": "object",
       "required": [
+        "update_ask"
+      ],
+      "properties": {
+        "update_ask": {
+          "type": "object",
+          "required": [
+            "ask"
+          ],
+          "properties": {
+            "ask": {
+              "$ref": "#/definitions/Ask"
+            },
+            "descriptor": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/RequestDescriptor"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "create_bid"
       ],
       "properties": {
         "create_bid": {
+          "type": "object",
+          "required": [
+            "bid"
+          ],
+          "properties": {
+            "bid": {
+              "$ref": "#/definitions/Bid"
+            },
+            "descriptor": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/RequestDescriptor"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "update_bid"
+      ],
+      "properties": {
+        "update_bid": {
           "type": "object",
           "required": [
             "bid"

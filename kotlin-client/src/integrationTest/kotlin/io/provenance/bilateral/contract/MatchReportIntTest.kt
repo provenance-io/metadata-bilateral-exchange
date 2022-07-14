@@ -1,5 +1,7 @@
 package io.provenance.bilateral.contract
 
+import io.provenance.bilateral.execute.Ask.CoinTradeAsk
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import org.junit.jupiter.api.Test
@@ -19,20 +21,24 @@ class MatchReportIntTest : ContractIntTest() {
     fun testSimpleMatchReport() {
         val askId = UUID.randomUUID().toString()
         bilateralClient.createAsk(
-            createAsk = CreateAsk.newCoinTrade(
-                id = askId,
-                quote = newCoins(100, "nhash"),
-                base = newCoins(100, "nhash"),
+            createAsk = CreateAsk(
+                ask = CoinTradeAsk(
+                    id = askId,
+                    quote = newCoins(100, "nhash"),
+                    base = newCoins(100, "nhash"),
+                ),
             ),
             signer = BilateralAccounts.askerAccount,
         )
         bilateralClient.assertAskExists(askId)
         val bidId = UUID.randomUUID().toString()
         bilateralClient.createBid(
-            createBid = CreateBid.newCoinTrade(
-                id = bidId,
-                quote = newCoins(100, "nhash"),
-                base = newCoins(100, "nhash"),
+            createBid = CreateBid(
+                bid = CoinTradeBid(
+                    id = bidId,
+                    quote = newCoins(100, "nhash"),
+                    base = newCoins(100, "nhash"),
+                ),
             ),
             signer = BilateralAccounts.bidderAccount,
         )

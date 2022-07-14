@@ -68,7 +68,7 @@ mod tests {
     use crate::storage::ask_order_storage::insert_ask_order;
     use crate::storage::bid_order_storage::insert_bid_order;
     use crate::test::cosmos_type_helpers::MockOwnedDeps;
-    use crate::test::mock_scope::DEFAULT_SCOPE_ID;
+    use crate::test::mock_scope::DEFAULT_SCOPE_ADDR;
     use crate::test::request_helpers::{mock_ask_order, mock_bid_order, mock_bid_scope_trade};
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::bid_types::bid_collateral::BidCollateral;
@@ -168,8 +168,10 @@ mod tests {
             &coins(100, "quote"),
         ));
         insert_ask_order(deps.as_mut().storage, &ask_order).expect("ask should be inserted");
-        let bid_order =
-            mock_bid_order(mock_bid_scope_trade(DEFAULT_SCOPE_ID, &coins(100, "quote")));
+        let bid_order = mock_bid_order(mock_bid_scope_trade(
+            DEFAULT_SCOPE_ADDR,
+            &coins(100, "quote"),
+        ));
         insert_bid_order(deps.as_mut().storage, &bid_order).expect("bid should be inserted");
         let report = deserialize_report(&deps, "ask_id", "bid_id");
         assert!(report.ask_exists, "the ask should be marked as existing");

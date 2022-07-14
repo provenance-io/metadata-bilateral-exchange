@@ -79,7 +79,7 @@ mod tests {
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::mock_instantiate::{default_instantiate, DEFAULT_ADMIN_ADDRESS};
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_DENOM, DEFAULT_MARKER_HOLDINGS};
-    use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ID};
+    use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ADDR};
     use crate::test::request_helpers::mock_ask_order;
     use crate::types::core::msg::ExecuteMsg;
     use crate::types::request::ask_types::ask::Ask;
@@ -390,7 +390,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            Ask::new_scope_trade(&ask_id, DEFAULT_SCOPE_ID, &coins(100, "nhash")),
+            Ask::new_scope_trade(&ask_id, DEFAULT_SCOPE_ADDR, &coins(100, "nhash")),
             None,
         )
         .expect("expected the scope trade to be created successfully");

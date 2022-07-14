@@ -1,7 +1,6 @@
 use crate::storage::bid_order_storage::{delete_bid_order_by_id, get_bid_order_by_id};
 use crate::storage::contract_info::get_contract_info;
 use crate::types::core::error::ContractError;
-use crate::types::request::bid_types::bid_collateral::BidCollateral;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{to_binary, BankMsg, DepsMut, MessageInfo, Response};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
@@ -30,12 +29,7 @@ pub fn cancel_bid(
     if info.sender != bid_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
         return ContractError::unauthorized().to_err();
     }
-    let coin_to_send = match &bid_order.collateral {
-        BidCollateral::CoinTrade(collateral) => collateral.quote.to_owned(),
-        BidCollateral::MarkerTrade(collateral) => collateral.quote.to_owned(),
-        BidCollateral::MarkerShareSale(collateral) => collateral.quote.to_owned(),
-        BidCollateral::ScopeTrade(collateral) => collateral.quote.to_owned(),
-    };
+    let coin_to_send = bid_order.collateral.get_quote();
     // Remove the bid order from storage now that it is no longer needed
     delete_bid_order_by_id(deps.storage, &id)?;
     Response::new()
@@ -57,7 +51,7 @@ mod tests {
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::mock_instantiate::{default_instantiate, DEFAULT_ADMIN_ADDRESS};
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_DENOM};
-    use crate::test::mock_scope::DEFAULT_SCOPE_ID;
+    use crate::test::mock_scope::DEFAULT_SCOPE_ADDR;
     use crate::test::request_helpers::mock_bid_order;
     use crate::types::core::error::ContractError;
     use crate::types::request::bid_types::bid::Bid;
@@ -244,7 +238,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &[coin(10, "bitcoin"), coin(10, "nhash")]),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect("expected bid creation to succeed");

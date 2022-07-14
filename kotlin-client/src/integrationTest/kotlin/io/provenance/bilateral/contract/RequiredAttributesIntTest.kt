@@ -4,6 +4,8 @@ import cosmos.base.v1beta1.CoinOuterClass.Coin
 import cosmos.tx.v1beta1.ServiceOuterClass
 import io.provenance.attribute.v1.AttributeType
 import io.provenance.attribute.v1.MsgAddAttributeRequest
+import io.provenance.bilateral.execute.Ask.CoinTradeAsk
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -229,15 +231,17 @@ class RequiredAttributesIntTest : ContractIntTest() {
         attributes: List<String>,
         requirementType: AttributeRequirementType,
     ) {
-        val createAsk = CreateAsk.newCoinTrade(
-            id = askUuid.toString(),
-            quote = DEFAULT_QUOTE,
-            base = DEFAULT_BASE,
+        val createAsk = CreateAsk(
+            ask = CoinTradeAsk(
+                id = askUuid.toString(),
+                quote = DEFAULT_QUOTE,
+                base = DEFAULT_BASE,
+            ),
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
                 attributeRequirement = AttributeRequirement.new(attributes, requirementType),
-            )
+            ),
         )
         bilateralClient.createAsk(
             createAsk = createAsk,
@@ -256,15 +260,17 @@ class RequiredAttributesIntTest : ContractIntTest() {
         attributes: List<String>,
         requirementType: AttributeRequirementType,
     ) {
-        val createBid = CreateBid.newCoinTrade(
-            id = bidUuid.toString(),
-            base = DEFAULT_BASE,
-            quote = DEFAULT_QUOTE,
+        val createBid = CreateBid(
+            bid = CoinTradeBid(
+                id = bidUuid.toString(),
+                base = DEFAULT_BASE,
+                quote = DEFAULT_QUOTE,
+            ),
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
                 attributeRequirement = AttributeRequirement.new(attributes, requirementType),
-            )
+            ),
         )
         bilateralClient.createBid(
             createBid = createBid,

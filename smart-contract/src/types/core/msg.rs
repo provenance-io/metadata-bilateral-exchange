@@ -28,7 +28,15 @@ pub enum ExecuteMsg {
         ask: Ask,
         descriptor: Option<RequestDescriptor>,
     },
+    UpdateAsk {
+        ask: Ask,
+        descriptor: Option<RequestDescriptor>,
+    },
     CreateBid {
+        bid: Bid,
+        descriptor: Option<RequestDescriptor>,
+    },
+    UpdateBid {
         bid: Bid,
         descriptor: Option<RequestDescriptor>,
     },

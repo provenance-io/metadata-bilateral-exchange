@@ -19,3 +19,16 @@ pub fn assert_validation_error_message<S: Into<String>>(err: ContractError, expe
         e => panic!("unexpected error received: {:?}", e),
     };
 }
+
+pub fn assert_missing_field_error<S: Into<String>>(err: ContractError, expected_missing_field: S) {
+    let expected_missing_field = expected_missing_field.into();
+    match err {
+        ContractError::MissingField { field } => {
+            assert_eq!(
+                expected_missing_field, field,
+                "the expected missing field was not specified",
+            );
+        }
+        e => panic!("unexpected error received: {:?}", e),
+    };
+}

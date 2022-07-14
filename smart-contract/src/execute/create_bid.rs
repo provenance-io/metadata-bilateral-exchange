@@ -1,17 +1,15 @@
 use crate::storage::bid_order_storage::{get_bid_order_by_id, insert_bid_order};
 use crate::types::core::error::ContractError;
-use crate::types::request::bid_types::bid::{
-    Bid, CoinTradeBid, MarkerShareSaleBid, MarkerTradeBid, ScopeTradeBid,
-};
-use crate::types::request::bid_types::bid_collateral::BidCollateral;
-use crate::types::request::bid_types::bid_order::BidOrder;
+use crate::types::request::bid_types::bid::Bid;
 use crate::types::request::request_descriptor::RequestDescriptor;
 use crate::util::cosmos_utilities::get_send_amount;
+use crate::util::create_bid_order_utilities::{
+    create_bid_order, BidCreationType, BidOrderCreationResponse,
+};
 use crate::util::extensions::ResultExtensions;
-use crate::util::provenance_utilities::{format_coin_display, get_single_marker_coin_holding};
-use crate::util::request_fee::{generate_request_fee, RequestFeeDetail};
-use cosmwasm_std::{to_binary, Coin, DepsMut, MessageInfo, Response};
-use provwasm_std::{ProvenanceMsg, ProvenanceQuerier, ProvenanceQuery};
+use crate::util::provenance_utilities::format_coin_display;
+use cosmwasm_std::{to_binary, DepsMut, MessageInfo, Response};
+use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
 
 // create bid entrypoint
 pub fn create_bid(
@@ -23,27 +21,14 @@ pub fn create_bid(
     if get_bid_order_by_id(deps.storage, bid.get_id()).is_ok() {
         return ContractError::existing_id("bid", bid.get_id()).to_err();
     }
-    let RequestFeeDetail {
+    let BidOrderCreationResponse {
+        bid_order,
         fee_send_msg,
-        funds_after_fee,
-    } = generate_request_fee("bid fee", &deps.as_ref(), &info, |c| &c.bid_fee)?;
-    let collateral = match &bid {
-        Bid::CoinTrade(coin_trade) => create_coin_trade_collateral(&funds_after_fee, coin_trade),
-        Bid::MarkerTrade(marker_trade) => {
-            create_marker_trade_collateral(&deps, &funds_after_fee, marker_trade)
-        }
-        Bid::MarkerShareSale(marker_share_sale) => {
-            create_marker_share_sale_collateral(&deps, &funds_after_fee, marker_share_sale)
-        }
-        Bid::ScopeTrade(scope_trade) => {
-            create_scope_trade_collateral(&funds_after_fee, scope_trade)
-        }
-    }?;
-    let bid_order = BidOrder::new(bid.get_id(), info.sender, collateral, descriptor)?;
+    } = create_bid_order(&deps, &info, bid, descriptor, BidCreationType::New)?;
     insert_bid_order(deps.storage, &bid_order)?;
     let response = Response::new()
         .add_attribute("action", "create_bid")
-        .add_attribute("bid_id", bid.get_id())
+        .add_attribute("bid_id", &bid_order.id)
         .set_data(to_binary(&bid_order)?);
     if let Some(fee_send_msg) = fee_send_msg {
         response
@@ -58,128 +43,30 @@ pub fn create_bid(
     .to_ok()
 }
 
-fn create_coin_trade_collateral(
-    quote_funds: &[Coin],
-    coin_trade: &CoinTradeBid,
-) -> Result<BidCollateral, ContractError> {
-    if coin_trade.id.is_empty() {
-        return ContractError::missing_field("id").to_err();
-    }
-    if coin_trade.base.is_empty() {
-        return ContractError::missing_field("base").to_err();
-    }
-    if quote_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "coin trade bid requests should include enough funds for bid fee + quote",
-        )
-        .to_err();
-    }
-    BidCollateral::coin_trade(&coin_trade.base, quote_funds).to_ok()
-}
-
-fn create_marker_trade_collateral(
-    deps: &DepsMut<ProvenanceQuery>,
-    quote_funds: &[Coin],
-    marker_trade: &MarkerTradeBid,
-) -> Result<BidCollateral, ContractError> {
-    if marker_trade.id.is_empty() {
-        return ContractError::missing_field("id").to_err();
-    }
-    if marker_trade.marker_denom.is_empty() {
-        return ContractError::missing_field("denom").to_err();
-    }
-    if quote_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds must be provided during a marker trade bid to pay bid fees + establish a quote",
-        )
-        .to_err();
-    }
-    // This grants us access to the marker address, as well as ensuring that the marker is real
-    let marker =
-        ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.marker_denom)?;
-    BidCollateral::marker_trade(marker.address, &marker_trade.marker_denom, quote_funds).to_ok()
-}
-
-fn create_marker_share_sale_collateral(
-    deps: &DepsMut<ProvenanceQuery>,
-    quote_funds: &[Coin],
-    marker_share_sale: &MarkerShareSaleBid,
-) -> Result<BidCollateral, ContractError> {
-    if marker_share_sale.id.is_empty() {
-        return ContractError::missing_field("id").to_err();
-    }
-    if marker_share_sale.marker_denom.is_empty() {
-        return ContractError::missing_field("denom").to_err();
-    }
-    if marker_share_sale.share_count.is_zero() {
-        return ContractError::validation_error(&[
-            "share count must be at least one for a marker share sale",
-        ])
-        .to_err();
-    }
-    if quote_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds must be provided during a marker share trade bid to pay bid fees + establish a quote",
-        )
-        .to_err();
-    }
-    let marker = ProvenanceQuerier::new(&deps.querier)
-        .get_marker_by_denom(&marker_share_sale.marker_denom)?;
-    let marker_shares_available = get_single_marker_coin_holding(&marker)?.amount.u128();
-    if marker_share_sale.share_count.u128() > marker_shares_available {
-        return ContractError::validation_error(&[format!(
-            "share count [{}] must be less than or equal to remaining [{}] shares available [{}]",
-            marker_share_sale.share_count.u128(),
-            marker_share_sale.marker_denom,
-            marker_shares_available,
-        )])
-        .to_err();
-    }
-    BidCollateral::marker_share_sale(
-        marker.address,
-        &marker_share_sale.marker_denom,
-        marker_share_sale.share_count.u128(),
-        quote_funds,
-    )
-    .to_ok()
-}
-
-fn create_scope_trade_collateral(
-    quote_funds: &[Coin],
-    scope_trade: &ScopeTradeBid,
-) -> Result<BidCollateral, ContractError> {
-    if scope_trade.id.is_empty() {
-        return ContractError::missing_field("id").to_err();
-    }
-    if scope_trade.scope_address.is_empty() {
-        return ContractError::missing_field("scope_address").to_err();
-    }
-    if quote_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds must be provided during a scope trade bid to pay bid fees + establish a quote",
-        )
-        .to_err();
-    }
-    BidCollateral::scope_trade(&scope_trade.scope_address, quote_funds).to_ok()
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::contract::execute;
+    use crate::execute::create_bid::create_bid;
+    use crate::storage::bid_order_storage::{get_bid_order_by_id, insert_bid_order};
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::mock_instantiate::{
         default_instantiate, test_instantiate, TestInstantiate, DEFAULT_ADMIN_ADDRESS,
     };
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM};
-    use crate::test::mock_scope::DEFAULT_SCOPE_ID;
+    use crate::test::mock_scope::DEFAULT_SCOPE_ADDR;
     use crate::test::request_helpers::{mock_bid_order, set_bid_fee};
+    use crate::types::core::error::ContractError;
     use crate::types::core::msg::ExecuteMsg;
-    use crate::types::request::request_descriptor::AttributeRequirement;
+    use crate::types::request::bid_types::bid::Bid;
+    use crate::types::request::bid_types::bid_collateral::BidCollateral;
+    use crate::types::request::bid_types::bid_order::BidOrder;
+    use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
+    use crate::util::provenance_utilities::format_coin_display;
     use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{coin, coins, from_binary, BankMsg, CosmosMsg, Storage};
+    use cosmwasm_std::{coin, coins, from_binary, BankMsg, Coin, CosmosMsg, Response, Storage};
     use provwasm_mocks::mock_dependencies;
+    use provwasm_std::ProvenanceMsg;
 
     #[test]
     fn test_coin_trade_with_valid_data() {
@@ -417,7 +304,7 @@ mod tests {
         match err {
             ContractError::MissingField { field } => {
                 assert_eq!(
-                    "denom", field,
+                    "marker_denom", field,
                     "expected the denom field to be the missing field",
                 );
             }
@@ -504,7 +391,10 @@ mod tests {
         .expect_err("an error should  occur when the denom is blank");
         match err {
             ContractError::MissingField { field } => {
-                assert_eq!("denom", field, "the missing field should be the denom",);
+                assert_eq!(
+                    "marker_denom", field,
+                    "the missing field should be the denom",
+                );
             }
             e => panic!("unexpected error: {:?}", e),
         };
@@ -646,7 +536,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "nhash")),
-            Bid::new_scope_trade("", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect_err("an error should occur when the bid id is missing");
@@ -675,7 +565,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &[]),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
         .expect_err("an error should occur when no quote funds are provided");
@@ -687,7 +577,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "nhash")),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::all::<String>(&[]),
@@ -709,7 +599,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "bidfee")),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         ).expect_err("an error should occur when enough funds for the fee are provided but not enough for the quote");
         assert!(
@@ -1007,7 +897,7 @@ mod tests {
                     coins(150, "nhash")
                 },
             ),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ID),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(descriptor.clone()),
         )
         .expect("expected the scope trade to successfully execute");
@@ -1020,7 +910,7 @@ mod tests {
         );
         let collateral = bid_order.collateral.unwrap_scope_trade();
         assert_eq!(
-            DEFAULT_SCOPE_ID, collateral.scope_address,
+            DEFAULT_SCOPE_ADDR, collateral.scope_address,
             "the correct scope address should be set in the bid collateral",
         );
         assert_eq!(

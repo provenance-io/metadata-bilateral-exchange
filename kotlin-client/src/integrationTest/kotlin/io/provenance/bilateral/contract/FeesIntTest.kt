@@ -1,5 +1,7 @@
 package io.provenance.bilateral.contract
 
+import io.provenance.bilateral.execute.Ask.CoinTradeAsk
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import org.junit.jupiter.api.Test
@@ -38,10 +40,12 @@ class FeesIntTest : ContractIntTest() {
         val quote = newCoins(1000, "somequote")
         val base = newCoins(1000, askerDenom)
         val askUuid = UUID.randomUUID()
-        val createAsk = CreateAsk.newCoinTrade(
-            id = askUuid.toString(),
-            base = base,
-            quote = quote,
+        val createAsk = CreateAsk(
+            ask = CoinTradeAsk(
+                id = askUuid.toString(),
+                base = base,
+                quote = quote,
+            ),
         )
         assertSucceeds("Ask should be created without error") {
             bilateralClient.createAsk(
@@ -83,10 +87,12 @@ class FeesIntTest : ContractIntTest() {
         val quote = newCoins(1000, bidderDenom)
         val base = newCoins(1000, "somebasedenom")
         val bidUuid = UUID.randomUUID()
-        val createBid = CreateBid.newCoinTrade(
-            id = bidUuid.toString(),
-            base = base,
-            quote = quote,
+        val createBid = CreateBid(
+            bid = CoinTradeBid(
+                id = bidUuid.toString(),
+                base = base,
+                quote = quote,
+            ),
         )
         assertSucceeds("Bid should be created without error") {
             bilateralClient.createBid(

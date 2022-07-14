@@ -58,7 +58,28 @@ pub fn insert_bid_order(
         ))
         .to_err();
     }
-    state
+    store_bid_order(storage, bid_order)
+}
+
+pub fn update_bid_order(
+    storage: &mut dyn Storage,
+    bid_order: &BidOrder,
+) -> Result<(), ContractError> {
+    let state = bid_orders();
+    if state.load(storage, bid_order.id.as_bytes()).is_ok() {
+        delete_bid_order_by_id(storage, &bid_order.id)?;
+        store_bid_order(storage, bid_order)
+    } else {
+        ContractError::storage_error(format!(
+            "attempted to replace bid with id [{}] in storage, but no bid with that id existed",
+            &bid_order.id,
+        ))
+        .to_err()
+    }
+}
+
+fn store_bid_order(storage: &mut dyn Storage, bid_order: &BidOrder) -> Result<(), ContractError> {
+    bid_orders()
         .replace(storage, bid_order.id.as_bytes(), Some(bid_order), None)?
         .to_ok()
 }
@@ -94,7 +115,7 @@ pub fn delete_bid_order_by_id<S: Into<String>>(
 mod tests {
     use crate::storage::ask_order_storage::may_get_ask_order_by_id;
     use crate::storage::bid_order_storage::{
-        delete_bid_order_by_id, get_bid_order_by_id, insert_bid_order,
+        delete_bid_order_by_id, get_bid_order_by_id, insert_bid_order, update_bid_order,
     };
     use crate::types::request::bid_types::bid_collateral::BidCollateral;
     use crate::types::request::bid_types::bid_order::BidOrder;
@@ -117,6 +138,25 @@ mod tests {
         order.id = "bid2".to_string();
         insert_bid_order(deps.as_mut().storage, &order)
             .expect("expected a new id to allow a nearly-identical bid order to be inserted");
+    }
+
+    #[test]
+    fn test_update_bid_order() {
+        let mut deps = mock_dependencies(&[]);
+        let mut order = BidOrder::new_unchecked(
+            "bid",
+            Addr::unchecked("bidder"),
+            BidCollateral::scope_trade("scope", &coins(100, "nhash")),
+            None,
+        );
+        update_bid_order(deps.as_mut().storage, &order)
+            .expect_err("expected an update to fail when the bid does not yet exist in storage");
+        insert_bid_order(deps.as_mut().storage, &order)
+            .expect("expected inserting a bid order to succeed");
+        update_bid_order(deps.as_mut().storage, &order)
+            .expect("expected updating a bid order to itself to succeed");
+        order.id = "bid2".to_string();
+        update_bid_order(deps.as_mut().storage, &order).expect_err("expected updating a bid order after changing its id to fail because it no longer has the same PK");
     }
 
     #[test]

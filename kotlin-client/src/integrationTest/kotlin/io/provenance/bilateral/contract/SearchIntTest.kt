@@ -1,6 +1,8 @@
 package io.provenance.bilateral.contract
 
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastMode
+import io.provenance.bilateral.execute.Ask.CoinTradeAsk
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.models.AttributeRequirement
@@ -17,6 +19,7 @@ import testconfiguration.accounts.BilateralAccounts
 import testconfiguration.extensions.checkIsSuccess
 import testconfiguration.functions.newCoins
 import testconfiguration.testcontainers.ContractIntTest
+import java.math.BigInteger
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -29,10 +32,12 @@ class SearchIntTest : ContractIntTest() {
         val msgs = (0..9).map {
             val askUuid = UUID.randomUUID()
             askUuids += askUuid
-            val createAsk = CreateAsk.newCoinTrade(
-                id = askUuid.toString(),
-                quote = newCoins(100, "nhash"),
-                base = newCoins(100, "nhash"),
+            val createAsk = CreateAsk(
+                ask = CoinTradeAsk(
+                    id = askUuid.toString(),
+                    quote = newCoins(100, "nhash"),
+                    base = newCoins(100, "nhash"),
+                ),
                 descriptor = RequestDescriptor(
                     description = "Description",
                     effectiveTime = OffsetDateTime.now(),
@@ -40,7 +45,7 @@ class SearchIntTest : ContractIntTest() {
                         attributes = listOf("a.pb", "b.pb"),
                         type = AttributeRequirementType.ALL,
                     )
-                )
+                ),
             )
             bilateralClient.generateCreateAskMsg(createAsk, BilateralAccounts.askerAccount.address())
         }
@@ -66,17 +71,17 @@ class SearchIntTest : ContractIntTest() {
             message = "All ask uuids should be present in the search result",
         )
         assertEquals(
-            expected = 1,
+            expected = BigInteger.ONE,
             actual = searchResult.pageNumber,
             message = "The search result should indicate the first page",
         )
         assertEquals(
-            expected = 1,
+            expected = BigInteger.ONE,
             actual = searchResult.totalPages,
             message = "The search result should indicate that there is only one total page",
         )
         assertEquals(
-            expected = 11,
+            expected = 11.toBigInteger(),
             actual = searchResult.pageSize,
             message = "The page size of the search result should reflect the input",
         )
@@ -99,10 +104,12 @@ class SearchIntTest : ContractIntTest() {
         val msgs = (0..9).map {
             val bidUuid = UUID.randomUUID()
             bidUuids += bidUuid
-            val createBid = CreateBid.newCoinTrade(
-                id = bidUuid.toString(),
-                quote = newCoins(100, "nhash"),
-                base = newCoins(100, "nhash"),
+            val createBid = CreateBid(
+                bid = CoinTradeBid(
+                    id = bidUuid.toString(),
+                    quote = newCoins(100, "nhash"),
+                    base = newCoins(100, "nhash"),
+                ),
                 descriptor = RequestDescriptor(
                     description = "Description",
                     effectiveTime = OffsetDateTime.now(),
@@ -136,17 +143,17 @@ class SearchIntTest : ContractIntTest() {
             message = "All bid uuids should be present in the search result",
         )
         assertEquals(
-            expected = 1,
+            expected = BigInteger.ONE,
             actual = searchResult.pageNumber,
             message = "The search result should indicate the first page",
         )
         assertEquals(
-            expected = 1,
+            expected = BigInteger.ONE,
             actual = searchResult.totalPages,
             message = "The search result should indicate that there is only one total page",
         )
         assertEquals(
-            expected = 11,
+            expected = 11.toBigInteger(),
             actual = searchResult.pageSize,
             message = "The page size of the search result should reflect the input",
         )
