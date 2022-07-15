@@ -159,7 +159,7 @@ fn create_marker_trade_ask_collateral(
             AskCreationType::Update { .. } => None,
         },
         &env.contract.address,
-        &[MarkerAccess::Admin],
+        &[MarkerAccess::Admin, MarkerAccess::Withdraw],
         None,
     )?;
     let messages = match &creation_type {

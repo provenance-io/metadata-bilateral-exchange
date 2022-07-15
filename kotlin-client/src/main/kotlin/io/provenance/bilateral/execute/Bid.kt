@@ -28,6 +28,7 @@ sealed interface Bid {
     data class MarkerTradeBid(
         val id: String,
         val markerDenom: String,
+        val withdrawSharesAfterMatch: Boolean? = null,
         // The quote is used for funds, and never added to the json payload send to the contract
         @JsonIgnore
         val quote: List<Coin>,

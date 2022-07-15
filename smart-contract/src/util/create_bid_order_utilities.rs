@@ -124,7 +124,13 @@ fn create_marker_trade_collateral(
     // This grants us access to the marker address, as well as ensuring that the marker is real
     let marker =
         ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.marker_denom)?;
-    BidCollateral::marker_trade(marker.address, &marker_trade.marker_denom, quote_funds).to_ok()
+    BidCollateral::marker_trade(
+        marker.address,
+        &marker_trade.marker_denom,
+        quote_funds,
+        marker_trade.withdraw_shares_after_match,
+    )
+    .to_ok()
 }
 
 fn create_marker_share_sale_collateral(

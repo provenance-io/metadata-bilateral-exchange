@@ -29,91 +29,20 @@ import kotlin.test.assertTrue
 
 class MarkerTradeIntTest : ContractIntTest() {
     @Test
-    fun testSimpleMarkerTrade() {
-        val markerDenom = "simplemarkertrade"
-        val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW, Access.ACCESS_BURN)
-        createMarker(
-            pbClient = pbClient,
-            ownerAccount = asker,
-            denomName = markerDenom,
-            supply = 10,
-            permissions = markerPermissions,
+    fun testMarkerTradeMatchWithoutWithdrawShares() {
+        testFullMarkerTradeMatch(
+            markerDenom = "markertradematchwithoutwithdraw",
+            quoteDenom = "markertradematchwithoutwithdrawquote",
+            withdrawSharesAfterMatch = false,
         )
-        grantMarkerAccess(
-            pbClient = pbClient,
-            markerAdminAccount = asker,
-            markerDenom = markerDenom,
-            grantAddress = contractInfo.contractAddress,
-        )
-        val bidderDenom = "simplemarkertradebid"
-        giveTestDenom(
-            pbClient = pbClient,
-            initialHoldings = newCoin(amount = 150, bidderDenom),
-            receiverAddress = bidder.address(),
-        )
-        val askUuid = UUID.randomUUID()
-        createAsk(
-            createAsk = CreateAsk(
-                ask = MarkerTradeAsk(
-                    id = askUuid.toString(),
-                    markerDenom = markerDenom,
-                    quotePerShare = newCoins(15, bidderDenom),
-                ),
-                descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
-            )
-        )
-        assertTrue(
-            actual = pbClient
-                .getMarkerAccount(markerDenom)
-                .accessControlList
-                .none { accessGrant -> accessGrant.address == asker.address() },
-            message = "The contract should remove access for the asker from the marker after receiving it",
-        )
-        val bidUuid = UUID.randomUUID()
-        createBid(
-            createBid = CreateBid(
-                bid = MarkerTradeBid(
-                    id = bidUuid.toString(),
-                    markerDenom = markerDenom,
-                    quote = newCoins(150, bidderDenom),
-                ),
-                descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
-            ),
-        )
-        val executeMatchResponse = executeMatch(
-            executeMatch = ExecuteMatch(askUuid.toString(), bidUuid.toString()),
-        )
-        assertTrue(
-            actual = executeMatchResponse.askDeleted,
-            message = "Expected the match response to indicate that the ask was deleted",
-        )
-        assertTrue(
-            actual = executeMatchResponse.bidDeleted,
-            message = "Expected the match response to indicate that the bid was deleted",
-        )
-        assertEquals(
-            expected = 150L,
-            actual = pbClient.getBalance(asker.address(), bidderDenom),
-            message = "The asker should have received the entirety of the bidder's denom in exchange for the scope",
-        )
-        val access = pbClient
-            .getMarkerAccount(markerDenom)
-            .accessControlList
-            .assertSingle("There should only be a single access on the marker after completing the trade")
-        assertEquals(
-            expected = bidder.address(),
-            actual = access.address,
-            message = "The bidder should be the sole permissioned entity on the marker after the trade completes",
-        )
-        assertEquals(
-            expected = markerPermissions.sorted(),
-            actual = access.permissionsList.sorted(),
-            message = "The bidder should be granted identical permissions to the asker after the trade completes",
-        )
-        assertEquals(
-            expected = 0L,
-            actual = pbClient.getBalance(bidder.address(), bidderDenom),
-            message = "After the trade is made, the bidder should no longer have any of its [$bidderDenom]",
+    }
+
+    @Test
+    fun testMarkerTradeMadeWithWithdrawShares() {
+        testFullMarkerTradeMatch(
+            markerDenom = "markertradematchwithwithdraw",
+            quoteDenom = "markertradematchwithwithdrawquote",
+            withdrawSharesAfterMatch = true,
         )
     }
 
@@ -144,6 +73,7 @@ class MarkerTradeIntTest : ContractIntTest() {
             markerAdminAccount = asker,
             markerDenom = markerDenom,
             grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
         )
         val createResponse = assertSucceeds("Now that the contract has admin access on the marker, creating the ask should succeed") {
             createAsk(createAsk = createAsk)
@@ -236,6 +166,7 @@ class MarkerTradeIntTest : ContractIntTest() {
             markerAdminAccount = asker,
             markerDenom = markerDenom,
             grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
         )
         val quoteDenom = "updatemarkertradeaskquote"
         val askUuid = UUID.randomUUID()
@@ -286,6 +217,7 @@ class MarkerTradeIntTest : ContractIntTest() {
             markerAdminAccount = asker,
             markerDenom = markerDenom,
             grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
         )
         val quoteDenom = "updatemarkertradebidquote"
         val quoteDenom2 = "updatemarkertradebidquote2"
@@ -357,5 +289,111 @@ class MarkerTradeIntTest : ContractIntTest() {
             actual = pbClient.getBalance(bidder.address(), quoteDenom2),
             message = "The new quote balance should be properly debited from the bidder's account",
         )
+    }
+
+    private fun testFullMarkerTradeMatch(
+        markerDenom: String,
+        quoteDenom: String,
+        withdrawSharesAfterMatch: Boolean,
+    ) {
+        val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW, Access.ACCESS_BURN)
+        val markerShareCount = 10L
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = markerShareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(amount = 150, quoteDenom),
+            receiverAddress = bidder.address(),
+        )
+        val askUuid = UUID.randomUUID()
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerTradeAsk(
+                    id = askUuid.toString(),
+                    markerDenom = markerDenom,
+                    quotePerShare = newCoins(15, quoteDenom),
+                ),
+                descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
+            )
+        )
+        assertTrue(
+            actual = pbClient
+                .getMarkerAccount(markerDenom)
+                .accessControlList
+                .none { accessGrant -> accessGrant.address == asker.address() },
+            message = "The contract should remove access for the asker from the marker after receiving it",
+        )
+        val bidUuid = UUID.randomUUID()
+        createBid(
+            createBid = CreateBid(
+                bid = MarkerTradeBid(
+                    id = bidUuid.toString(),
+                    markerDenom = markerDenom,
+                    withdrawSharesAfterMatch = withdrawSharesAfterMatch,
+                    quote = newCoins(150, quoteDenom),
+                ),
+                descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
+            ),
+        )
+        val executeMatchResponse = executeMatch(
+            executeMatch = ExecuteMatch(askUuid.toString(), bidUuid.toString()),
+        )
+        assertTrue(
+            actual = executeMatchResponse.askDeleted,
+            message = "Expected the match response to indicate that the ask was deleted",
+        )
+        assertTrue(
+            actual = executeMatchResponse.bidDeleted,
+            message = "Expected the match response to indicate that the bid was deleted",
+        )
+        assertEquals(
+            expected = 150L,
+            actual = pbClient.getBalance(asker.address(), quoteDenom),
+            message = "The asker should have received the entirety of the bidder's denom in exchange for the scope",
+        )
+        val access = pbClient
+            .getMarkerAccount(markerDenom)
+            .accessControlList
+            .assertSingle("There should only be a single access on the marker after completing the trade")
+        assertEquals(
+            expected = bidder.address(),
+            actual = access.address,
+            message = "The bidder should be the sole permissioned entity on the marker after the trade completes",
+        )
+        assertEquals(
+            expected = markerPermissions.sorted(),
+            actual = access.permissionsList.sorted(),
+            message = "The bidder should be granted identical permissions to the asker after the trade completes",
+        )
+        assertEquals(
+            expected = 0L,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
+            message = "After the trade is made, the bidder should no longer have any of its [$quoteDenom]",
+        )
+        if (withdrawSharesAfterMatch) {
+            assertEquals(
+                expected = markerShareCount,
+                actual = pbClient.getBalance(bidder.address(), markerDenom),
+                message = "The contract should automatically withdraw all marker shares to the bidder because it was requested",
+            )
+        } else {
+            assertEquals(
+                expected = 0L,
+                actual = pbClient.getBalance(bidder.address(), markerDenom),
+                message = "The bidder did not request that marker shares were withdrawn, so they should not hold any of them after the match",
+            )
+        }
     }
 }

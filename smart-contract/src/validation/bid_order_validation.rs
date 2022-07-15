@@ -325,7 +325,12 @@ mod tests {
     fn test_marker_trade_empty_marker_address() {
         assert_validation_failure(
             "bid order does not include a valid marker address",
-            &mock_bid_order(mock_bid_marker_trade("", "denom", &coins(100, "nhash"))),
+            &mock_bid_order(mock_bid_marker_trade(
+                "",
+                "denom",
+                &coins(100, "nhash"),
+                None,
+            )),
             marker_trade_error("must include a valid marker address"),
         );
     }
@@ -334,7 +339,12 @@ mod tests {
     fn test_marker_trade_empty_marker_denom() {
         assert_validation_failure(
             "bid order does not include a valid marker denom",
-            &mock_bid_order(mock_bid_marker_trade("marker", "", &coins(100, "nhash"))),
+            &mock_bid_order(mock_bid_marker_trade(
+                "marker",
+                "",
+                &coins(100, "nhash"),
+                None,
+            )),
             marker_trade_error("must include a valid marker denom"),
         );
     }
@@ -343,7 +353,7 @@ mod tests {
     fn test_marker_trade_empty_quote() {
         assert_validation_failure(
             "bid order does not include quote funds",
-            &mock_bid_order(mock_bid_marker_trade("marker", "denom", &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker", "denom", &[], None)),
             marker_trade_error("must include at least one quote coin"),
         );
     }
@@ -352,12 +362,22 @@ mod tests {
     fn test_marker_trade_quote_funds_include_invalid_coins() {
         assert_validation_failure(
             "bid order includes quote coin with zero amount",
-            &mock_bid_order(mock_bid_marker_trade("marker", "denom", &coins(0, "nhash"))),
+            &mock_bid_order(mock_bid_marker_trade(
+                "marker",
+                "denom",
+                &coins(0, "nhash"),
+                None,
+            )),
             zero_coin_error("nhash", "BidCollateral Quote Coin"),
         );
         assert_validation_failure(
             "bid order includes quote coin with blank denom",
-            &mock_bid_order(mock_bid_marker_trade("marker", "denom", &coins(100, ""))),
+            &mock_bid_order(mock_bid_marker_trade(
+                "marker",
+                "denom",
+                &coins(100, ""),
+                None,
+            )),
             blank_denom_error(100, "BidCollateral Quote Coin"),
         );
     }

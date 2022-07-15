@@ -51,6 +51,7 @@ sealed interface BidCollateral {
         val markerAddress: String,
         val markerDenom: String,
         val quote: List<Coin>,
+        val withdrawSharesAfterMatch: Boolean?,
     ) : BidCollateral
 
     @JsonNaming(SnakeCaseStrategy::class)

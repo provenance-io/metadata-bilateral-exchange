@@ -69,6 +69,7 @@ mod tests {
                             Addr::unchecked(format!("marker{}", index)),
                             format!("denom{}", index),
                             &[],
+                            None,
                         )
                     },
                     Some(RequestDescriptor::basic(format!("Some bid {}", index))),
@@ -255,6 +256,7 @@ mod tests {
                             Addr::unchecked(format!("marker{}", index)),
                             format!("denom{}", index),
                             &[],
+                            None,
                         )
                     },
                     Some(RequestDescriptor::basic(format!("Some bid {}", index))),
@@ -352,6 +354,7 @@ mod tests {
                             Addr::unchecked(format!("marker{}", index)),
                             format!("denom{}", index),
                             &[],
+                            None,
                         )
                     },
                     Some(RequestDescriptor::basic(format!("Some bid {}", index))),

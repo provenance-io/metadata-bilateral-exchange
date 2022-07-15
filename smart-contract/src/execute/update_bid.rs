@@ -220,7 +220,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(1400, "quote")),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
         )
         .expect("expected the bid to be created");
@@ -231,7 +231,7 @@ mod tests {
         let response = update_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(200, "quote")),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             Some(descriptor.clone()),
         )
         .expect("the bid update should be successful");
@@ -268,14 +268,14 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(10, "quote")),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
         )
         .expect("the bid should be created successfully");
         let err = update_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "quote")),
-            Bid::new_marker_trade("bid_id", ""),
+            Bid::new_marker_trade("bid_id", "", None),
             None,
         )
         .expect_err("an error should occur when the marker denom is empty");
@@ -283,7 +283,7 @@ mod tests {
         let err = update_bid(
             deps.as_mut(),
             mock_info("bidder", &[]),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
         )
         .expect_err("an error should occur when the bid supplies no quote funds");
@@ -302,7 +302,7 @@ mod tests {
         let err = update_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(150, "quote")),
-            Bid::new_marker_trade("bid_id_2", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id_2", DEFAULT_MARKER_DENOM, None),
             None,
         )
         .expect_err("an error should occur when trying to change the bid type");
@@ -318,7 +318,7 @@ mod tests {
         let err = update_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "quote")),
-            Bid::new_marker_trade("bid_id", "some other denom"),
+            Bid::new_marker_trade("bid_id", "some other denom", None),
             None,
         )
         .expect_err(
@@ -332,7 +332,7 @@ mod tests {
         let err = update_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(45332, "quote")),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::all::<String>(&[]),

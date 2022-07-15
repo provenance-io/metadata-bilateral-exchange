@@ -194,7 +194,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(150, "quotecoin")),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
         )
         .expect("expected bid creation to succeed");
