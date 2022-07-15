@@ -165,7 +165,7 @@ mod tests {
         let order = BidOrder::new_unchecked(
             "bid",
             Addr::unchecked("bidder"),
-            BidCollateral::marker_trade(Addr::unchecked("marker"), "marker", &[]),
+            BidCollateral::marker_trade(Addr::unchecked("marker"), "marker", &[], None),
             None,
         );
         assert!(
@@ -189,7 +189,7 @@ mod tests {
         let order = BidOrder::new_unchecked(
             "bid",
             Addr::unchecked("bidder"),
-            BidCollateral::marker_trade(Addr::unchecked("marker"), "marker", &[]),
+            BidCollateral::marker_trade(Addr::unchecked("marker"), "marker", &[], None),
             None,
         );
         get_bid_order_by_id(deps.as_ref().storage, &order.id).expect_err("expected a get for the bid order by id to fail when the order does not exist in storage");

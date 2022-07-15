@@ -15,8 +15,16 @@ impl Bid {
         Self::CoinTrade(CoinTradeBid::new(id, base))
     }
 
-    pub fn new_marker_trade<S1: Into<String>, S2: Into<String>>(id: S1, marker_denom: S2) -> Self {
-        Self::MarkerTrade(MarkerTradeBid::new(id, marker_denom))
+    pub fn new_marker_trade<S1: Into<String>, S2: Into<String>>(
+        id: S1,
+        marker_denom: S2,
+        withdraw_shares_after_match: Option<bool>,
+    ) -> Self {
+        Self::MarkerTrade(MarkerTradeBid::new(
+            id,
+            marker_denom,
+            withdraw_shares_after_match,
+        ))
     }
 
     pub fn new_marker_share_sale<S1: Into<String>, S2: Into<String>>(
@@ -65,12 +73,18 @@ impl CoinTradeBid {
 pub struct MarkerTradeBid {
     pub id: String,
     pub marker_denom: String,
+    pub withdraw_shares_after_match: Option<bool>,
 }
 impl MarkerTradeBid {
-    pub fn new<S1: Into<String>, S2: Into<String>>(id: S1, marker_denom: S2) -> Self {
+    pub fn new<S1: Into<String>, S2: Into<String>>(
+        id: S1,
+        marker_denom: S2,
+        withdraw_shares_after_match: Option<bool>,
+    ) -> Self {
         Self {
             id: id.into(),
             marker_denom: marker_denom.into(),
+            withdraw_shares_after_match,
         }
     }
 }

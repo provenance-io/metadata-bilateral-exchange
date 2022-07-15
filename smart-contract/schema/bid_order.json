@@ -196,6 +196,12 @@
           "items": {
             "$ref": "#/definitions/Coin"
           }
+        },
+        "withdraw_shares_after_match": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       }
     },

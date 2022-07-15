@@ -5,19 +5,14 @@ import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import org.junit.jupiter.api.Test
-import testconfiguration.accounts.BilateralAccounts
+import testconfiguration.ContractIntTest
 import testconfiguration.extensions.clearFees
 import testconfiguration.extensions.getBalance
 import testconfiguration.extensions.setFees
-import testconfiguration.functions.assertAskExists
-import testconfiguration.functions.assertAskIsDeleted
-import testconfiguration.functions.assertBidExists
-import testconfiguration.functions.assertBidIsDeleted
 import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.giveTestDenom
 import testconfiguration.functions.newCoin
 import testconfiguration.functions.newCoins
-import testconfiguration.testcontainers.ContractIntTest
 import java.util.UUID
 import kotlin.test.assertEquals
 
@@ -29,41 +24,37 @@ class FeesIntTest : ContractIntTest() {
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, askerDenom),
-            receiverAddress = BilateralAccounts.askerAccount.address(),
+            receiverAddress = asker.address(),
         )
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(3, askFeeDenom),
-            receiverAddress = BilateralAccounts.askerAccount.address(),
+            receiverAddress = asker.address(),
         )
         bilateralClient.setFees(askFee = newCoins(1, askFeeDenom))
         val quote = newCoins(1000, "somequote")
         val base = newCoins(1000, askerDenom)
         val askUuid = UUID.randomUUID()
-        val createAsk = CreateAsk(
-            ask = CoinTradeAsk(
-                id = askUuid.toString(),
-                base = base,
-                quote = quote,
-            ),
-        )
         assertSucceeds("Ask should be created without error") {
-            bilateralClient.createAsk(
-                createAsk = createAsk,
-                signer = BilateralAccounts.askerAccount,
+            createAsk(
+                createAsk = CreateAsk(
+                    ask = CoinTradeAsk(
+                        id = askUuid.toString(),
+                        base = base,
+                        quote = quote,
+                    ),
+                ),
             )
         }
-        bilateralClient.assertAskExists(askUuid.toString())
         assertEquals(
             expected = 2,
-            actual = pbClient.getBalance(BilateralAccounts.askerAccount.address(), askFeeDenom),
+            actual = pbClient.getBalance(asker.address(), askFeeDenom),
             message = "The correct fee should be removed from the asker's account",
         )
-        bilateralClient.cancelAsk(askUuid.toString(), BilateralAccounts.askerAccount)
-        bilateralClient.assertAskIsDeleted(askUuid.toString())
+        cancelAsk(askUuid.toString())
         assertEquals(
             expected = 2,
-            actual = pbClient.getBalance(BilateralAccounts.askerAccount.address(), askFeeDenom),
+            actual = pbClient.getBalance(asker.address(), askFeeDenom),
             message = "The fee should not be refunded after canceling the ask",
         )
         bilateralClient.clearFees()
@@ -76,41 +67,37 @@ class FeesIntTest : ContractIntTest() {
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, bidderDenom),
-            receiverAddress = BilateralAccounts.bidderAccount.address(),
+            receiverAddress = bidder.address(),
         )
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(3, bidFeeDenom),
-            receiverAddress = BilateralAccounts.bidderAccount.address(),
+            receiverAddress = bidder.address(),
         )
         bilateralClient.setFees(bidFee = newCoins(1, bidFeeDenom))
         val quote = newCoins(1000, bidderDenom)
         val base = newCoins(1000, "somebasedenom")
         val bidUuid = UUID.randomUUID()
-        val createBid = CreateBid(
-            bid = CoinTradeBid(
-                id = bidUuid.toString(),
-                base = base,
-                quote = quote,
-            ),
-        )
         assertSucceeds("Bid should be created without error") {
-            bilateralClient.createBid(
-                createBid = createBid,
-                signer = BilateralAccounts.bidderAccount,
+            createBid(
+                createBid = CreateBid(
+                    bid = CoinTradeBid(
+                        id = bidUuid.toString(),
+                        base = base,
+                        quote = quote,
+                    ),
+                ),
             )
         }
-        bilateralClient.assertBidExists(bidUuid.toString())
         assertEquals(
             expected = 2,
-            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidFeeDenom),
+            actual = pbClient.getBalance(bidder.address(), bidFeeDenom),
             message = "The correct fee should be removed from the bidder's account",
         )
-        bilateralClient.cancelBid(bidUuid.toString(), BilateralAccounts.bidderAccount)
-        bilateralClient.assertBidIsDeleted(bidUuid.toString())
+        cancelBid(bidUuid.toString())
         assertEquals(
             expected = 2,
-            actual = pbClient.getBalance(BilateralAccounts.bidderAccount.address(), bidFeeDenom),
+            actual = pbClient.getBalance(bidder.address(), bidFeeDenom),
             message = "The fee should not be refunded after canceling the bid",
         )
         bilateralClient.clearFees()

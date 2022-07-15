@@ -144,8 +144,14 @@ pub fn mock_bid_marker_trade<S1: Into<String>, S2: Into<String>>(
     addr: S1,
     denom: S2,
     quote: &[Coin],
+    withdraw_shares_after_match: Option<bool>,
 ) -> BidCollateral {
-    BidCollateral::marker_trade(Addr::unchecked(addr), denom, quote)
+    BidCollateral::marker_trade(
+        Addr::unchecked(addr),
+        denom,
+        quote,
+        withdraw_shares_after_match,
+    )
 }
 
 pub fn mock_bid_marker_share<S1: Into<String>, S2: Into<String>>(

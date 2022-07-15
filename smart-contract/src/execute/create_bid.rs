@@ -284,7 +284,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "nhash")),
-            Bid::new_marker_trade("", "somedenom"),
+            Bid::new_marker_trade("", "somedenom", None),
             None,
         )
         .expect_err("an error should occur when the bid has a blank id");
@@ -297,7 +297,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "nhash")),
-            Bid::new_marker_trade("bid_id", ""),
+            Bid::new_marker_trade("bid_id", "", None),
             None,
         )
         .expect_err("an error should occur when the bid has a blank denom");
@@ -313,7 +313,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &[]),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
         )
         .expect_err("an error should occur when no quote funds are provided");
@@ -325,7 +325,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "nhash")),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
         )
         .expect_err("an error should occur when no marker is found");
@@ -339,7 +339,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "nhash")),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             Some(RequestDescriptor::new_populated_attributes(
                 "description",
                 AttributeRequirement::none::<String>(&[]),
@@ -355,7 +355,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(100, "bidfee")),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
         ).expect_err("an error should occur when just enough funds are sent to pay the bid fee but not enough for the quote");
         assert!(
@@ -785,7 +785,7 @@ mod tests {
                     coins(100, "nhash")
                 },
             ),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             Some(descriptor.clone()),
         )
         .expect("expected bid creation to succeed");

@@ -159,7 +159,7 @@ fn create_marker_trade_ask_collateral(
             AskCreationType::Update { .. } => None,
         },
         &env.contract.address,
-        &[MarkerAccess::Admin],
+        &[MarkerAccess::Admin, MarkerAccess::Withdraw],
         None,
     )?;
     let messages = match &creation_type {
@@ -174,13 +174,13 @@ fn create_marker_trade_ask_collateral(
                 &existing_ask_order.ask_type,
                 &RequestType::MarkerTrade,
             )?;
-            let existing_collateral = existing_ask_order.collateral.get_marker_trade()?;
-            if existing_collateral.marker_denom != marker_trade.marker_denom {
+            let existing_marker_denom = get_update_marker_denom(existing_ask_order)?;
+            if existing_marker_denom != &marker_trade.marker_denom {
                 return ContractError::invalid_update(
                     format!(
                         "marker trade with id [{}] cannot change marker denom with an update. current denom [{}], proposed new denom [{}]", 
                         existing_ask_order.id,
-                        existing_collateral.marker_denom,
+                        existing_marker_denom,
                         marker_trade.marker_denom
                     )
                 ).to_err();
@@ -200,11 +200,9 @@ fn create_marker_trade_ask_collateral(
                     .into_iter()
                     .filter(|perm| perm.address != env.contract.address)
                     .collect::<Vec<AccessGrant>>(),
-                AskCreationType::Update { existing_ask_order } => existing_ask_order
-                    .collateral
-                    .get_marker_trade()?
-                    .removed_permissions
-                    .to_owned(),
+                AskCreationType::Update { existing_ask_order } => {
+                    get_update_marker_removed_permissions(existing_ask_order)?
+                }
             },
         ),
         messages,
@@ -252,24 +250,14 @@ fn create_marker_share_sale_ask_collateral(
                 &existing_ask_order.ask_type,
                 &RequestType::MarkerShareSale,
             )?;
-            let existing_collateral = existing_ask_order.collateral.get_marker_share_sale()?;
-            if existing_collateral.marker_denom != marker_share_sale.marker_denom {
+            let existing_marker_denom = get_update_marker_denom(existing_ask_order)?;
+            if existing_marker_denom != &marker_share_sale.marker_denom {
                 return ContractError::invalid_update(
                     format!(
                         "marker share sale with id [{}] cannot change marker denom with an update. current denom [{}], proposed new denom [{}]",
                         existing_ask_order.id,
-                        existing_collateral.marker_denom,
+                        existing_marker_denom,
                         marker_share_sale.marker_denom,
-                    )
-                ).to_err();
-            }
-            if existing_collateral.sale_type != marker_share_sale.share_sale_type {
-                return ContractError::invalid_update(
-                    format!(
-                        "marker share sale with id [{}] cannot change share sale type with an update. current [{}], proposed [{}]",
-                        existing_ask_order.id,
-                        existing_collateral.sale_type.get_name(),
-                        marker_share_sale.share_sale_type.get_name(),
                     )
                 ).to_err();
             }
@@ -289,11 +277,9 @@ fn create_marker_share_sale_ask_collateral(
                     .into_iter()
                     .filter(|perm| perm.address != env.contract.address)
                     .collect::<Vec<AccessGrant>>(),
-                AskCreationType::Update { existing_ask_order } => existing_ask_order
-                    .collateral
-                    .get_marker_share_sale()?
-                    .removed_permissions
-                    .to_owned(),
+                AskCreationType::Update { existing_ask_order } => {
+                    get_update_marker_removed_permissions(existing_ask_order)?
+                }
             },
             marker_share_sale.share_sale_type.to_owned(),
         ),
@@ -371,7 +357,14 @@ fn check_ask_type<S: Into<String>>(
     existing_ask_type: &RequestType,
     expected_ask_type: &RequestType,
 ) -> Result<(), ContractError> {
-    if existing_ask_type != expected_ask_type {
+    let valid_update = match existing_ask_type {
+        RequestType::MarkerTrade | RequestType::MarkerShareSale => {
+            expected_ask_type == &RequestType::MarkerTrade
+                || expected_ask_type == &RequestType::MarkerShareSale
+        }
+        ask_type => ask_type == expected_ask_type,
+    };
+    if !valid_update {
         ContractError::invalid_update(format!(
             "ask with id [{}] cannot change ask type from [{}] to [{}]",
             ask_id.into(),
@@ -382,4 +375,38 @@ fn check_ask_type<S: Into<String>>(
     } else {
         ().to_ok()
     }
+}
+
+fn get_update_marker_denom(ask_order: &AskOrder) -> Result<&String, ContractError> {
+    match &ask_order.collateral {
+        AskCollateral::MarkerTrade(ref c) => &c.marker_denom,
+        AskCollateral::MarkerShareSale(ref c) => &c.marker_denom,
+        _ => {
+            return ContractError::invalid_update(format!(
+                "update for ask [{}] of type [{}] attempted to use marker collateral",
+                &ask_order.id,
+                ask_order.ask_type.get_name(),
+            ))
+            .to_err();
+        }
+    }
+    .to_ok()
+}
+
+fn get_update_marker_removed_permissions(
+    ask_order: &AskOrder,
+) -> Result<Vec<AccessGrant>, ContractError> {
+    match &ask_order.collateral {
+        AskCollateral::MarkerTrade(ref c) => c.removed_permissions.to_owned(),
+        AskCollateral::MarkerShareSale(ref c) => c.removed_permissions.to_owned(),
+        _ => {
+            return ContractError::invalid_update(format!(
+                "update for ask [{}] of type [{}] attempted to use marker collateral",
+                &ask_order.id,
+                ask_order.ask_type.get_name(),
+            ))
+            .to_err();
+        }
+    }
+    .to_ok()
 }

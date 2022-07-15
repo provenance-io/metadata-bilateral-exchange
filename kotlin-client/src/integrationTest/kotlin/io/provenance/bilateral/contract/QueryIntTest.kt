@@ -5,16 +5,11 @@ import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import org.junit.jupiter.api.Test
-import testconfiguration.accounts.BilateralAccounts
-import testconfiguration.functions.assertAskExists
-import testconfiguration.functions.assertAskIsDeleted
-import testconfiguration.functions.assertBidExists
-import testconfiguration.functions.assertBidIsDeleted
+import testconfiguration.ContractIntTest
 import testconfiguration.functions.assertNotNull
 import testconfiguration.functions.assertNull
 import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.newCoins
-import testconfiguration.testcontainers.ContractIntTest
 import java.util.UUID
 import kotlin.test.assertFails
 
@@ -33,13 +28,10 @@ class QueryIntTest : ContractIntTest() {
                 base = newCoins(150, "nhash"),
             ),
         )
-        bilateralClient.createAsk(createAsk, BilateralAccounts.askerAccount)
-        bilateralClient.assertAskExists(createAsk.ask.mapToId())
+        createAsk(createAsk)
         bilateralClient.getAskOrNull(createAsk.ask.mapToId()).assertNotNull("Ask should exist when fetched by nullable request")
         assertSucceeds("Expected the ask to be available by collateral id") { bilateralClient.getAskByCollateralId(coinTradeAskUuid.toString()) }
         bilateralClient.getAskByCollateralIdOrNull(coinTradeAskUuid.toString()).assertNotNull("ask should not be null when fetching by collateral id")
-        bilateralClient.cancelAsk(createAsk.ask.mapToId(), BilateralAccounts.askerAccount)
-        bilateralClient.assertAskIsDeleted(createAsk.ask.mapToId())
     }
 
     @Test
@@ -54,10 +46,7 @@ class QueryIntTest : ContractIntTest() {
                 base = newCoins(150, "nhash"),
             ),
         )
-        bilateralClient.createBid(createBid, BilateralAccounts.bidderAccount)
-        bilateralClient.assertBidExists(createBid.bid.mapToId())
+        createBid(createBid)
         bilateralClient.getBidOrNull(createBid.bid.mapToId()).assertNotNull("Bid should exist when fetched by nullable request")
-        bilateralClient.cancelBid(createBid.bid.mapToId(), BilateralAccounts.bidderAccount)
-        bilateralClient.assertBidIsDeleted(createBid.bid.mapToId())
     }
 }

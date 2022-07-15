@@ -560,6 +560,7 @@ mod tests {
                 Addr::unchecked("marker"),
                 "targetcoin",
                 &coins(1000, "nhash"),
+                None,
             ),
             Some(RequestDescriptor::new_populated_attributes(
                 "Best bid ever",
@@ -1033,7 +1034,7 @@ mod tests {
             "Ask collateral coin_trade and bid collateral marker_trade mismatch",
             &deps.as_ref(),
             &mock_ask_order(AskCollateral::coin_trade(&[], &[])),
-            &mock_bid_order(mock_bid_marker_trade("marker", "somecoin", &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker", "somecoin", &[], None)),
             expected_error(
                 "Ask collateral was of type coin trade, which did not match bid collateral",
             ),
@@ -1152,7 +1153,7 @@ mod tests {
             "Ask marker denom does not match bid marker denom",
             &deps.as_ref(),
             &mock_ask_order(mock_ask_marker_trade("marker", "firstmarkerdenom", 10, &[])),
-            &mock_bid_order(mock_bid_marker_trade("marker", "secondmarkerdenom", &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker", "secondmarkerdenom", &[], None)),
             marker_trade_error("Ask marker denom [firstmarkerdenom] does not match bid marker denom [secondmarkerdenom]"),
             true,
         );
@@ -1165,7 +1166,7 @@ mod tests {
             "Ask marker address does not match bid marker address",
             &deps.as_ref(),
             &mock_ask_order(mock_ask_marker_trade("marker1", "test", 10, &[])),
-            &mock_bid_order(mock_bid_marker_trade("marker2", "test", &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker2", "test", &[], None)),
             marker_trade_error(
                 "Ask marker address [marker1] does not match bid marker address [marker2]",
             ),
@@ -1180,7 +1181,7 @@ mod tests {
             "No marker was mocked for target marker address",
             &deps.as_ref(),
             &mock_ask_order(mock_ask_marker_trade("marker", "test", 10, &[])),
-            &mock_bid_order(mock_bid_marker_trade("marker", "test", &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker", "test", &[], None)),
             marker_trade_error("Failed to find marker for denom [test]"),
             true,
         );
@@ -1197,7 +1198,7 @@ mod tests {
         .to_marker();
         deps.querier.with_markers(vec![marker.clone()]);
         let ask = mock_ask_order(mock_ask_marker_trade("marker", "targetcoin", 10, &[]));
-        let bid = mock_bid_order(mock_bid_marker_trade("marker", "targetcoin", &[]));
+        let bid = mock_bid_order(mock_bid_marker_trade("marker", "targetcoin", &[], None));
         assert_validation_failure(
             "Marker contained none of its own denom",
             &deps.as_ref(),
@@ -1242,7 +1243,7 @@ mod tests {
             "Marker contained a coin count that did not match the value recorded when the ask was made",
             &deps.as_ref(),
             &mock_ask_order(mock_ask_marker_trade("marker", "targetcoin", 49, &[])),
-            &mock_bid_order(mock_bid_marker_trade("marker", "targetcoin", &[])),
+            &mock_bid_order(mock_bid_marker_trade("marker", "targetcoin", &[], None)),
             marker_trade_error("Marker share count was [50] but the original value when added to the contract was [49]"),
             true,
         );
@@ -1271,6 +1272,7 @@ mod tests {
                 "marker",
                 "targetcoin",
                 &coins(200, "nhash"),
+                None,
             )),
             marker_trade_error("Ask quote [500nhash] did not match bid quote [200nhash]"),
             false,

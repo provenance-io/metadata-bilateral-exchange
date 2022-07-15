@@ -150,6 +150,18 @@ fn execute_marker_trade(
     bid_collateral: &MarkerTradeBidCollateral,
 ) -> Result<ExecuteResults, ContractError> {
     let mut messages = vec![];
+    // Only transfer marker shares to the bidder if the bidder explicitly requested it with a Some(true)
+    // value for their withdraw_shares_after_match param during BidOrder creation
+    if bid_collateral.withdraw_shares_after_match.unwrap_or(false) {
+        messages.push(withdraw_coins(
+            &ask_collateral.marker_denom,
+            // Withdraw all remaining shares in the marker to the bidder's account upon marker
+            // trade completion.  This will cause them to immediately show up in the bidder's wallet.
+            ask_collateral.share_count.u128(),
+            &ask_collateral.marker_denom,
+            bid_order.owner.to_owned(),
+        )?);
+    }
     if let Some(asker_permissions) = ask_collateral
         .removed_permissions
         .iter()
@@ -307,7 +319,7 @@ mod tests {
     use crate::types::request::bid_types::bid::Bid;
     use crate::types::request::share_sale_type::ShareSaleType;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{coins, BankMsg, CosmosMsg, Response, Storage};
+    use cosmwasm_std::{coins, BankMsg, Coin, CosmosMsg, Response, Storage, Uint128};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::{
         MarkerMsgParams, MetadataMsgParams, PartyType, ProvenanceMsg, ProvenanceMsgParams,
@@ -458,22 +470,42 @@ mod tests {
 
     #[test]
     fn test_execute_marker_trade_from_admin_matching_quote() {
-        do_marker_trade_test(DEFAULT_ADMIN_ADDRESS, false);
+        do_marker_trade_test(DEFAULT_ADMIN_ADDRESS, false, None);
     }
 
     #[test]
     fn test_execute_marker_trade_from_admin_mismatched_quote() {
-        do_marker_trade_test(DEFAULT_ADMIN_ADDRESS, true);
+        do_marker_trade_test(DEFAULT_ADMIN_ADDRESS, true, None);
+    }
+
+    #[test]
+    fn test_execute_marker_trade_from_admin_matching_quote_explicit_no_withdraw_coins() {
+        do_marker_trade_test(DEFAULT_ADMIN_ADDRESS, false, Some(false));
+    }
+
+    #[test]
+    fn test_execute_marker_trade_from_admin_matching_quote_and_withdraw_coins() {
+        do_marker_trade_test(DEFAULT_ADMIN_ADDRESS, false, Some(true));
     }
 
     #[test]
     fn test_execute_marker_trade_from_asker_matching_quote() {
-        do_marker_trade_test("asker", false);
+        do_marker_trade_test("asker", false, None);
     }
 
     #[test]
     fn test_execute_marker_trade_from_asker_mismatched_quote() {
-        do_marker_trade_test("asker", true);
+        do_marker_trade_test("asker", true, None);
+    }
+
+    #[test]
+    fn test_execute_marker_trade_from_asker_matching_quote_explicit_no_withdraw_coins() {
+        do_marker_trade_test("asker", false, Some(false));
+    }
+
+    #[test]
+    fn test_execute_marker_trade_from_asker_matching_quote_and_withdraw_coins() {
+        do_marker_trade_test("asker", false, Some(true));
     }
 
     #[test]
@@ -680,7 +712,11 @@ mod tests {
         });
     }
 
-    fn do_marker_trade_test<S: Into<String>>(match_sender_address: S, mismatched_quotes: bool) {
+    fn do_marker_trade_test<S: Into<String>>(
+        match_sender_address: S,
+        mismatched_quotes: bool,
+        withdraw_shares: Option<bool>,
+    ) {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         deps.querier
@@ -702,7 +738,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_info("bidder", &bid_quote),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, withdraw_shares),
             None,
         )
         .expect("the bid should be created successfully");
@@ -722,7 +758,11 @@ mod tests {
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response);
         assert_eq!(
-            3,
+            3 + if withdraw_shares.unwrap_or(false) {
+                1
+            } else {
+                0
+            },
             response.messages.len(),
             "the correct number of messages should be produced",
         );
@@ -773,6 +813,27 @@ mod tests {
                     "the contract should have its marker permissions removed",
                 );
             },
+            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
+                assert!(
+                    withdraw_shares.unwrap_or(false),
+                    "a withdraw coins message should only be sent when the bidder requested a withdraw",
+                );
+                assert_eq!(
+                    DEFAULT_MARKER_DENOM,
+                    marker_denom,
+                    "the withdrawn marker denom should be the correct type",
+                );
+                assert_eq!(
+                    &Coin { amount: Uint128::new(DEFAULT_MARKER_HOLDINGS), denom: DEFAULT_MARKER_DENOM.to_string() },
+                    coin,
+                    "the withdrawn marker coin should equate to the entirety of the marker's coin holdings",
+                );
+                assert_eq!(
+                    "bidder",
+                    recipient.as_str(),
+                    "the bidder should receive all the marker coin",
+                );
+            }
             msg => panic!("unexpected message: {:?}", msg),
         });
     }

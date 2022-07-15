@@ -19,20 +19,18 @@ import io.provenance.client.protobuf.extensions.toTxBody
 import io.provenance.scope.util.toByteString
 import mu.KLogging
 import org.junit.jupiter.api.Test
-import testconfiguration.accounts.BilateralAccounts
+import testconfiguration.ContractIntTest
 import testconfiguration.extensions.checkIsSuccess
 import testconfiguration.functions.assertAskExists
-import testconfiguration.functions.assertAskIsDeleted
 import testconfiguration.functions.assertBidExists
-import testconfiguration.functions.assertBidIsDeleted
 import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.bindNamesToSigner
 import testconfiguration.functions.newCoins
-import testconfiguration.testcontainers.ContractIntTest
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
+import kotlin.test.assertTrue
 
 class RequiredAttributesIntTest : ContractIntTest() {
     private companion object : KLogging() {
@@ -47,7 +45,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         bindNamesToSigner(
             pbClient = pbClient,
             names = testAttributes,
-            signer = BilateralAccounts.adminAccount,
+            signer = admin,
             restricted = true,
         )
         val askUuid = UUID.randomUUID()
@@ -62,28 +60,28 @@ class RequiredAttributesIntTest : ContractIntTest() {
         )
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid] and expecting a failure")
         assertFails("Expected the match to fail because the asker and bidder are both missing the attributes") {
-            bilateralClient.executeMatch(executeMatch, BilateralAccounts.adminAccount)
+            executeMatch(executeMatch)
         }
         addDummyAttributesToAddress(
-            attributeOwner = BilateralAccounts.adminAccount,
+            attributeOwner = admin,
             attributes = testAttributes,
-            targetAddress = BilateralAccounts.askerAccount.address(),
+            targetAddress = asker.address(),
         )
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid] and expecting a failure")
         assertFails("Expected the match to fail because the bidder is still missing the attributes") {
-            bilateralClient.executeMatch(executeMatch, BilateralAccounts.adminAccount)
+            executeMatch(executeMatch, admin)
         }
         addDummyAttributesToAddress(
-            attributeOwner = BilateralAccounts.adminAccount,
+            attributeOwner = admin,
             attributes = testAttributes,
-            targetAddress = BilateralAccounts.bidderAccount.address(),
+            targetAddress = bidder.address(),
         )
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid] and expecting success")
-        assertSucceeds("Expected match to succeed now that all required attributes are held by ask and bid") {
-            bilateralClient.executeMatch(executeMatch, BilateralAccounts.adminAccount)
+        val matchResponse = assertSucceeds("Expected match to succeed now that all required attributes are held by ask and bid") {
+            executeMatch(executeMatch, admin)
         }
-        bilateralClient.assertAskIsDeleted(askUuid.toString())
-        bilateralClient.assertBidIsDeleted(bidUuid.toString())
+        assertTrue(matchResponse.askDeleted, "The ask should be deleted")
+        assertTrue(matchResponse.bidDeleted, "The bid should be deleted")
     }
 
     @Test
@@ -93,7 +91,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         bindNamesToSigner(
             pbClient = pbClient,
             names = testAttributes,
-            signer = BilateralAccounts.adminAccount,
+            signer = admin,
             restricted = true,
         )
         val askUuid = UUID.randomUUID()
@@ -108,32 +106,32 @@ class RequiredAttributesIntTest : ContractIntTest() {
         )
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid] and expecting a failure")
         assertFails("Expected the match to fail because the asker and bidder are both missing the attributes") {
-            bilateralClient.executeMatch(executeMatch, BilateralAccounts.adminAccount)
+            executeMatch(executeMatch, admin)
         }
         // Only add a random one of the attributes to the asker account to spice things up and verify that only one of
         // any of the values is required
         addDummyAttributesToAddress(
-            attributeOwner = BilateralAccounts.adminAccount,
+            attributeOwner = admin,
             attributes = testAttributes.random().let(::listOf),
-            targetAddress = BilateralAccounts.askerAccount.address(),
+            targetAddress = asker.address(),
         )
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid] and expecting a failure")
         assertFails("Expected the match to fail because the bidder is still missing attributes") {
-            bilateralClient.executeMatch(executeMatch, BilateralAccounts.adminAccount)
+            executeMatch(executeMatch, admin)
         }
         // Only add a random one of the attributes to the bidder account to spice things up and verify that only one of
         // any of the values is required
         addDummyAttributesToAddress(
-            attributeOwner = BilateralAccounts.adminAccount,
+            attributeOwner = admin,
             attributes = testAttributes.random().let(::listOf),
-            targetAddress = BilateralAccounts.bidderAccount.address(),
+            targetAddress = bidder.address(),
         )
         logger.info("Executing match for ask [$askUuid] and bid [$bidUuid] and expecting success")
-        assertSucceeds("Expected the match to succeed now that both ask and bid have one attribute") {
-            bilateralClient.executeMatch(executeMatch, BilateralAccounts.adminAccount)
+        val matchResponse = assertSucceeds("Expected the match to succeed now that both ask and bid have one attribute") {
+            executeMatch(executeMatch, admin)
         }
-        bilateralClient.assertAskIsDeleted(askUuid.toString())
-        bilateralClient.assertBidIsDeleted(bidUuid.toString())
+        assertTrue(matchResponse.askDeleted, "The ask should be deleted")
+        assertTrue(matchResponse.bidDeleted, "The bid should be deleted")
     }
 
     @Test
@@ -143,7 +141,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
         bindNamesToSigner(
             pbClient = pbClient,
             names = testAttributes,
-            signer = BilateralAccounts.adminAccount,
+            signer = admin,
             restricted = true,
         )
         val firstAskUuid = UUID.randomUUID()
@@ -157,11 +155,11 @@ class RequiredAttributesIntTest : ContractIntTest() {
             bidId = firstBidUuid.toString(),
         )
         logger.info("Executing match for ask [$firstAskUuid] and bid [$firstBidUuid]")
-        assertSucceeds("Expecting the match to succeed because neither account has any of the specified attributes") {
-            bilateralClient.executeMatch(firstExecuteMatch, BilateralAccounts.adminAccount)
+        val matchResponse = assertSucceeds("Expecting the match to succeed because neither account has any of the specified attributes") {
+            executeMatch(firstExecuteMatch, admin)
         }
-        bilateralClient.assertAskIsDeleted(firstAskUuid.toString())
-        bilateralClient.assertBidIsDeleted(firstBidUuid.toString())
+        assertTrue(matchResponse.askDeleted, "The ask should be deleted")
+        assertTrue(matchResponse.bidDeleted, "The bid should be deleted")
         val secondAskUuid = UUID.randomUUID()
         logger.info("Creating ask with uuid: $secondAskUuid, requiring none of attributes: $testAttributes")
         createAndSendAsk(secondAskUuid, testAttributes, AttributeRequirementType.NONE)
@@ -175,31 +173,27 @@ class RequiredAttributesIntTest : ContractIntTest() {
         // Only add a random one of the attributes to the asker account to spice things up and verify that only one of
         // any of the values is required to cause a rejection
         addDummyAttributesToAddress(
-            attributeOwner = BilateralAccounts.adminAccount,
+            attributeOwner = admin,
             attributes = testAttributes.random().let(::listOf),
-            targetAddress = BilateralAccounts.askerAccount.address(),
+            targetAddress = asker.address(),
         )
         logger.info("Executing match for ask [$secondAskUuid] and bid [$secondBidUuid] and expecting a failure")
         assertFails("Expected the match to fail because the asker has one of the attributes") {
-            bilateralClient.executeMatch(secondExecuteMatch, BilateralAccounts.adminAccount)
+            executeMatch(secondExecuteMatch, admin)
         }
         // Only add a random one of the attributes to the bidder account to spice things up and verify that only one of
         // any of the values is required to cause a rejection
         addDummyAttributesToAddress(
-            attributeOwner = BilateralAccounts.adminAccount,
+            attributeOwner = admin,
             attributes = testAttributes.random().let(::listOf),
-            targetAddress = BilateralAccounts.bidderAccount.address(),
+            targetAddress = bidder.address(),
         )
         logger.info("Executing match for ask [$secondAskUuid] and bid [$secondBidUuid] and expecting a failure")
         assertFails("Expected the match to fail because both asker and bidder have attributes that are not allowed") {
-            bilateralClient.executeMatch(secondExecuteMatch, BilateralAccounts.adminAccount)
+            executeMatch(secondExecuteMatch, admin)
         }
         bilateralClient.assertAskExists(secondAskUuid.toString(), "Expected the ask to exist because a match was never made")
         bilateralClient.assertBidExists(secondBidUuid.toString(), "Expected the bid to exist because a match was never made")
-        bilateralClient.cancelAsk(secondAskUuid.toString(), BilateralAccounts.askerAccount)
-        bilateralClient.assertAskIsDeleted(secondAskUuid.toString())
-        bilateralClient.cancelBid(secondBidUuid.toString(), BilateralAccounts.bidderAccount)
-        bilateralClient.assertBidIsDeleted(secondBidUuid.toString())
     }
 
     private fun addDummyAttributesToAddress(
@@ -243,14 +237,10 @@ class RequiredAttributesIntTest : ContractIntTest() {
                 attributeRequirement = AttributeRequirement.new(attributes, requirementType),
             ),
         )
-        bilateralClient.createAsk(
-            createAsk = createAsk,
-            signer = BilateralAccounts.askerAccount,
-        )
-        val askOrder = bilateralClient.assertAskExists(askUuid.toString())
+        val createResponse = createAsk(createAsk)
         assertEquals(
             expected = createAsk.descriptor?.effectiveTime,
-            actual = askOrder.descriptor?.effectiveTime,
+            actual = createResponse.askOrder.descriptor?.effectiveTime,
             message = "Expected the effective time to correctly deserialize from the contract response",
         )
     }
@@ -272,14 +262,10 @@ class RequiredAttributesIntTest : ContractIntTest() {
                 attributeRequirement = AttributeRequirement.new(attributes, requirementType),
             ),
         )
-        bilateralClient.createBid(
-            createBid = createBid,
-            signer = BilateralAccounts.bidderAccount,
-        )
-        val bidOrder = bilateralClient.assertBidExists(bidUuid.toString())
+        val createResponse = createBid(createBid)
         assertEquals(
             expected = createBid.descriptor?.effectiveTime,
-            actual = bidOrder.descriptor?.effectiveTime,
+            actual = createResponse.bidOrder.descriptor?.effectiveTime,
             message = "Expected the effective time to correctly deserialize from the contract response",
         )
     }

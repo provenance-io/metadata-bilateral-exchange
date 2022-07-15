@@ -15,10 +15,9 @@ import io.provenance.client.protobuf.extensions.toAny
 import io.provenance.client.protobuf.extensions.toTxBody
 import io.provenance.scope.util.toUuid
 import org.junit.jupiter.api.Test
-import testconfiguration.accounts.BilateralAccounts
+import testconfiguration.ContractIntTest
 import testconfiguration.extensions.checkIsSuccess
 import testconfiguration.functions.newCoins
-import testconfiguration.testcontainers.ContractIntTest
 import java.math.BigInteger
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -47,17 +46,17 @@ class SearchIntTest : ContractIntTest() {
                     )
                 ),
             )
-            bilateralClient.generateCreateAskMsg(createAsk, BilateralAccounts.askerAccount.address())
+            bilateralClient.generateCreateAskMsg(createAsk, asker.address())
         }
         pbClient.estimateAndBroadcastTx(
             txBody = msgs.map { it.toAny() }.toTxBody(),
-            signers = listOf(BaseReqSigner(BilateralAccounts.askerAccount)),
+            signers = listOf(BaseReqSigner(asker)),
             mode = BroadcastMode.BROADCAST_MODE_BLOCK,
             gasAdjustment = 1.2,
         ).checkIsSuccess()
         val searchResult = bilateralClient.searchAsks(
             ContractSearchRequest(
-                searchType = ContractSearchType.byOwner(BilateralAccounts.askerAccount.address()),
+                searchType = ContractSearchType.byOwner(asker.address()),
                 pageSize = 11.toBigInteger(),
             )
         )
@@ -90,10 +89,10 @@ class SearchIntTest : ContractIntTest() {
             txBody = askUuids.map { askUuid ->
                 bilateralClient.generateCancelAskMsg(
                     askId = askUuid.toString(),
-                    senderAddress = BilateralAccounts.askerAccount.address(),
+                    senderAddress = asker.address(),
                 ).toAny()
             }.toTxBody(),
-            signers = BaseReqSigner(BilateralAccounts.askerAccount).let(::listOf),
+            signers = BaseReqSigner(asker).let(::listOf),
             mode = BroadcastMode.BROADCAST_MODE_BLOCK,
         ).checkIsSuccess()
     }
@@ -119,17 +118,17 @@ class SearchIntTest : ContractIntTest() {
                     )
                 )
             )
-            bilateralClient.generateCreateBidMsg(createBid, BilateralAccounts.bidderAccount.address())
+            bilateralClient.generateCreateBidMsg(createBid, bidder.address())
         }
         pbClient.estimateAndBroadcastTx(
             txBody = msgs.map { it.toAny() }.toTxBody(),
-            signers = listOf(BaseReqSigner(BilateralAccounts.bidderAccount)),
+            signers = listOf(BaseReqSigner(bidder)),
             mode = BroadcastMode.BROADCAST_MODE_BLOCK,
             gasAdjustment = 1.2,
         ).checkIsSuccess()
         val searchResult = bilateralClient.searchBids(
             ContractSearchRequest(
-                searchType = ContractSearchType.byOwner(BilateralAccounts.bidderAccount.address()),
+                searchType = ContractSearchType.byOwner(bidder.address()),
                 pageSize = 11.toBigInteger(),
             )
         )
@@ -162,10 +161,10 @@ class SearchIntTest : ContractIntTest() {
             txBody = bidUuids.map { bidUuid ->
                 bilateralClient.generateCancelBidMsg(
                     bidId = bidUuid.toString(),
-                    senderAddress = BilateralAccounts.bidderAccount.address(),
+                    senderAddress = bidder.address(),
                 ).toAny()
             }.toTxBody(),
-            signers = BaseReqSigner(BilateralAccounts.bidderAccount).let(::listOf),
+            signers = BaseReqSigner(bidder).let(::listOf),
             mode = BroadcastMode.BROADCAST_MODE_BLOCK,
         ).checkIsSuccess()
     }

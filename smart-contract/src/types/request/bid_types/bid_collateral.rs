@@ -21,11 +21,13 @@ impl BidCollateral {
         marker_address: Addr,
         marker_denom: S,
         quote: &[Coin],
+        withdraw_shares_after_match: Option<bool>,
     ) -> Self {
         Self::MarkerTrade(MarkerTradeBidCollateral::new(
             marker_address,
             marker_denom,
             quote,
+            withdraw_shares_after_match,
         ))
     }
 
@@ -106,13 +108,20 @@ pub struct MarkerTradeBidCollateral {
     pub marker_address: Addr,
     pub marker_denom: String,
     pub quote: Vec<Coin>,
+    pub withdraw_shares_after_match: Option<bool>,
 }
 impl MarkerTradeBidCollateral {
-    pub fn new<S: Into<String>>(marker_address: Addr, marker_denom: S, quote: &[Coin]) -> Self {
+    pub fn new<S: Into<String>>(
+        marker_address: Addr,
+        marker_denom: S,
+        quote: &[Coin],
+        withdraw_shares_after_match: Option<bool>,
+    ) -> Self {
         Self {
             marker_address,
             marker_denom: marker_denom.into(),
             quote: quote.to_owned(),
+            withdraw_shares_after_match,
         }
     }
 }
