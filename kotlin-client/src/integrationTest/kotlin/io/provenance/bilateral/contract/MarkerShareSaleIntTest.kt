@@ -1,6 +1,8 @@
 package io.provenance.bilateral.contract
 
+import io.provenance.bilateral.execute.Ask
 import io.provenance.bilateral.execute.Ask.MarkerShareSaleAsk
+import io.provenance.bilateral.execute.Ask.MarkerTradeAsk
 import io.provenance.bilateral.execute.Bid.MarkerShareSaleBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
@@ -23,6 +25,7 @@ import testconfiguration.functions.grantMarkerAccess
 import testconfiguration.functions.newCoin
 import testconfiguration.functions.newCoins
 import testconfiguration.ContractIntTest
+import testconfiguration.extensions.testGetMarkerTrade
 import java.math.BigInteger
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -440,6 +443,84 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             expected = newCoins(5000, quoteDenom),
             actual = updateResponse.updatedAskOrder.testGetMarkerShareSale().quotePerShare,
             message = "Expected the ask's quote per share to be properly updated",
+        )
+        val cancelResponse = cancelAsk(askUuid.toString())
+        assertEquals(
+            expected = updateResponse.updatedAskOrder,
+            actual = cancelResponse.cancelledAskOrder,
+            message = "The cancelled ask order should be returned in the response",
+        )
+        val afterCancelGrant = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Only a single permission should exist on the marker after cancelling the ask")
+        assertEquals(
+            expected = asker.address(),
+            actual = afterCancelGrant.address,
+            message = "After cancelling the ask, the asker should regain admin control over the marker",
+        )
+        assertEquals(
+            expected = markerPermissions.sorted(),
+            actual = afterCancelGrant.permissionsList.sorted(),
+            message = "After cancelling the ask, the asker should regain its exact permissions",
+        )
+    }
+
+    @Test
+    fun testUpdateAskToMarkerTrade() {
+        val markerDenom = "updateasktomarkertradesingletx"
+        val shareCount = 100L
+        val shareSaleAmount = 50.toBigInteger()
+        val markerPermissions = listOf(Access.ACCESS_ADMIN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val quoteDenom = "updateasktomarkertradesingletxsharesalequote"
+        val askUuid = UUID.randomUUID()
+        assertSucceeds("Creating the marker share sale ask should succeed") {
+            createAsk(
+                createAsk = CreateAsk(
+                    ask = MarkerShareSaleAsk(
+                        id = askUuid.toString(),
+                        markerDenom = markerDenom,
+                        sharesToSell = shareSaleAmount,
+                        quotePerShare = newCoins(100, quoteDenom),
+                        shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+            )
+        }
+        val updateResponse = assertSucceeds("Updating the marker share sale ask should succeed") {
+            updateAsk(
+                updateAsk = UpdateAsk(
+                    ask = MarkerTradeAsk(
+                        id = askUuid.toString(),
+                        markerDenom = markerDenom,
+                        quotePerShare = newCoins(5000, quoteDenom),
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+            )
+        }
+        val tradeCollateral = updateResponse.updatedAskOrder.testGetMarkerTrade()
+        assertEquals(
+            expected = newCoins(5000, quoteDenom),
+            actual = tradeCollateral.quotePerShare,
+            message = "Expected the ask's quote per share to be properly updated",
+        )
+        assertEquals(
+            expected = shareCount.toBigInteger(),
+            actual = tradeCollateral.shareCount,
+            message = "The marker's total share count should be stored in the ask order",
         )
         val cancelResponse = cancelAsk(askUuid.toString())
         assertEquals(

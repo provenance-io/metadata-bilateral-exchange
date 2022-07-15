@@ -50,6 +50,8 @@ sealed interface AskCollateral {
     data class MarkerTrade(
         val markerAddress: String,
         val markerDenom: String,
+        @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
+        val shareCount: BigInteger,
         val quotePerShare: List<Coin>,
         val removedPermissions: List<MarkerAccessGrant>,
     ) : AskCollateral

@@ -1,5 +1,7 @@
 package io.provenance.bilateral.contract
 
+import io.provenance.bilateral.execute.Ask
+import io.provenance.bilateral.execute.Ask.MarkerShareSaleAsk
 import io.provenance.bilateral.execute.Ask.MarkerTradeAsk
 import io.provenance.bilateral.execute.Bid.MarkerTradeBid
 import io.provenance.bilateral.execute.CreateAsk
@@ -8,6 +10,7 @@ import io.provenance.bilateral.execute.ExecuteMatch
 import io.provenance.bilateral.execute.UpdateAsk
 import io.provenance.bilateral.execute.UpdateBid
 import io.provenance.bilateral.models.RequestDescriptor
+import io.provenance.bilateral.models.ShareSaleType
 import io.provenance.marker.v1.Access
 import org.junit.jupiter.api.Test
 import testconfiguration.extensions.getBalance
@@ -21,6 +24,7 @@ import testconfiguration.functions.grantMarkerAccess
 import testconfiguration.functions.newCoin
 import testconfiguration.functions.newCoins
 import testconfiguration.ContractIntTest
+import testconfiguration.extensions.testGetMarkerShareSale
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -198,6 +202,75 @@ class MarkerTradeIntTest : ContractIntTest() {
             expected = newCoins(100, quoteDenom),
             actual = response.updatedAskOrder.testGetMarkerTrade().quotePerShare,
             message = "The quote per share in the ask order should be properly updated",
+        )
+    }
+
+    @Test
+    fun testUpdateAskToMarkerShareSale() {
+        val markerDenom = "updatemarkertradeasktosharesale"
+        val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW, Access.ACCESS_BURN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = 10,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val quoteDenom = "updatemarkertradeasktosharesalequote"
+        val askUuid = UUID.randomUUID()
+        assertSucceeds("Creating an ask should succeed") {
+            createAsk(
+                createAsk = CreateAsk(
+                    ask = MarkerTradeAsk(
+                        id = askUuid.toString(),
+                        markerDenom = markerDenom,
+                        quotePerShare = newCoins(15, quoteDenom),
+                    ),
+                    descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
+                ),
+            )
+        }
+        val response = assertSucceeds("Updating the ask should succeed") {
+            updateAsk(
+                updateAsk = UpdateAsk(
+                    ask = MarkerShareSaleAsk(
+                        id = askUuid.toString(),
+                        markerDenom = markerDenom,
+                        sharesToSell = 5.toBigInteger(),
+                        quotePerShare = newCoins(100, quoteDenom),
+                        shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                    ),
+                    descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
+                ),
+            )
+        }
+        val shareSaleCollateral = response.updatedAskOrder.testGetMarkerShareSale()
+        assertEquals(
+            expected = newCoins(100, quoteDenom),
+            actual = shareSaleCollateral.quotePerShare,
+            message = "The quote per share in the ask order should be properly updated",
+        )
+        assertEquals(
+            expected = 5.toBigInteger(),
+            actual = shareSaleCollateral.totalSharesInSale,
+            message = "The correct total shares in sale should be set in the updated collateral",
+        )
+        assertEquals(
+            expected = 5.toBigInteger(),
+            actual = shareSaleCollateral.remainingSharesInSale,
+            message = "The correct remaining shares in sale should be set in the updated collateral",
+        )
+        assertEquals(
+            expected = ShareSaleType.SINGLE_TRANSACTION,
+            actual = shareSaleCollateral.saleType,
+            message = "The correct sale type should be set in the updated collateral",
         )
     }
 

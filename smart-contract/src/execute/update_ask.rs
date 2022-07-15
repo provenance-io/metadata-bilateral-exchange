@@ -310,6 +310,90 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_marker_trade_update_to_share_sale() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &coins(100, "quote")),
+            None,
+        )
+        .expect("expected the ask to be created");
+        let ask_order_before_update = get_ask_order_by_id(deps.as_ref().storage, "ask_id")
+            .expect("the ask order should be available by id after being created");
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::any(&["this.pb", "that.pio"]),
+        );
+        // Update the marker to simulate a successful ask creation and marker control change to the
+        // contract
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        let response = update_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                50,
+                &coins(250, "quote"),
+                ShareSaleType::SingleTransaction,
+            ),
+            Some(descriptor.clone()),
+        )
+        .expect("the ask update should be successful");
+        let ask_order = assert_valid_response(
+            &deps,
+            &response,
+            RequestType::MarkerShareSale,
+            Some(descriptor),
+        );
+        assert!(
+            response.messages.is_empty(),
+            "no messages should be sent for a marker trade to share sale update",
+        );
+        let collateral = ask_order.collateral.unwrap_marker_share_sale();
+        assert_eq!(
+            DEFAULT_MARKER_ADDRESS,
+            collateral.marker_address.as_str(),
+            "the correct marker address should be included in the updated collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_DENOM, collateral.marker_denom,
+            "the correct marker denom should be included in the updated collateral",
+        );
+        assert_eq!(
+            50,
+            collateral.total_shares_in_sale.u128(),
+            "the correct total shares in sale should be included in the updated collateral",
+        );
+        assert_eq!(
+            50,
+            collateral.remaining_shares_in_sale.u128(),
+            "the correct remaining shares in sale should be included in the updated collateral",
+        );
+        assert_eq!(
+            coins(250, "quote"),
+            collateral.quote_per_share,
+            "the updated quote per share should be included in the updated collateral",
+        );
+        assert_eq!(
+            ask_order_before_update.collateral.unwrap_marker_trade().removed_permissions,
+            collateral.removed_permissions,
+            "the original permissions revoked in the marker trade should be maintained in the update",
+        );
+        assert_eq!(
+            ShareSaleType::SingleTransaction,
+            collateral.sale_type,
+            "the sale type value should be set to the correct value in the updated collateral",
+        );
+    }
+
+    #[test]
     fn test_invalid_marker_trade_update_scenarios() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
@@ -383,7 +467,9 @@ mod tests {
             Ask::new_marker_trade("ask_id_2", DEFAULT_MARKER_DENOM, &coins(100, "quote")),
             None,
         )
-        .expect_err("an error should occur when trying to change the ask type");
+        .expect_err(
+            "an error should occur when trying to change the ask type to a non-marker type",
+        );
         match err {
             ContractError::InvalidUpdate { explanation } => {
                 assert_eq!(
@@ -498,6 +584,76 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_marker_share_sale_single_tx_update_to_marker_trade() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                10,
+                &coins(100, "quote"),
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        )
+        .expect("expected the ask to be created");
+        let ask_order_before_update = get_ask_order_by_id(deps.as_ref().storage, "ask_id")
+            .expect("the ask order should be available by id after being created");
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::any(&["this.pb", "that.pio"]),
+        );
+        // Update the marker to simulate a successful ask creation and marker control change to the
+        // contract
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        let response = update_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &coins(500, "quote")),
+            Some(descriptor.clone()),
+        )
+        .expect("the ask update should be successful");
+        let ask_order =
+            assert_valid_response(&deps, &response, RequestType::MarkerTrade, Some(descriptor));
+        assert!(
+            response.messages.is_empty(),
+            "no messages should be sent for a marker share sale to marker trade update",
+        );
+        let collateral = ask_order.collateral.unwrap_marker_trade();
+        assert_eq!(
+            DEFAULT_MARKER_ADDRESS,
+            collateral.marker_address.as_str(),
+            "the correct marker address should be included in the updated collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_DENOM, collateral.marker_denom,
+            "the correct marker denom should be included in the updated collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_HOLDINGS,
+            collateral.share_count.u128(),
+            "the correct marker share count should be included in the updated collateral",
+        );
+        assert_eq!(
+            coins(500, "quote"),
+            collateral.quote_per_share,
+            "the updated quote per share should be included in the updated collateral",
+        );
+        assert_eq!(
+            ask_order_before_update.collateral.unwrap_marker_share_sale().removed_permissions,
+            collateral.removed_permissions,
+            "the original permissions revoked in the marker share sale should be maintained in the update",
+        );
+    }
+
+    #[test]
     fn test_valid_marker_share_sale_multiple_tx_update() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
@@ -584,6 +740,76 @@ mod tests {
             ShareSaleType::MultipleTransactions,
             collateral.sale_type,
             "the sale type value should stay the same in the updated collateral",
+        );
+    }
+
+    #[test]
+    fn test_valid_marker_share_sale_multiple_tx_update_to_marker_trade() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                50,
+                &coins(100, "quote"),
+                ShareSaleType::MultipleTransactions,
+            ),
+            None,
+        )
+        .expect("expected the ask to be created");
+        let ask_order_before_update = get_ask_order_by_id(deps.as_ref().storage, "ask_id")
+            .expect("the ask order should be available by id after being created");
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::any(&["this.pb", "that.pio"]),
+        );
+        // Update the marker to simulate a successful ask creation and marker control change to the
+        // contract
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        let response = update_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &coins(500, "quote")),
+            Some(descriptor.clone()),
+        )
+        .expect("the ask update should be successful");
+        let ask_order =
+            assert_valid_response(&deps, &response, RequestType::MarkerTrade, Some(descriptor));
+        assert!(
+            response.messages.is_empty(),
+            "no messages should be sent for a marker share sale to marker trade update",
+        );
+        let collateral = ask_order.collateral.unwrap_marker_trade();
+        assert_eq!(
+            DEFAULT_MARKER_ADDRESS,
+            collateral.marker_address.as_str(),
+            "the correct marker address should be included in the updated collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_DENOM, collateral.marker_denom,
+            "the correct marker denom should be included in the updated collateral",
+        );
+        assert_eq!(
+            DEFAULT_MARKER_HOLDINGS,
+            collateral.share_count.u128(),
+            "the correct marker share count should be included in the updated collateral",
+        );
+        assert_eq!(
+            coins(500, "quote"),
+            collateral.quote_per_share,
+            "the updated quote per share should be included in the updated collateral",
+        );
+        assert_eq!(
+            ask_order_before_update.collateral.unwrap_marker_share_sale().removed_permissions,
+            collateral.removed_permissions,
+            "the original permissions revoked in the marker share sale should be maintained in the update",
         );
     }
 
@@ -695,7 +921,9 @@ mod tests {
             ),
             None,
         )
-        .expect_err("an error should occur when trying to change the ask type");
+        .expect_err(
+            "an error should occur when trying to change the ask type to a non-marker type",
+        );
         match err {
             ContractError::InvalidUpdate { explanation } => {
                 assert_eq!(
@@ -724,30 +952,6 @@ mod tests {
             ContractError::InvalidUpdate { explanation } => {
                 assert_eq!(
                     format!("marker share sale with id [ask_id] cannot change marker denom with an update. current denom [{}], proposed new denom [othervalidmarker]", DEFAULT_MARKER_DENOM),
-                    explanation,
-                    "unexpected invalid update error explanation",
-                );
-            }
-            e => panic!("unexpected error: {:?}", e),
-        };
-        let err = update_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &[]),
-            Ask::new_marker_share_sale(
-                "ask_id",
-                DEFAULT_MARKER_DENOM,
-                15,
-                &coins(100, "quote"),
-                ShareSaleType::MultipleTransactions,
-            ),
-            None,
-        )
-        .expect_err("an error should occur when trying to change the share sale type");
-        match err {
-            ContractError::InvalidUpdate { explanation } => {
-                assert_eq!(
-                    "marker share sale with id [ask_id] cannot change share sale type with an update. current [single_transaction], proposed [multiple_transactions]",
                     explanation,
                     "unexpected invalid update error explanation",
                 );
