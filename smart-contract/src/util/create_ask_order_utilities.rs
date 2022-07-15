@@ -174,16 +174,7 @@ fn create_marker_trade_ask_collateral(
                 &existing_ask_order.ask_type,
                 &RequestType::MarkerTrade,
             )?;
-            let existing_marker_denom = match &existing_ask_order.collateral {
-                AskCollateral::MarkerTrade(ref c) => &c.marker_denom,
-                AskCollateral::MarkerShareSale(ref c) => &c.marker_denom,
-                _ => {
-                    return ContractError::invalid_update(
-                        "update attempted to use non-marker collateral",
-                    )
-                    .to_err();
-                }
-            };
+            let existing_marker_denom = get_update_marker_denom(existing_ask_order)?;
             if existing_marker_denom != &marker_trade.marker_denom {
                 return ContractError::invalid_update(
                     format!(
@@ -210,16 +201,7 @@ fn create_marker_trade_ask_collateral(
                     .filter(|perm| perm.address != env.contract.address)
                     .collect::<Vec<AccessGrant>>(),
                 AskCreationType::Update { existing_ask_order } => {
-                    match &existing_ask_order.collateral {
-                        AskCollateral::MarkerTrade(ref c) => c.removed_permissions.to_owned(),
-                        AskCollateral::MarkerShareSale(ref c) => c.removed_permissions.to_owned(),
-                        _ => {
-                            return ContractError::invalid_update(
-                                "update attempted to use non-marker collateral",
-                            )
-                            .to_err();
-                        }
-                    }
+                    get_update_marker_removed_permissions(existing_ask_order)?
                 }
             },
         ),
@@ -268,16 +250,7 @@ fn create_marker_share_sale_ask_collateral(
                 &existing_ask_order.ask_type,
                 &RequestType::MarkerShareSale,
             )?;
-            let existing_marker_denom = match &existing_ask_order.collateral {
-                AskCollateral::MarkerTrade(ref c) => &c.marker_denom,
-                AskCollateral::MarkerShareSale(ref c) => &c.marker_denom,
-                _ => {
-                    return ContractError::invalid_update(
-                        "update attempted to use non-marker collateral",
-                    )
-                    .to_err();
-                }
-            };
+            let existing_marker_denom = get_update_marker_denom(existing_ask_order)?;
             if existing_marker_denom != &marker_share_sale.marker_denom {
                 return ContractError::invalid_update(
                     format!(
@@ -305,16 +278,7 @@ fn create_marker_share_sale_ask_collateral(
                     .filter(|perm| perm.address != env.contract.address)
                     .collect::<Vec<AccessGrant>>(),
                 AskCreationType::Update { existing_ask_order } => {
-                    match &existing_ask_order.collateral {
-                        AskCollateral::MarkerTrade(ref c) => c.removed_permissions.to_owned(),
-                        AskCollateral::MarkerShareSale(ref c) => c.removed_permissions.to_owned(),
-                        _ => {
-                            return ContractError::invalid_update(
-                                "update attempted to use non-marker collateral",
-                            )
-                            .to_err();
-                        }
-                    }
+                    get_update_marker_removed_permissions(existing_ask_order)?
                 }
             },
             marker_share_sale.share_sale_type.to_owned(),
@@ -411,4 +375,38 @@ fn check_ask_type<S: Into<String>>(
     } else {
         ().to_ok()
     }
+}
+
+fn get_update_marker_denom(ask_order: &AskOrder) -> Result<&String, ContractError> {
+    match &ask_order.collateral {
+        AskCollateral::MarkerTrade(ref c) => &c.marker_denom,
+        AskCollateral::MarkerShareSale(ref c) => &c.marker_denom,
+        _ => {
+            return ContractError::invalid_update(format!(
+                "update for ask [{}] of type [{}] attempted to use marker collateral",
+                &ask_order.id,
+                ask_order.ask_type.get_name(),
+            ))
+            .to_err();
+        }
+    }
+    .to_ok()
+}
+
+fn get_update_marker_removed_permissions(
+    ask_order: &AskOrder,
+) -> Result<Vec<AccessGrant>, ContractError> {
+    match &ask_order.collateral {
+        AskCollateral::MarkerTrade(ref c) => c.removed_permissions.to_owned(),
+        AskCollateral::MarkerShareSale(ref c) => c.removed_permissions.to_owned(),
+        _ => {
+            return ContractError::invalid_update(format!(
+                "update for ask [{}] of type [{}] attempted to use marker collateral",
+                &ask_order.id,
+                ask_order.ask_type.get_name(),
+            ))
+            .to_err();
+        }
+    }
+    .to_ok()
 }
