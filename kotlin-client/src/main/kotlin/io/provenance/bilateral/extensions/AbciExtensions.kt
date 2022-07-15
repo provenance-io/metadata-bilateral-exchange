@@ -9,7 +9,7 @@ fun BroadcastTxResponse.singleWasmEvent(): Event = txResponse
     .singleOrNull { it.type == "wasm" }
     ?: throw ProvenanceEventParsingException("Expected a single wasm event to be emitted by the Metadata Bilateral Exchange smart contract. Got log: ${txResponse.rawLog}")
 
-fun Event.attributeOrNull(name: String): String? = attributesList.singleOrNull { it.key.toRawStringContent() == name }?.value?.toRawStringContent()
+fun Event.attributeOrNull(name: String): String? = attributesList.singleOrNull { it.key.toStringUTF8() == name }?.value?.toStringUTF8()
 
 fun Event.attribute(name: String): String = attributeOrNull(name)
-    ?: throw ProvenanceEventParsingException("Failed to find attribute by name [$name] in list: ${attributesList.map { it.key.toRawStringContent() }}")
+    ?: throw ProvenanceEventParsingException("Failed to find attribute by name [$name] in list: ${attributesList.map { it.key.toStringUTF8() }}")

@@ -13,26 +13,6 @@ import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
 import io.provenance.bilateral.serialization.CosmWasmUintToBigIntegerDeserializer
 import java.math.BigInteger
 
-/**
- * See ContractSearchType for JSON payloads for each different type of ask search.
- */
-@JsonNaming(SnakeCaseStrategy::class)
-@JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
-@JsonTypeName("search_asks")
-data class SearchAsks(val search: ContractSearchRequest) : ContractQueryMsg {
-    override fun toLoggingString(): String = "searchAsks, ${search.getLoggingSuffix()}"
-}
-
-/**
- * See ContractSearchType for JSON payloads for each different type of bid search.
- */
-@JsonNaming(SnakeCaseStrategy::class)
-@JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
-@JsonTypeName("search_bids")
-data class SearchBids(val search: ContractSearchRequest) : ContractQueryMsg {
-    override fun toLoggingString(): String = "searchBids, ${search.getLoggingSuffix()}"
-}
-
 @JsonNaming(SnakeCaseStrategy::class)
 data class ContractSearchRequest(
     val searchType: ContractSearchType,
@@ -41,6 +21,14 @@ data class ContractSearchRequest(
     @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
     val pageNumber: BigInteger? = null,
 ) {
+    companion object {
+        val DEFAULT_PAGE_SIZE: BigInteger = BigInteger.TEN
+        val MAX_PAGE_SIZE: BigInteger = 25.toBigInteger()
+        val MIN_PAGE_SIZE: BigInteger = BigInteger.ONE
+        val DEFAULT_PAGE_NUMBER: BigInteger = BigInteger.ONE
+        val MIN_PAGE_NUMBER: BigInteger = BigInteger.ONE
+    }
+
     internal fun searchAsks(): SearchAsks = SearchAsks(this)
     internal fun searchBids(): SearchBids = SearchBids(this)
 
@@ -51,6 +39,20 @@ data class ContractSearchRequest(
         is ContractSearchType.Id -> "[id], id = [${this.searchType.id}]"
         is ContractSearchType.Owner -> "[owner], owner = [${this.searchType.owner}]"
     }.let { searchTypeString -> "searchType = $searchTypeString, pageSize = [${pageSize ?: "DEFAULT"}, pageNumber = [${pageNumber ?: "DEFAULT"}]" }
+}
+
+@JsonNaming(SnakeCaseStrategy::class)
+@JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
+@JsonTypeName("search_asks")
+data class SearchAsks(val search: ContractSearchRequest) : ContractQueryMsg {
+    override fun toLoggingString(): String = "searchAsks, ${search.getLoggingSuffix()}"
+}
+
+@JsonNaming(SnakeCaseStrategy::class)
+@JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
+@JsonTypeName("search_bids")
+data class SearchBids(val search: ContractSearchRequest) : ContractQueryMsg {
+    override fun toLoggingString(): String = "searchBids, ${search.getLoggingSuffix()}"
 }
 
 sealed interface ContractSearchType {

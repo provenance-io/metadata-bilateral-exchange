@@ -34,6 +34,13 @@ can only occur when the bidder has placed the appropriate quote that matches the
 is completed, the asker will receive the requested quote funds in coin, and the bidder will receive the goods specified
 by the asker.  Matches must be executed by the contract's admin account.
 
+### Update
+At any time before a match occurs, an asker or bidder may update their ask or bid order.  When this occurs, any goods
+held by the contract on behalf of the asker or bidder that differ from the goods provided during the update will be 
+refunded.  Ex: A coin trade ask provides a base of 100askcoin, but the update specifies a base of 200askcoin2.  The
+update will then store 200askcoin2 in the contract, and the original 100askcoin will be refunded to the asker. 
+Ask/bid ids cannot be altered by updates, and ask/bid types cannot be altered by updates.
+
 ### Cancellation
 At any time before a match occurs, an asker or bidder may cancel their ask or bid order.  When this occurs, any goods
 held by the contract on the behalf of the asker or bidder will be returned to the originating account in totality.
@@ -68,34 +75,32 @@ In this trade, the asker lists an amount of marker-held denom as the base.  The 
 AND withdraw permissions on the marker prior to the asker invoking the `create_ask` execution route for this trade type
 to be accepted.  Additionally, only an administrator of the marker may list a marker for trade and at least one of the
 marker's coins must remain in the marker's account holdings.  The marker is then stripped of all permissions by the
-contract to ensure that no modifications can be made before a cancellation or match occurs.  The behavior of this listing
-differs based on the share sale type:
+contract to ensure that no modifications can be made before a cancellation or match occurs.  In both marker share sale
+"sale types," the asker specifies a `shares_to_sell` value and a `quote_per_share` value that dictates how many shares
+will be sold in the transaction.  The `shares_to_sell` value must always be less than or equal to the total number of
+shares currently owned by the marker.  Each sale type differs in its execution:
 
-* _Single Share Sale_: In this type, the asker chooses a `share_count`, which specifies how many shares of the marker
-will be sold.  This number must, of course, be less than or equal to the remaining marker shares held by the marker
-account.  The asker also specifies a `quote_per_share`, which indicates how much each share will be sold for. After a match occurs,
-the asker is sent the quote funds from the bidder, and the asker's marker permissions are restored.  The bidder receives
-as many shares as were listed as the `share_count` value, and the ask and bid orders are deleted from the contract.
+* _Single Share Sale_: In this type, the asker is specifying that a single transaction will occur.  The bidder must
+provide the exact same `share_count` in their bid as the asker's `shares_to_sell` amount, which then executes as a 
+single transaction.  The asker's `shares_to_sell` is multiplied by each coin in the `quote_per_share` to create a total
+quote, which must match the quote provided by the bidder, unless the asker specifies that they will accept mismatched
+bids during match execution.
 
-_Example_: If the asker lists `10` as the `share_count` and `20nhash` as the `quote_per_share`, then the bidder must list a quote of
-`10` purchased shares at `200nhash`.  This will produce a valid match and the trade can occur.
+_Example_: If the asker lists `10` as the `shares_to_sell` and `20nhash` as the `quote_per_share`, then the bidder must 
+list a quote of `10` purchased shares (`share_count`) at `200nhash`.  This will produce a valid match and the trade can occur.
 
-* _Multiple Share Sale_: In this type, the asker specifies a `remove_sale_share_threshold`, which indicates the amount
-of shares remaining at the end of the sale.  If no value is provided, the contract assumes the value to be zero and will
-not stop the sale until all marker shares have been sold to bidders.  Like the single share type, the asker also provides
-a `quote_per_share` value, specifying how much each share costs to purchase.  Each bidder provides how many shares they
-wish to purchase, as well as a properly calculated quote.  When a match is made, the asker receives the quote from the
-bidder, and the bidder receives their specified count of shares.  The contract then determines if the marker has any
-shares remaining above the `remove_sale_share_threshold`.  If it does, the ask remains available and more bids can be
-matched against it.  If it does not, the ask is deleted and the marker permissions are restored to the asker.  In all
-cases, the bid order is always deleted after the bidder receives their marker shares.  A match will never be accepted if
-the bid intends to purchase enough shares to reduce the marker's share holdings beneath the `remove_sale_share_threshold`.
+* _Multiple Share Sale_: In this type, the asker is specifying that they will match as many bids as it takes to sell a
+total of `shares_to_sell` shares.  This can occur as many times as is required to sell all of the shares, but each bid
+must specify the correct quote, which will always be equivalent to the bid's `share_count` multiplied by the `quote_per_share`
+of the ask.  This may, of course, be overridden if the asker's specifies that they will accept mismatched bids during
+the match.  Once an amount of shares in the ask are sold equivalent to the `shares_to_sell` amount, the ask is deleted.
+All bids are immediately deleted after successful matches.
 
-_Example_: The asker has a marker with 100 shares of `markerdenom`.  They list the `remove_sale_share_threshold` as `50` and the 
+_Example_: The asker has a marker with 100 shares of `markerdenom`.  They list the `shares_to_sell` as `50` and the 
 `quote_per_share` as `10nhash`.  A bidder produces a request for `15` shares with the proper quote of `150nhash`.  The
 match is made, the asker receives `150nhash` the bidder receives `15markerdenom` and the bid is deleted.  The remaining
-balance of shares is 85, so the ask remains in the contract and the marker is not yet returned to the asker.  A second
-bid comes in for `35` shares at `350nhash`.  The match is made, the asker receives `350nhash` and the bidder receives
+balance of shares in the sale 35, so the ask remains in the contract and the marker is not yet returned to the asker.  
+A second bid comes in for `35` shares at `350nhash`.  The match is made, the asker receives `350nhash` and the bidder receives
 `35markerdenom`.  The ask and bid are deleted, and the asker receives their permissions to the marker again.
 
 #### Scope Trade

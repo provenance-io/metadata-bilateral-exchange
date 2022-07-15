@@ -14,4 +14,4 @@ fun TxResponse.executeContractDataToJsonBytes(): ByteArray = Hex
     ?.let(MsgExecuteContractResponse::parseFrom)
     ?.data
     ?.toByteArray()
-    ?: throw IllegalStateException("Response bytes returned could not be parsed into a single MsgData with the proper formatting")
+    ?: throw IllegalStateException("Could not parse tx data to contract json. Hex: ${this.data}")
