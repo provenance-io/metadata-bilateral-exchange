@@ -5,7 +5,6 @@ use crate::types::request::bid_types::bid::{
 use crate::types::request::bid_types::bid_collateral::BidCollateral;
 use crate::types::request::bid_types::bid_order::BidOrder;
 use crate::types::request::request_descriptor::RequestDescriptor;
-use crate::types::request::request_type::RequestType;
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::get_single_marker_coin_holding;
 use crate::util::request_fee::generate_request_fee;
@@ -14,7 +13,7 @@ use provwasm_std::{ProvenanceMsg, ProvenanceQuerier, ProvenanceQuery};
 
 pub enum BidCreationType {
     New,
-    Update { existing_bid_order: Box<BidOrder> },
+    Update,
 }
 
 pub struct BidOrderCreationResponse {
@@ -36,23 +35,18 @@ pub fn create_bid_order(
             (resp.fee_send_msg, resp.funds_after_fee)
         }
         // Updates do not charge creation fees
-        BidCreationType::Update { .. } => (None, info.funds.to_owned()),
+        BidCreationType::Update => (None, info.funds.to_owned()),
     };
     let collateral = match &bid {
-        Bid::CoinTrade(coin_trade) => {
-            create_coin_trade_collateral(creation_type, &funds_after_fee, coin_trade)
-        }
+        Bid::CoinTrade(coin_trade) => create_coin_trade_collateral(&funds_after_fee, coin_trade),
         Bid::MarkerTrade(marker_trade) => {
-            create_marker_trade_collateral(creation_type, deps, &funds_after_fee, marker_trade)
+            create_marker_trade_collateral(deps, &funds_after_fee, marker_trade)
         }
-        Bid::MarkerShareSale(marker_share_sale) => create_marker_share_sale_collateral(
-            creation_type,
-            deps,
-            &funds_after_fee,
-            marker_share_sale,
-        ),
+        Bid::MarkerShareSale(marker_share_sale) => {
+            create_marker_share_sale_collateral(deps, &funds_after_fee, marker_share_sale)
+        }
         Bid::ScopeTrade(scope_trade) => {
-            create_scope_trade_collateral(creation_type, &funds_after_fee, scope_trade)
+            create_scope_trade_collateral(&funds_after_fee, scope_trade)
         }
     }?;
     let bid_order = BidOrder::new(bid.get_id(), info.sender.clone(), collateral, descriptor)?;
@@ -64,7 +58,6 @@ pub fn create_bid_order(
 }
 
 fn create_coin_trade_collateral(
-    creation_type: BidCreationType,
     quote_funds: &[Coin],
     coin_trade: &CoinTradeBid,
 ) -> Result<BidCollateral, ContractError> {
@@ -80,21 +73,10 @@ fn create_coin_trade_collateral(
         )
         .to_err();
     }
-    match creation_type {
-        BidCreationType::New => {}
-        BidCreationType::Update { existing_bid_order } => {
-            check_bid_type(
-                &existing_bid_order.id,
-                &existing_bid_order.bid_type,
-                &RequestType::CoinTrade,
-            )?;
-        }
-    }
     BidCollateral::coin_trade(&coin_trade.base, quote_funds).to_ok()
 }
 
 fn create_marker_trade_collateral(
-    creation_type: BidCreationType,
     deps: &DepsMut<ProvenanceQuery>,
     quote_funds: &[Coin],
     marker_trade: &MarkerTradeBid,
@@ -111,16 +93,6 @@ fn create_marker_trade_collateral(
         )
         .to_err();
     }
-    match creation_type {
-        BidCreationType::New => {}
-        BidCreationType::Update { existing_bid_order } => {
-            check_bid_type(
-                &existing_bid_order.id,
-                &existing_bid_order.bid_type,
-                &RequestType::MarkerTrade,
-            )?;
-        }
-    }
     // This grants us access to the marker address, as well as ensuring that the marker is real
     let marker =
         ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.marker_denom)?;
@@ -134,7 +106,6 @@ fn create_marker_trade_collateral(
 }
 
 fn create_marker_share_sale_collateral(
-    creation_type: BidCreationType,
     deps: &DepsMut<ProvenanceQuery>,
     quote_funds: &[Coin],
     marker_share_sale: &MarkerShareSaleBid,
@@ -169,16 +140,6 @@ fn create_marker_share_sale_collateral(
         )])
         .to_err();
     }
-    match creation_type {
-        BidCreationType::New => {}
-        BidCreationType::Update { existing_bid_order } => {
-            check_bid_type(
-                &existing_bid_order.id,
-                &existing_bid_order.bid_type,
-                &RequestType::MarkerShareSale,
-            )?;
-        }
-    }
     BidCollateral::marker_share_sale(
         marker.address,
         &marker_share_sale.marker_denom,
@@ -189,7 +150,6 @@ fn create_marker_share_sale_collateral(
 }
 
 fn create_scope_trade_collateral(
-    creation_type: BidCreationType,
     quote_funds: &[Coin],
     scope_trade: &ScopeTradeBid,
 ) -> Result<BidCollateral, ContractError> {
@@ -205,33 +165,5 @@ fn create_scope_trade_collateral(
         )
         .to_err();
     }
-    match creation_type {
-        BidCreationType::New => {}
-        BidCreationType::Update { existing_bid_order } => {
-            check_bid_type(
-                &existing_bid_order.id,
-                &existing_bid_order.bid_type,
-                &RequestType::ScopeTrade,
-            )?;
-        }
-    }
     BidCollateral::scope_trade(&scope_trade.scope_address, quote_funds).to_ok()
-}
-
-fn check_bid_type<S: Into<String>>(
-    bid_id: S,
-    existing_bid_type: &RequestType,
-    expected_bid_type: &RequestType,
-) -> Result<(), ContractError> {
-    if existing_bid_type != expected_bid_type {
-        ContractError::invalid_update(format!(
-            "bid with id [{}] cannot change bid type from [{}] to [{}]",
-            bid_id.into(),
-            existing_bid_type.get_name(),
-            expected_bid_type.get_name(),
-        ))
-        .to_err()
-    } else {
-        ().to_ok()
-    }
 }

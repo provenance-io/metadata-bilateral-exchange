@@ -478,6 +478,12 @@
         },
         "marker_denom": {
           "type": "string"
+        },
+        "withdraw_shares_after_match": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       }
     },

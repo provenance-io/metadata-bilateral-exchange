@@ -18,16 +18,8 @@ pub fn update_bid(
         return ContractError::unauthorized().to_err();
     }
     let refunded_quote = existing_bid_order.collateral.get_quote();
-    let new_bid_order = create_bid_order(
-        &deps,
-        &info,
-        bid,
-        descriptor,
-        BidCreationType::Update {
-            existing_bid_order: Box::new(existing_bid_order),
-        },
-    )?
-    .bid_order;
+    let new_bid_order =
+        create_bid_order(&deps, &info, bid, descriptor, BidCreationType::Update)?.bid_order;
     update_bid_order(deps.storage, &new_bid_order)?;
     Response::new()
         .add_attribute("action", "update_bid")
@@ -103,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_coin_trade_update() {
+    fn test_valid_coin_trade_update_to_same_type() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         create_bid(
@@ -141,6 +133,47 @@ mod tests {
             coins(100, "base"),
             collateral.base,
             "the correct base should be set on the bid",
+        );
+    }
+
+    #[test]
+    fn test_valid_coin_trade_update_to_new_type() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        create_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(150, "quote")),
+            Bid::new_coin_trade("bid_id", &coins(150, "base")),
+            None,
+        )
+        .expect("expected the bid to be created");
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::all(&["my.pb", "attributes.pb"]),
+        );
+        let response = update_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(100, "quote")),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
+            Some(descriptor.clone()),
+        )
+        .expect("the bid update should be successful");
+        let bid_order = assert_valid_response(
+            &deps,
+            &response,
+            RequestType::ScopeTrade,
+            &coins(150, "quote"),
+            Some(descriptor),
+        );
+        let collateral = bid_order.collateral.unwrap_scope_trade();
+        assert_eq!(
+            coins(100, "quote"),
+            collateral.quote,
+            "the correct quote should be set on the bid",
+        );
+        assert_eq!(
+            DEFAULT_SCOPE_ADDR, collateral.scope_address,
+            "the correct scope address should be set on the bid",
         );
     }
 
@@ -185,22 +218,6 @@ mod tests {
         let err = update_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(150, "quote")),
-            Bid::new_coin_trade("bid_id_2", &coins(100, "base")),
-            None,
-        )
-        .expect_err("an error should occur when trying to change bid type");
-        match err {
-            ContractError::InvalidUpdate { explanation } => {
-                assert_eq!(
-                    explanation,
-                    "bid with id [bid_id_2] cannot change bid type from [scope_trade] to [coin_trade]",
-                );
-            }
-            e => panic!("unexpected error: {:?}", e),
-        };
-        let err = update_bid(
-            deps.as_mut(),
-            mock_info("bidder", &coins(150, "quote")),
             Bid::new_coin_trade("bid_id", &coins(150, "base")),
             Some(RequestDescriptor::new_populated_attributes(
                 "description",
@@ -212,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_marker_trade_update() {
+    fn test_valid_marker_trade_update_to_same_type() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         // Create a new contract-owned marker to ensure the creation functions see it
@@ -260,6 +277,50 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_marker_trade_update_to_new_type() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        // Create a new contract-owned marker to ensure the creation functions see it
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        create_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(1400, "quote")),
+            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
+            None,
+        )
+        .expect("expected the bid to be created");
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::all(&["my.pb", "attributes.pb"]),
+        );
+        let response = update_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(200, "quote")),
+            Bid::new_coin_trade("bid_id", &coins(100, "base")),
+            Some(descriptor.clone()),
+        )
+        .expect("the bid update should be successful");
+        let bid_order = assert_valid_response(
+            &deps,
+            &response,
+            RequestType::CoinTrade,
+            &coins(1400, "quote"),
+            Some(descriptor),
+        );
+        let collateral = bid_order.collateral.unwrap_coin_trade();
+        assert_eq!(
+            coins(200, "quote"),
+            collateral.quote,
+            "the correct quote should be set on the bid",
+        );
+        assert_eq!(
+            coins(100, "base"),
+            collateral.base,
+            "the correct base should be set on the bid",
+        );
+    }
+
+    #[test]
     fn test_invalid_marker_trade_update_scenarios() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
@@ -301,22 +362,6 @@ mod tests {
         .expect("expected the second bid to be created successfully");
         let err = update_bid(
             deps.as_mut(),
-            mock_info("bidder", &coins(150, "quote")),
-            Bid::new_marker_trade("bid_id_2", DEFAULT_MARKER_DENOM, None),
-            None,
-        )
-        .expect_err("an error should occur when trying to change the bid type");
-        match err {
-            ContractError::InvalidUpdate { explanation } => {
-                assert_eq!(
-                    explanation,
-                    "bid with id [bid_id_2] cannot change bid type from [coin_trade] to [marker_trade]",
-                );
-            }
-            e => panic!("unexpected error: {:?}", e),
-        };
-        let err = update_bid(
-            deps.as_mut(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_marker_trade("bid_id", "some other denom", None),
             None,
@@ -343,7 +388,7 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_marker_share_sale_update() {
+    fn test_valid_marker_share_sale_update_to_same_type() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         // Create a new contract-owned marker to ensure the creation functions see it
@@ -392,6 +437,50 @@ mod tests {
             25,
             collateral.share_count.u128(),
             "the correct share count should be set on the bid",
+        );
+    }
+
+    #[test]
+    fn test_valid_marker_share_sale_update_to_new_type() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        // Create a new contract-owned marker to ensure the creation functions see it
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        create_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(10, "quote")),
+            Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
+            None,
+        )
+        .expect("expected the bid to be created");
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::all(&["my.pb", "attributes.pb"]),
+        );
+        let response = update_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(444, "quote")),
+            Bid::new_coin_trade("bid_id", &coins(234, "base")),
+            Some(descriptor.clone()),
+        )
+        .expect("the bid update should be successful");
+        let bid_order = assert_valid_response(
+            &deps,
+            &response,
+            RequestType::CoinTrade,
+            &coins(10, "quote"),
+            Some(descriptor),
+        );
+        let collateral = bid_order.collateral.unwrap_coin_trade();
+        assert_eq!(
+            coins(444, "quote"),
+            collateral.quote,
+            "the correct quote should be set on the bid",
+        );
+        assert_eq!(
+            coins(234, "base"),
+            collateral.base,
+            "the correct base should be set on the bid",
         );
     }
 
@@ -500,22 +589,6 @@ mod tests {
         .expect("expected the second bid to be created successfully");
         let err = update_bid(
             deps.as_mut(),
-            mock_info("bidder", &coins(100, "quote")),
-            Bid::new_marker_share_sale("bid_id_2", DEFAULT_MARKER_DENOM, 10),
-            None,
-        )
-        .expect_err("an error should occur when trying to change the bid type");
-        match err {
-            ContractError::InvalidUpdate { explanation } => {
-                assert_eq!(
-                    explanation,
-                    "bid with id [bid_id_2] cannot change bid type from [coin_trade] to [marker_share_sale]",
-                );
-            }
-            e => panic!("unexpected error: {:?}", e),
-        };
-        let err = update_bid(
-            deps.as_mut(),
             mock_info("bidder", &coins(10, "quote")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
             Some(RequestDescriptor::new_populated_attributes(
@@ -528,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_scope_trade_update() {
+    fn test_valid_scope_trade_update_to_same_type() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut().storage);
         create_bid(
@@ -565,6 +638,48 @@ mod tests {
         assert_eq!(
             DEFAULT_SCOPE_ADDR, collateral.scope_address,
             "the correct scope address should be set on the bid",
+        );
+    }
+
+    #[test]
+    fn test_valid_scope_trade_update_to_new_type() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut().storage);
+        create_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(11, "quote")),
+            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
+            None,
+        )
+        .expect("expected the bid to be created");
+        let descriptor = RequestDescriptor::new_populated_attributes(
+            "description",
+            AttributeRequirement::all(&["my.pb", "attributes.pb"]),
+        );
+        let response = update_bid(
+            deps.as_mut(),
+            mock_info("bidder", &coins(111, "quote")),
+            Bid::new_coin_trade("bid_id", &coins(555, "base")),
+            Some(descriptor.clone()),
+        )
+        .expect("the bid update should be successful");
+        let bid_order = assert_valid_response(
+            &deps,
+            &response,
+            RequestType::CoinTrade,
+            &coins(11, "quote"),
+            Some(descriptor),
+        );
+        let collateral = bid_order.collateral.unwrap_coin_trade();
+        assert_eq!(
+            coins(111, "quote"),
+            collateral.quote,
+            "the correct quote should be set on the bid",
+        );
+        assert_eq!(
+            coins(555, "base"),
+            collateral.base,
+            "the correct base should be set on the bid",
         );
     }
 
@@ -606,22 +721,6 @@ mod tests {
             None,
         )
         .expect("the second bid should be created successfully");
-        let err = update_bid(
-            deps.as_mut(),
-            mock_info("bidder", &coins(100, "quote")),
-            Bid::new_scope_trade("bid_id_2", DEFAULT_SCOPE_ADDR),
-            None,
-        )
-        .expect_err("an error should occur when trying to change the bid type");
-        match err {
-            ContractError::InvalidUpdate { explanation } => {
-                assert_eq!(
-                    explanation,
-                    "bid with id [bid_id_2] cannot change bid type from [coin_trade] to [scope_trade]",
-                );
-            }
-            e => panic!("unexpected error: {:?}", e),
-        };
         let err = update_bid(
             deps.as_mut(),
             mock_info("bidder", &coins(123, "quote")),
