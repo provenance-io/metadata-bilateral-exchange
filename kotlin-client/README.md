@@ -29,12 +29,12 @@ import io.provenance.client.grpc.GasEstimationMethod
 import io.provenance.client.grpc.PbClient
 import java.net.URI
 
-fun makeClient(): BilateralContractClient = BilateralContractClient.new(
+fun makeClient(): BilateralContractClient = BilateralContractClient.builder(
     pbClient = PbClient(
         chainId = "chain-local",
         channelUri = URI.create("http://localhost:9090"),
         gasEstimationMethod = GasEstimationMethod.MSG_FEE_CALCULATION
     ),
     addressResolver = ContractAddressResolver.FromName("mycontractname.pb"),
-)
+).build()
 ```
