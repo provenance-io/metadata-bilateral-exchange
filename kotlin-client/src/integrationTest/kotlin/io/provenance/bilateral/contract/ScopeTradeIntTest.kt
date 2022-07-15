@@ -1,6 +1,7 @@
 package io.provenance.bilateral.contract
 
 import io.provenance.bilateral.execute.Ask.ScopeTradeAsk
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.Bid.ScopeTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
@@ -15,6 +16,7 @@ import mu.KLogging
 import org.junit.jupiter.api.Test
 import testconfiguration.ContractIntTest
 import testconfiguration.extensions.getBalance
+import testconfiguration.extensions.testGetCoinTrade
 import testconfiguration.extensions.testGetScopeTrade
 import testconfiguration.functions.assertSingle
 import testconfiguration.functions.assertSucceeds
@@ -221,7 +223,7 @@ class ScopeTradeIntTest : ContractIntTest() {
     }
 
     @Test
-    fun testUpdateBid() {
+    fun testUpdateBidSameType() {
         val quoteDenom = "updatescopetradebidquote"
         val quoteDenom2 = "updatescopetradebidquote2"
         giveTestDenom(
@@ -269,6 +271,74 @@ class ScopeTradeIntTest : ContractIntTest() {
             expected = newCoins(300, quoteDenom2),
             actual = response.updatedBidOrder.testGetScopeTrade().quote,
             message = "Expected the updated bid order to include the new quote",
+        )
+        assertEquals(
+            expected = 1000,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
+            message = "The original bid quote denom should be refunded to the bidder",
+        )
+        assertEquals(
+            expected = 700,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom2),
+            message = "The bid should have debited the new quote denom from the bidder",
+        )
+    }
+
+    @Test
+    fun testUpdateBidNewType() {
+        val quoteDenom = "updatescopetradenewtypebidquote"
+        val quoteDenom2 = "updatescopetradenewtypebidquote2"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(1000, quoteDenom),
+            receiverAddress = bidder.address(),
+        )
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(1000, quoteDenom2),
+            receiverAddress = bidder.address(),
+        )
+        val bidUuid = UUID.randomUUID()
+        val scopeAddress = MetadataAddress.forScope(UUID.randomUUID()).toString()
+        assertSucceeds("Expected creating a scope trade bid to succeed") {
+            createBid(
+                createBid = CreateBid(
+                    bid = ScopeTradeBid(
+                        id = bidUuid.toString(),
+                        scopeAddress = scopeAddress,
+                        quote = newCoins(100, quoteDenom),
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+            )
+        }
+        assertEquals(
+            expected = 900,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
+            message = "The bid should have removed the correct amount of quote funds from the bidder account",
+        )
+        val response = assertSucceeds("Expected updating a scope trade bid to succeed") {
+            updateBid(
+                updateBid = UpdateBid(
+                    bid = CoinTradeBid(
+                        id = bidUuid.toString(),
+                        quote = newCoins(300, quoteDenom2),
+                        base = newCoins(1, "some base"),
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+            )
+        }
+        val collateral = response.updatedBidOrder.testGetCoinTrade()
+        assertEquals(
+            expected = newCoins(300, quoteDenom2),
+            actual = collateral.quote,
+            message = "Expected the updated bid order to include the new quote",
+        )
+        assertEquals(
+            expected = newCoins(1, "some base"),
+            actual = collateral.base,
+            message = "Expected the updated bid order to include the new base",
         )
         assertEquals(
             expected = 1000,

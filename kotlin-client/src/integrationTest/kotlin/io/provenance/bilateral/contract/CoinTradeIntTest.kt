@@ -2,6 +2,7 @@ package io.provenance.bilateral.contract
 
 import io.provenance.bilateral.execute.Ask.CoinTradeAsk
 import io.provenance.bilateral.execute.Bid.CoinTradeBid
+import io.provenance.bilateral.execute.Bid.ScopeTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
@@ -15,6 +16,7 @@ import testconfiguration.ContractIntTest
 import testconfiguration.extensions.getBalance
 import testconfiguration.extensions.getBalanceMap
 import testconfiguration.extensions.testGetCoinTrade
+import testconfiguration.extensions.testGetScopeTrade
 import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.giveTestDenom
 import testconfiguration.functions.newCoin
@@ -362,7 +364,7 @@ class CoinTradeIntTest : ContractIntTest() {
     }
 
     @Test
-    fun testUpdateBid() {
+    fun testUpdateBidToSameType() {
         val quoteDenom = "updatecointradeaskquote"
         val quote2Denom = "updatecointradeaskquote2"
         val baseDenom = "updatecointradeaskbase"
@@ -414,6 +416,83 @@ class CoinTradeIntTest : ContractIntTest() {
             expected = newCoins(200, baseDenom),
             actual = updatedCollateral.base,
             message = "Expected the base to be properly updated",
+        )
+        assertEquals(
+            expected = 1000,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
+            message = "The bidder's quote denom should have been refunded from the initial bid, restoring their balance to max",
+        )
+        assertEquals(
+            expected = 400,
+            actual = pbClient.getBalance(bidder.address(), quote2Denom),
+            message = "The bidder's account should have been debited of its quote2 denom",
+        )
+        val cancelResponse = cancelBid(bidUuid.toString(), bidder)
+        assertEquals(
+            expected = updateResponse.updatedBidOrder,
+            actual = cancelResponse.cancelledBidOrder,
+            message = "The cancel response should include the cancelled bid order",
+        )
+        assertEquals(
+            expected = 1000,
+            actual = pbClient.getBalance(bidder.address(), quote2Denom),
+            message = "After cancelling the updated order, the bidder should have all of its quote2Denom amount from a refund",
+        )
+    }
+
+    @Test
+    fun testUpdateBidToNewType() {
+        val quoteDenom = "updatecointradenewtypeaskquote"
+        val quote2Denom = "updatecointradenewtypeaskquote2"
+        val baseDenom = "updatecointradenewtypeaskbase"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(1000, quoteDenom),
+            receiverAddress = bidder.address(),
+        )
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(1000, quote2Denom),
+            receiverAddress = bidder.address(),
+        )
+        val bidUuid = UUID.randomUUID()
+        assertSucceeds("Initial ask should be created without error") {
+            createBid(
+                createBid = CreateBid(
+                    bid = CoinTradeBid(
+                        id = bidUuid.toString(),
+                        quote = newCoins(100, quoteDenom),
+                        base = newCoins(100, baseDenom),
+                    ),
+                ),
+            )
+        }
+        assertEquals(
+            expected = 900,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
+            message = "The bidder's account should have been debited of its quote denom",
+        )
+        val updateResponse = assertSucceeds("Update bid should succeed without error") {
+            updateBid(
+                updateBid = UpdateBid(
+                    bid = ScopeTradeBid(
+                        id = bidUuid.toString(),
+                        quote = newCoins(600, quote2Denom),
+                        scopeAddress = "some rando scope",
+                    )
+                ),
+            )
+        }
+        val updatedCollateral = updateResponse.updatedBidOrder.testGetScopeTrade()
+        assertEquals(
+            expected = newCoins(600, quote2Denom),
+            actual = updatedCollateral.quote,
+            message = "Expected the quote to be properly updated",
+        )
+        assertEquals(
+            expected = "some rando scope",
+            actual = updatedCollateral.scopeAddress,
+            message = "Expected the scope address to be properly updated",
         )
         assertEquals(
             expected = 1000,

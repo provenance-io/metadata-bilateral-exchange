@@ -2,6 +2,7 @@ package io.provenance.bilateral.contract
 
 import io.provenance.bilateral.execute.Ask.MarkerShareSaleAsk
 import io.provenance.bilateral.execute.Ask.MarkerTradeAsk
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.Bid.MarkerShareSaleBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test
 import testconfiguration.ContractIntTest
 import testconfiguration.extensions.getBalance
 import testconfiguration.extensions.getMarkerAccount
+import testconfiguration.extensions.testGetCoinTrade
 import testconfiguration.extensions.testGetMarkerShareSale
 import testconfiguration.extensions.testGetMarkerTrade
 import testconfiguration.functions.assertSingle
@@ -541,7 +543,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
     }
 
     @Test
-    fun testUpdateBid() {
+    fun testUpdateBidToSameType() {
         val markerDenom = "updatebidsingletx"
         val shareCount = 100L
         val shareSaleAmount = 50.toBigInteger()
@@ -560,8 +562,8 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             grantAddress = contractInfo.contractAddress,
             permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
         )
-        val quoteDenom = "updateasksingletxsharesalequote"
-        val quoteDenom2 = "updateasksingletxsharesalequote2"
+        val quoteDenom = "updatebidsingletxsharesalequote"
+        val quoteDenom2 = "updatebidsingletxsharesalequote2"
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, quoteDenom),
@@ -623,6 +625,107 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             expected = newCoins(999, quoteDenom2),
             actual = response.updatedBidOrder.testGetMarkerShareSale().quote,
             message = "Expected the bid's quote to be properly updated",
+        )
+        assertEquals(
+            expected = 1000,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
+            message = "The bidder's quote should be fully refunded from the original bid",
+        )
+        assertEquals(
+            expected = 1,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom2),
+            message = "The bidder's quote2 should be debited down by the appropriate amount",
+        )
+    }
+
+    @Test
+    fun testUpdateBidToNewType() {
+        val markerDenom = "updatebidnewtypesingletx"
+        val shareCount = 100L
+        val shareSaleAmount = 50.toBigInteger()
+        val markerPermissions = listOf(Access.ACCESS_ADMIN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val quoteDenom = "updatebidnewtypesingletxsharesalequote"
+        val quoteDenom2 = "updatebidnewtypesingletxsharesalequote2"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(1000, quoteDenom),
+            receiverAddress = bidder.address(),
+        )
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(1000, quoteDenom2),
+            receiverAddress = bidder.address(),
+        )
+        val askUuid = UUID.randomUUID()
+        assertSucceeds("Creating the marker share sale ask should succeed") {
+            createAsk(
+                createAsk = CreateAsk(
+                    ask = MarkerShareSaleAsk(
+                        id = askUuid.toString(),
+                        markerDenom = markerDenom,
+                        sharesToSell = shareSaleAmount,
+                        quotePerShare = newCoins(100, quoteDenom),
+                        shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+            )
+        }
+        val bidUuid = UUID.randomUUID()
+        assertSucceeds("Creating a bid should succeed") {
+            createBid(
+                createBid = CreateBid(
+                    bid = MarkerShareSaleBid(
+                        id = bidUuid.toString(),
+                        markerDenom = markerDenom,
+                        shareCount = shareSaleAmount,
+                        quote = newCoins(50, quoteDenom),
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+            )
+        }
+        assertEquals(
+            expected = 950,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
+            message = "The correct quote amount should be taken from the bidder's account",
+        )
+        val response = assertSucceeds("Updating a bid should succeed") {
+            updateBid(
+                updateBid = UpdateBid(
+                    bid = CoinTradeBid(
+                        id = bidUuid.toString(),
+                        quote = newCoins(999, quoteDenom2),
+                        base = newCoins(50, "somebase"),
+                    ),
+                    descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+                ),
+            )
+        }
+        val collateral = response.updatedBidOrder.testGetCoinTrade()
+        assertEquals(
+            expected = newCoins(999, quoteDenom2),
+            actual = collateral.quote,
+            message = "Expected the bid's quote to be properly updated",
+        )
+        assertEquals(
+            expected = newCoins(50, "somebase"),
+            actual = collateral.base,
+            message = "Expected the bid's base to be properly updated",
         )
         assertEquals(
             expected = 1000,

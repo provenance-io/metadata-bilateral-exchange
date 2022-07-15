@@ -2,6 +2,7 @@ package io.provenance.bilateral.contract
 
 import io.provenance.bilateral.execute.Ask.MarkerShareSaleAsk
 import io.provenance.bilateral.execute.Ask.MarkerTradeAsk
+import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.Bid.MarkerTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test
 import testconfiguration.ContractIntTest
 import testconfiguration.extensions.getBalance
 import testconfiguration.extensions.getMarkerAccount
+import testconfiguration.extensions.testGetCoinTrade
 import testconfiguration.extensions.testGetMarkerShareSale
 import testconfiguration.extensions.testGetMarkerTrade
 import testconfiguration.functions.assertSingle
@@ -274,7 +276,7 @@ class MarkerTradeIntTest : ContractIntTest() {
     }
 
     @Test
-    fun testUpdateBid() {
+    fun testUpdateBidSameType() {
         val markerDenom = "updatemarkertradebid"
         val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW, Access.ACCESS_BURN)
         createMarker(
@@ -350,6 +352,102 @@ class MarkerTradeIntTest : ContractIntTest() {
             expected = newCoins(700, quoteDenom2),
             actual = response.updatedBidOrder.testGetMarkerTrade().quote,
             message = "The quote should be properly updated in the bid order",
+        )
+        assertEquals(
+            expected = 1000,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
+            message = "The original bid's quote should be fully refunded to the bidder",
+        )
+        assertEquals(
+            expected = 300,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom2),
+            message = "The new quote balance should be properly debited from the bidder's account",
+        )
+    }
+
+    @Test
+    fun testUpdateBidnewType() {
+        val markerDenom = "updatemarkertradenewtypebid"
+        val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW, Access.ACCESS_BURN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = 10,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val quoteDenom = "updatemarkertradenewtypebidquote"
+        val quoteDenom2 = "updatemarkertradenewtypebidquote2"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(1000, quoteDenom),
+            receiverAddress = bidder.address(),
+        )
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(1000, quoteDenom2),
+            receiverAddress = bidder.address(),
+        )
+        val askUuid = UUID.randomUUID()
+        assertSucceeds("Creating an ask should succeed") {
+            createAsk(
+                createAsk = CreateAsk(
+                    ask = MarkerTradeAsk(
+                        id = askUuid.toString(),
+                        markerDenom = markerDenom,
+                        quotePerShare = newCoins(15, quoteDenom),
+                    ),
+                    descriptor = RequestDescriptor(description = "Example description", effectiveTime = OffsetDateTime.now()),
+                ),
+            )
+        }
+        val bidUuid = UUID.randomUUID()
+        assertSucceeds("Creating a bid should succeed") {
+            createBid(
+                createBid = CreateBid(
+                    bid = MarkerTradeBid(
+                        id = bidUuid.toString(),
+                        markerDenom = markerDenom,
+                        quote = newCoins(100, quoteDenom),
+                    )
+                ),
+                signer = bidder,
+            )
+        }
+        assertEquals(
+            expected = 900,
+            actual = pbClient.getBalance(bidder.address(), quoteDenom),
+            message = "The bidder's account should have properly been debited of its quote funds",
+        )
+        val response = assertSucceeds("Updating a bid should succeed") {
+            updateBid(
+                updateBid = UpdateBid(
+                    bid = CoinTradeBid(
+                        id = bidUuid.toString(),
+                        quote = newCoins(700, quoteDenom2),
+                        base = newCoins(44220, "some base"),
+                    )
+                ),
+                signer = bidder,
+            )
+        }
+        val collateral = response.updatedBidOrder.testGetCoinTrade()
+        assertEquals(
+            expected = newCoins(700, quoteDenom2),
+            actual = collateral.quote,
+            message = "The quote should be properly updated in the bid order",
+        )
+        assertEquals(
+            expected = newCoins(44220, "some base"),
+            actual = collateral.base,
+            message = "The base should be properly updated in the bid order",
         )
         assertEquals(
             expected = 1000,

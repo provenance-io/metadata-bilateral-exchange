@@ -39,7 +39,9 @@ At any time before a match occurs, an asker or bidder may update their ask or bi
 held by the contract on behalf of the asker or bidder that differ from the goods provided during the update will be 
 refunded.  Ex: A coin trade ask provides a base of 100askcoin, but the update specifies a base of 200askcoin2.  The
 update will then store 200askcoin2 in the contract, and the original 100askcoin will be refunded to the asker. 
-Ask/bid ids cannot be altered by updates, and ask/bid types cannot be altered by updates.
+Beside the id field in the bid, all values may be altered by an update, including the bid type.  For asks, the id field
+may not be altered, and, in most cases, the ask type cannot be altered.  Ask types of marker trade and marker share sale
+may be interchanged if the `marker_denom` specified in the `AskOrder` is unchanged.
 
 ### Cancellation
 At any time before a match occurs, an asker or bidder may cancel their ask or bid order.  When this occurs, any goods
