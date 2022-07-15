@@ -15,9 +15,9 @@ import io.provenance.client.protobuf.extensions.toAny
 import io.provenance.client.protobuf.extensions.toTxBody
 import io.provenance.scope.util.toUuid
 import org.junit.jupiter.api.Test
+import testconfiguration.ContractIntTest
 import testconfiguration.extensions.checkIsSuccess
 import testconfiguration.functions.newCoins
-import testconfiguration.ContractIntTest
 import java.math.BigInteger
 import java.time.OffsetDateTime
 import java.util.UUID

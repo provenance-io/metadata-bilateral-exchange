@@ -53,9 +53,11 @@ class StringExtensionsTest {
             txMsgData.addData(
                 MsgData.newBuilder()
                     .setMsgType("/cosmos.wasm.v1.MsgExecuteContract")
-                    .setData(MsgExecuteContractResponse.newBuilder().also { msgExecuteContract ->
-                        msgExecuteContract.data = OBJECT_MAPPER.writeValueAsBytes(bidOrder).toByteString()
-                    }.build().toByteString())
+                    .setData(
+                        MsgExecuteContractResponse.newBuilder().also { msgExecuteContract ->
+                            msgExecuteContract.data = OBJECT_MAPPER.writeValueAsBytes(bidOrder).toByteString()
+                        }.build().toByteString()
+                    )
             )
         }.build()
         val hex = Hex.encode(msgData.toByteArray())

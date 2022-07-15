@@ -19,13 +19,13 @@ import io.provenance.client.protobuf.extensions.toTxBody
 import io.provenance.scope.util.toByteString
 import mu.KLogging
 import org.junit.jupiter.api.Test
+import testconfiguration.ContractIntTest
 import testconfiguration.extensions.checkIsSuccess
 import testconfiguration.functions.assertAskExists
 import testconfiguration.functions.assertBidExists
 import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.bindNamesToSigner
 import testconfiguration.functions.newCoins
-import testconfiguration.ContractIntTest
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals

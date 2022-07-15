@@ -13,6 +13,7 @@ import io.provenance.metadata.v1.ScopeRequest
 import io.provenance.scope.util.MetadataAddress
 import mu.KLogging
 import org.junit.jupiter.api.Test
+import testconfiguration.ContractIntTest
 import testconfiguration.extensions.getBalance
 import testconfiguration.extensions.testGetScopeTrade
 import testconfiguration.functions.assertSingle
@@ -20,7 +21,6 @@ import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.giveTestDenom
 import testconfiguration.functions.newCoin
 import testconfiguration.functions.newCoins
-import testconfiguration.ContractIntTest
 import testconfiguration.util.ScopeWriteUtil
 import java.time.OffsetDateTime
 import java.util.UUID

@@ -1,6 +1,5 @@
 package io.provenance.bilateral.contract
 
-import io.provenance.bilateral.execute.Ask
 import io.provenance.bilateral.execute.Ask.MarkerShareSaleAsk
 import io.provenance.bilateral.execute.Ask.MarkerTradeAsk
 import io.provenance.bilateral.execute.Bid.MarkerTradeBid
@@ -13,8 +12,10 @@ import io.provenance.bilateral.models.RequestDescriptor
 import io.provenance.bilateral.models.ShareSaleType
 import io.provenance.marker.v1.Access
 import org.junit.jupiter.api.Test
+import testconfiguration.ContractIntTest
 import testconfiguration.extensions.getBalance
 import testconfiguration.extensions.getMarkerAccount
+import testconfiguration.extensions.testGetMarkerShareSale
 import testconfiguration.extensions.testGetMarkerTrade
 import testconfiguration.functions.assertSingle
 import testconfiguration.functions.assertSucceeds
@@ -23,8 +24,6 @@ import testconfiguration.functions.giveTestDenom
 import testconfiguration.functions.grantMarkerAccess
 import testconfiguration.functions.newCoin
 import testconfiguration.functions.newCoins
-import testconfiguration.ContractIntTest
-import testconfiguration.extensions.testGetMarkerShareSale
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals

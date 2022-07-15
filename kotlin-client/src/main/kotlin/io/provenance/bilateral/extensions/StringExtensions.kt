@@ -5,7 +5,7 @@ import cosmos.base.abci.v1beta1.Abci.TxResponse
 import cosmwasm.wasm.v1beta1.Tx.MsgExecuteContractResponse
 import org.bouncycastle.util.encoders.Hex
 
-fun TxResponse.executeContractDataToJsonBytes(): ByteArray = Hex
+internal fun TxResponse.executeContractDataToJsonBytes(): ByteArray = Hex
     .decode(this.data)
     .let(TxMsgData::parseFrom)
     .dataList

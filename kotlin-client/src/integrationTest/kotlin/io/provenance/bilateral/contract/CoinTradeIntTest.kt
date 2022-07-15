@@ -11,6 +11,7 @@ import io.provenance.bilateral.models.AttributeRequirement
 import io.provenance.bilateral.models.AttributeRequirementType
 import io.provenance.bilateral.models.RequestDescriptor
 import org.junit.jupiter.api.Test
+import testconfiguration.ContractIntTest
 import testconfiguration.extensions.getBalance
 import testconfiguration.extensions.getBalanceMap
 import testconfiguration.extensions.testGetCoinTrade
@@ -18,7 +19,6 @@ import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.giveTestDenom
 import testconfiguration.functions.newCoin
 import testconfiguration.functions.newCoins
-import testconfiguration.ContractIntTest
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals

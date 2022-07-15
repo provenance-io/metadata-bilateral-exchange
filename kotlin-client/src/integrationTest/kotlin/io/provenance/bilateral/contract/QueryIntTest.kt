@@ -5,11 +5,11 @@ import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import org.junit.jupiter.api.Test
+import testconfiguration.ContractIntTest
 import testconfiguration.functions.assertNotNull
 import testconfiguration.functions.assertNull
 import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.newCoins
-import testconfiguration.ContractIntTest
 import java.util.UUID
 import kotlin.test.assertFails
 
