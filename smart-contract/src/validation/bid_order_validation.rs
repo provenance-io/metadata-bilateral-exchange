@@ -179,7 +179,10 @@ pub fn validate_bid_order(bid_order: &BidOrder) -> Result<(), ContractError> {
     if invalid_field_messages.is_empty() {
         ().to_ok()
     } else {
-        ContractError::validation_error(&invalid_field_messages).to_err()
+        ContractError::ValidationError {
+            messages: invalid_field_messages,
+        }
+        .to_err()
     }
 }
 

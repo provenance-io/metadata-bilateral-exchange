@@ -15,12 +15,12 @@ pub fn update_settings(
     validate_settings_update(&update)?;
     let mut contract_info = get_contract_info(deps.storage)?;
     if info.sender != contract_info.admin {
-        return ContractError::unauthorized().to_err();
+        return ContractError::Unauthorized.to_err();
     }
     if !info.funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds cannot be provided during a settings update",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "funds cannot be provided during a settings update".to_string(),
+        }
         .to_err();
     }
     let mut attributes = vec![];

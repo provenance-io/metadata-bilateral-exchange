@@ -25,10 +25,12 @@ pub fn check_valid_migration_versioning(contract_info: &ContractInfo) -> Result<
     let existing_contract_version = contract_info.contract_version.parse::<Version>()?;
     let new_contract_version = CONTRACT_VERSION.parse::<Version>()?;
     if existing_contract_version > new_contract_version {
-        return ContractError::invalid_migration(format!(
-            "current contract version [{}] is greater than the migration target version [{}]",
-            &contract_info.contract_version, CONTRACT_VERSION,
-        ))
+        return ContractError::InvalidMigration {
+            message: format!(
+                "current contract version [{}] is greater than the migration target version [{}]",
+                &contract_info.contract_version, CONTRACT_VERSION,
+            ),
+        }
         .to_err();
     }
     ().to_ok()

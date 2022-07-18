@@ -27,25 +27,28 @@ pub fn funds_minus_fees<S: Into<String>>(
             .iter_mut()
             .find(|fund_coin| fund_coin.denom == fee_coin.denom);
         if matching_fund_coin.is_none() {
-            return ContractError::generic_error(format!(
-                "{}: unable to find matching coin of denom [{}] in funds. funds: [{}], fees: [{}]",
-                fee_type.into(),
-                fee_coin.denom,
-                format_coin_display(funds),
-                format_coin_display(fees),
-            ))
-            .to_err();
+            return ContractError::GenericError {
+                message: format!(
+                    "{}: unable to find matching coin of denom [{}] in funds. funds: [{}], fees: [{}]",
+                    fee_type.into(),
+                    fee_coin.denom,
+                    format_coin_display(funds),
+                    format_coin_display(fees),
+                )
+            }.to_err();
         }
         let matching_fund_coin = matching_fund_coin.unwrap();
         if matching_fund_coin.amount.u128() < fee_coin.amount.u128() {
-            return ContractError::generic_error(format!(
-                "{}: expected at least [{}{}] to be provided in funds. funds: [{}], fees: [{}]",
-                fee_type.into(),
-                fee_coin.amount.u128(),
-                fee_coin.denom,
-                format_coin_display(funds),
-                format_coin_display(fees),
-            ))
+            return ContractError::GenericError {
+                message: format!(
+                    "{}: expected at least [{}{}] to be provided in funds. funds: [{}], fees: [{}]",
+                    fee_type.into(),
+                    fee_coin.amount.u128(),
+                    fee_coin.denom,
+                    format_coin_display(funds),
+                    format_coin_display(fees),
+                ),
+            }
             .to_err();
         }
         matching_fund_coin.amount -= fee_coin.amount;

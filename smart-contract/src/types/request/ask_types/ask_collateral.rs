@@ -62,28 +62,40 @@ impl AskCollateral {
     pub fn get_coin_trade(&self) -> Result<&CoinTradeAskCollateral, ContractError> {
         match self {
             AskCollateral::CoinTrade(collateral) => collateral.to_ok(),
-            _ => ContractError::invalid_type("expected coin trade ask collateral").to_err(),
+            _ => ContractError::InvalidType {
+                explanation: "expected coin trade ask collateral".to_string(),
+            }
+            .to_err(),
         }
     }
 
     pub fn get_marker_trade(&self) -> Result<&MarkerTradeAskCollateral, ContractError> {
         match self {
             AskCollateral::MarkerTrade(collateral) => collateral.to_ok(),
-            _ => ContractError::invalid_type("expected marker trade ask collateral").to_err(),
+            _ => ContractError::InvalidType {
+                explanation: "expected marker trade ask collateral".to_string(),
+            }
+            .to_err(),
         }
     }
 
     pub fn get_marker_share_sale(&self) -> Result<&MarkerShareSaleAskCollateral, ContractError> {
         match self {
             AskCollateral::MarkerShareSale(collateral) => collateral.to_ok(),
-            _ => ContractError::invalid_type("expected marker share sale ask collateral").to_err(),
+            _ => ContractError::InvalidType {
+                explanation: "expected marker share sale ask collateral".to_string(),
+            }
+            .to_err(),
         }
     }
 
     pub fn get_scope_trade(&self) -> Result<&ScopeTradeAskCollateral, ContractError> {
         match self {
             AskCollateral::ScopeTrade(collateral) => collateral.to_ok(),
-            _ => ContractError::invalid_type("expected scope trade ask collateral").to_err(),
+            _ => ContractError::InvalidType {
+                explanation: "expected scope trade ask collateral".to_string(),
+            }
+            .to_err(),
         }
     }
 }

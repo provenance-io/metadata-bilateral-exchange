@@ -30,7 +30,10 @@ pub fn validate_match(
     if validation_messages.is_empty() {
         ().to_ok()
     } else {
-        ContractError::validation_error(&validation_messages).to_err()
+        ContractError::ValidationError {
+            messages: validation_messages,
+        }
+        .to_err()
     }
 }
 

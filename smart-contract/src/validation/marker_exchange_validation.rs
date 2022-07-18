@@ -15,47 +15,57 @@ pub fn validate_marker_for_ask(
 ) -> Result<(), ContractError> {
     if let Some(original_owner_address) = original_owner_address {
         if !marker_has_admin(marker, original_owner_address) {
-            return ContractError::invalid_marker(format!(
-                "expected sender [{}] to have admin privileges on marker [{}]",
-                original_owner_address.as_str(),
-                marker.denom,
-            ))
+            return ContractError::InvalidMarker {
+                message: format!(
+                    "expected sender [{}] to have admin privileges on marker [{}]",
+                    original_owner_address.as_str(),
+                    marker.denom,
+                ),
+            }
             .to_err();
         }
     }
     if !marker_has_permissions(marker, contract_address, expected_contract_permissions) {
-        return ContractError::invalid_marker(format!(
-            "expected this contract [{}] to have privileges {:?} on marker [{}]",
-            contract_address.as_str(),
-            expected_contract_permissions,
-            marker.denom,
-        ))
+        return ContractError::InvalidMarker {
+            message: format!(
+                "expected this contract [{}] to have privileges {:?} on marker [{}]",
+                contract_address.as_str(),
+                expected_contract_permissions,
+                marker.denom,
+            ),
+        }
         .to_err();
     }
     if marker.status != MarkerStatus::Active {
-        return ContractError::invalid_marker(format!(
-            "expected marker [{}] to be active, but was in status [{:?}]",
-            marker.denom, marker.status,
-        ))
+        return ContractError::InvalidMarker {
+            message: format!(
+                "expected marker [{}] to be active, but was in status [{:?}]",
+                marker.denom, marker.status,
+            ),
+        }
         .to_err();
     }
     let marker_coin = get_single_marker_coin_holding(marker)?;
     if marker_coin.amount.u128() == 0 {
-        return ContractError::invalid_marker(format!(
-            "expected marker [{}] to hold at least one of its supply of denom, but it had [{}]",
-            marker.denom,
-            marker_coin.amount.u128(),
-        ))
+        return ContractError::InvalidMarker {
+            message: format!(
+                "expected marker [{}] to hold at least one of its supply of denom, but it had [{}]",
+                marker.denom,
+                marker_coin.amount.u128(),
+            ),
+        }
         .to_err();
     }
     if let Some(shares_sold) = shares_sold {
         if marker_coin.amount.u128() < shares_sold {
-            return ContractError::invalid_marker(format!(
+            return ContractError::InvalidMarker {
+                message: format!(
                 "expected marker [{}] to have at least [{}] shares to sell, but it only had [{}]",
                 marker.denom,
                 shares_sold,
                 marker_coin.amount.u128(),
-            ))
+            ),
+            }
             .to_err();
         }
     }

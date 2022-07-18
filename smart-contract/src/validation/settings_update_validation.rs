@@ -17,7 +17,10 @@ pub fn validate_settings_update(update: &SettingsUpdate) -> Result<(), ContractE
         validation_errors.append(&mut validate_coin_vector("new_bid_fee", new_bid_fee));
     }
     if !validation_errors.is_empty() {
-        ContractError::validation_error(&validation_errors).to_err()
+        ContractError::ValidationError {
+            messages: validation_errors,
+        }
+        .to_err()
     } else {
         ().to_ok()
     }

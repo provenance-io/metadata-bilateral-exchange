@@ -58,11 +58,13 @@ pub fn insert_ask_order(
 ) -> Result<(), ContractError> {
     let state = ask_orders();
     if let Ok(existing_ask) = state.load(storage, ask_order.id.as_bytes()) {
-        return ContractError::storage_error(format!(
-            "an ask with id [{}] for owner [{}] already exists",
-            existing_ask.id,
-            existing_ask.owner.as_str(),
-        ))
+        return ContractError::StorageError {
+            message: format!(
+                "an ask with id [{}] for owner [{}] already exists",
+                existing_ask.id,
+                existing_ask.owner.as_str(),
+            ),
+        }
         .to_err();
     }
     store_ask_order(storage, ask_order)
@@ -77,10 +79,12 @@ pub fn update_ask_order(
         delete_ask_order_by_id(storage, &ask_order.id)?;
         store_ask_order(storage, ask_order)
     } else {
-        ContractError::storage_error(format!(
-            "attempted to replace ask with id [{}] in storage, but no ask with that id existed",
-            &ask_order.id
-        ))
+        ContractError::StorageError {
+            message: format!(
+                "attempted to replace ask with id [{}] in storage, but no ask with that id existed",
+                &ask_order.id
+            ),
+        }
         .to_err()
     }
 }
@@ -102,9 +106,11 @@ pub fn get_ask_order_by_id<S: Into<String>>(
     id: S,
 ) -> Result<AskOrder, ContractError> {
     let id = id.into();
-    ask_orders().load(storage, id.as_bytes()).map_err(|e| {
-        ContractError::storage_error(format!("failed to find AskOrder by id [{}]: {:?}", id, e))
-    })
+    ask_orders()
+        .load(storage, id.as_bytes())
+        .map_err(|e| ContractError::StorageError {
+            message: format!("failed to find AskOrder by id [{}]: {:?}", id, e),
+        })
 }
 
 pub fn may_get_ask_order_by_collateral_id<S: Into<String>>(
@@ -124,9 +130,11 @@ pub fn delete_ask_order_by_id<S: Into<String>>(
     id: S,
 ) -> Result<(), ContractError> {
     let id = id.into();
-    ask_orders().remove(storage, id.as_bytes()).map_err(|e| {
-        ContractError::storage_error(format!("failed to remove AskOrder by id [{}]: {:?}", id, e))
-    })?;
+    ask_orders()
+        .remove(storage, id.as_bytes())
+        .map_err(|e| ContractError::StorageError {
+            message: format!("failed to remove AskOrder by id [{}]: {:?}", id, e),
+        })?;
     ().to_ok()
 }
 

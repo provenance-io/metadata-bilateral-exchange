@@ -19,7 +19,11 @@ pub fn create_bid(
     descriptor: Option<RequestDescriptor>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     if get_bid_order_by_id(deps.storage, bid.get_id()).is_ok() {
-        return ContractError::existing_id("bid", bid.get_id()).to_err();
+        return ContractError::ExistingId {
+            id: bid.get_id().to_string(),
+            id_type: "bid".to_string(),
+        }
+        .to_err();
     }
     let BidOrderCreationResponse {
         bid_order,

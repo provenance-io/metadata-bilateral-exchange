@@ -5,9 +5,11 @@ use crate::types::request::bid_types::bid::{
 use crate::types::request::bid_types::bid_collateral::BidCollateral;
 use crate::types::request::bid_types::bid_order::BidOrder;
 use crate::types::request::request_descriptor::RequestDescriptor;
+use crate::types::request::request_type::RequestType;
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::get_single_marker_coin_holding;
 use crate::util::request_fee::generate_request_fee;
+use crate::validation::bid_order_validation::validate_bid_order;
 use cosmwasm_std::{Coin, CosmosMsg, DepsMut, MessageInfo};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuerier, ProvenanceQuery};
 
@@ -49,7 +51,14 @@ pub fn create_bid_order(
             create_scope_trade_collateral(&funds_after_fee, scope_trade)
         }
     }?;
-    let bid_order = BidOrder::new(bid.get_id(), info.sender.clone(), collateral, descriptor)?;
+    let bid_order = BidOrder {
+        id: bid.get_id().to_string(),
+        bid_type: RequestType::from_bid_collateral(&collateral),
+        owner: info.sender.clone(),
+        collateral,
+        descriptor,
+    };
+    validate_bid_order(&bid_order)?;
     BidOrderCreationResponse {
         bid_order,
         fee_send_msg,
@@ -62,15 +71,22 @@ fn create_coin_trade_collateral(
     coin_trade: &CoinTradeBid,
 ) -> Result<BidCollateral, ContractError> {
     if coin_trade.id.is_empty() {
-        return ContractError::missing_field("id").to_err();
+        return ContractError::MissingField {
+            field: "id".to_string(),
+        }
+        .to_err();
     }
     if coin_trade.base.is_empty() {
-        return ContractError::missing_field("base").to_err();
+        return ContractError::MissingField {
+            field: "base".to_string(),
+        }
+        .to_err();
     }
     if quote_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "coin trade bid requests should include enough funds for bid fee + quote",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "coin trade bid requests should include enough funds for bid fee + quote"
+                .to_string(),
+        }
         .to_err();
     }
     BidCollateral::coin_trade(&coin_trade.base, quote_funds).to_ok()
@@ -82,15 +98,21 @@ fn create_marker_trade_collateral(
     marker_trade: &MarkerTradeBid,
 ) -> Result<BidCollateral, ContractError> {
     if marker_trade.id.is_empty() {
-        return ContractError::missing_field("id").to_err();
+        return ContractError::MissingField {
+            field: "id".to_string(),
+        }
+        .to_err();
     }
     if marker_trade.marker_denom.is_empty() {
-        return ContractError::missing_field("marker_denom").to_err();
+        return ContractError::MissingField {
+            field: "marker_denom".to_string(),
+        }
+        .to_err();
     }
     if quote_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds must be provided during a marker trade bid to pay bid fees + establish a quote",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "funds must be provided during a marker trade bid to pay bid fees + establish a quote".to_string(),
+        }
         .to_err();
     }
     // This grants us access to the marker address, as well as ensuring that the marker is real
@@ -111,33 +133,41 @@ fn create_marker_share_sale_collateral(
     marker_share_sale: &MarkerShareSaleBid,
 ) -> Result<BidCollateral, ContractError> {
     if marker_share_sale.id.is_empty() {
-        return ContractError::missing_field("id").to_err();
+        return ContractError::MissingField {
+            field: "id".to_string(),
+        }
+        .to_err();
     }
     if marker_share_sale.marker_denom.is_empty() {
-        return ContractError::missing_field("marker_denom").to_err();
+        return ContractError::MissingField {
+            field: "marker_denom".to_string(),
+        }
+        .to_err();
     }
     if marker_share_sale.share_count.is_zero() {
-        return ContractError::validation_error(&[
-            "share count must be at least one for a marker share sale",
-        ])
+        return ContractError::ValidationError {
+            messages: vec!["share count must be at least one for a marker share sale".to_string()],
+        }
         .to_err();
     }
     if quote_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds must be provided during a marker share trade bid to pay bid fees + establish a quote",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "funds must be provided during a marker share trade bid to pay bid fees + establish a quote".to_string(),
+        }
             .to_err();
     }
     let marker = ProvenanceQuerier::new(&deps.querier)
         .get_marker_by_denom(&marker_share_sale.marker_denom)?;
     let marker_shares_available = get_single_marker_coin_holding(&marker)?.amount.u128();
     if marker_share_sale.share_count.u128() > marker_shares_available {
-        return ContractError::validation_error(&[format!(
+        return ContractError::ValidationError {
+            messages: vec![format!(
             "share count [{}] must be less than or equal to remaining [{}] shares available [{}]",
             marker_share_sale.share_count.u128(),
             marker_share_sale.marker_denom,
             marker_shares_available,
-        )])
+        )],
+        }
         .to_err();
     }
     BidCollateral::marker_share_sale(
@@ -154,15 +184,21 @@ fn create_scope_trade_collateral(
     scope_trade: &ScopeTradeBid,
 ) -> Result<BidCollateral, ContractError> {
     if scope_trade.id.is_empty() {
-        return ContractError::missing_field("id").to_err();
+        return ContractError::MissingField {
+            field: "id".to_string(),
+        }
+        .to_err();
     }
     if scope_trade.scope_address.is_empty() {
-        return ContractError::missing_field("scope_address").to_err();
+        return ContractError::MissingField {
+            field: "scope_address".to_string(),
+        }
+        .to_err();
     }
     if quote_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds must be provided during a scope trade bid to pay bid fees + establish a quote",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "funds must be provided during a scope trade bid to pay bid fees + establish a quote".to_string(),
+        }
         .to_err();
     }
     BidCollateral::scope_trade(&scope_trade.scope_address, quote_funds).to_ok()

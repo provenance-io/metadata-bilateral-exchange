@@ -1,6 +1,6 @@
 [package]
 name = "metadata-bilateral-exchange"
-version = "1.0.7"
+version = "1.0.8"
 authors = ["Jake Schwartz <jschwartz@figure.com>", "Ken Talley <ktalley@figure.com>"]
 edition = "2018"
 

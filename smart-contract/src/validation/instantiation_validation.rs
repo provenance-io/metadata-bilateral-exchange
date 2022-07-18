@@ -18,7 +18,10 @@ pub fn validate_instantiate_msg(msg: &InstantiateMsg) -> Result<(), ContractErro
         invalid_fields.append(&mut validate_coin_vector("bid_fee", bid_fee));
     }
     if !invalid_fields.is_empty() {
-        ContractError::validation_error(&invalid_fields).to_err()
+        ContractError::ValidationError {
+            messages: invalid_fields,
+        }
+        .to_err()
     } else {
         ().to_ok()
     }

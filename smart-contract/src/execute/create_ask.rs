@@ -21,7 +21,11 @@ pub fn create_ask(
     // If loading an ask by the target id returns an Ok response, then the requested id already
     // exists in storage and should not be overwritten
     if get_ask_order_by_id(deps.storage, ask.get_id()).is_ok() {
-        return ContractError::existing_id("ask", ask.get_id()).to_err();
+        return ContractError::ExistingId {
+            id: ask.get_id().to_string(),
+            id_type: "ask".to_string(),
+        }
+        .to_err();
     }
     let AskOrderCreationResponse {
         ask_order,

@@ -16,21 +16,23 @@ pub fn cancel_ask(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     // return error if id is empty
     if id.is_empty() {
-        return ContractError::validation_error(&["an id must be provided when cancelling an ask"])
-            .to_err();
+        return ContractError::ValidationError {
+            messages: vec!["an id must be provided when cancelling an ask".to_string()],
+        }
+        .to_err();
     }
 
     // return error if funds sent
     if !info.funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds should not be provided when cancelling an ask",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "funds should not be provided when cancelling an ask".to_string(),
+        }
         .to_err();
     }
     let ask_order = get_ask_order_by_id(deps.storage, &id)?;
     // Only the owner of the ask and the admin can cancel an ask
     if info.sender != ask_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
-        return ContractError::unauthorized().to_err();
+        return ContractError::Unauthorized.to_err();
     }
     let mut messages: Vec<CosmosMsg<ProvenanceMsg>> = vec![];
     match &ask_order.collateral {

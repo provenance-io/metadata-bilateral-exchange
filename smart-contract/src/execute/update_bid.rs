@@ -15,7 +15,7 @@ pub fn update_bid(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let existing_bid_order = get_bid_order_by_id(deps.storage, bid.get_id())?;
     if info.sender != existing_bid_order.owner {
-        return ContractError::unauthorized().to_err();
+        return ContractError::Unauthorized.to_err();
     }
     let refunded_quote = existing_bid_order.collateral.get_quote();
     let new_bid_order =

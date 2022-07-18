@@ -6,10 +6,9 @@ use provwasm_std::ProvenanceMsg;
 pub fn get_send_amount(msg: &CosmosMsg<ProvenanceMsg>) -> Result<Vec<Coin>, ContractError> {
     match msg {
         CosmosMsg::Bank(BankMsg::Send { amount, .. }) => amount.to_vec().to_ok(),
-        msg => ContractError::generic_error(format!(
-            "expected CosmosMsg::Bank(BankMsg::Send) but got: {:?}",
-            msg
-        ))
+        msg => ContractError::GenericError {
+            message: format!("expected CosmosMsg::Bank(BankMsg::Send) but got: {:?}", msg),
+        }
         .to_err(),
     }
 }

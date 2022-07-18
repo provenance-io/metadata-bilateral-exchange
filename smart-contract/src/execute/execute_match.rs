@@ -41,13 +41,16 @@ pub fn execute_match(
     }
     // return error if either ids are badly formed
     if !invalid_fields.is_empty() {
-        return ContractError::validation_error(&invalid_fields).to_err();
+        return ContractError::ValidationError {
+            messages: invalid_fields,
+        }
+        .to_err();
     }
     // return error if funds sent
     if !info.funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds should not be provided during match execution",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "funds should not be provided during match execution".to_string(),
+        }
         .to_err();
     }
     let ask_order = get_ask_order_by_id(deps.storage, &ask_id)?;
@@ -57,7 +60,7 @@ pub fn execute_match(
     let accept_mismatched_bids = accept_mismatched_bids.unwrap_or(false);
     // only the admin or the asker may execute matches
     if info.sender != ask_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
-        return ContractError::unauthorized().to_err();
+        return ContractError::Unauthorized.to_err();
     }
     validate_match(
         &deps.as_ref(),
@@ -179,10 +182,12 @@ fn execute_marker_trade(
             &[bidder_permissions],
         )?);
     } else {
-        return ContractError::validation_error(&[
-            "failed to find access permissions in the revoked permissions for the asker"
-                .to_string(),
-        ])
+        return ContractError::ValidationError {
+            messages: vec![
+                "failed to find access permissions in the revoked permissions for the asker"
+                    .to_string(),
+            ],
+        }
         .to_err();
     }
     // Send the entirety of the quote to the asker. They have just effectively sold their
