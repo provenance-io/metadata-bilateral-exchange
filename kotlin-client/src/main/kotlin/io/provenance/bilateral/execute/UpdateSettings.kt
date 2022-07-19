@@ -5,17 +5,18 @@ import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 import cosmos.base.v1beta1.CoinOuterClass.Coin
-import io.provenance.bilateral.interfaces.ContractExecuteMsg
+import io.provenance.bilateral.interfaces.BilateralContractExecuteMsg
 
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("update_settings")
-data class UpdateSettings(val update: Body) : ContractExecuteMsg {
+data class UpdateSettings(val update: Body) : BilateralContractExecuteMsg {
     /**
      * The request contents for updating contract settings.
      *
      * @param newAdminAddress A new admin for which to execute matches and perform other actions.  If set to null, the
-     * existing admin will not be changed.
+     * existing admin will not be changed.  WARNING: This value can be arbitrarily set to any value.  If changed to an
+     * address that is not controlled by any party, the contract will no longer be accessible for admin functionalities.
      * @param askFee A fee to charge when new asks are created.  If set to null, no fee will be charged for future asks.
      * @param bidFee A fee to charge when new bids are created.  If set to null, no fee will be charged for future bids.
      */

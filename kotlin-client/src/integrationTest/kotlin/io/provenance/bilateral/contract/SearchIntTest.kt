@@ -6,8 +6,8 @@ import io.provenance.bilateral.execute.Bid.CoinTradeBid
 import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.models.AttributeRequirement
-import io.provenance.bilateral.models.AttributeRequirementType
 import io.provenance.bilateral.models.RequestDescriptor
+import io.provenance.bilateral.models.enums.AttributeRequirementType
 import io.provenance.bilateral.query.ContractSearchRequest
 import io.provenance.bilateral.query.ContractSearchType
 import io.provenance.client.grpc.BaseReqSigner
@@ -26,6 +26,78 @@ import kotlin.test.assertTrue
 
 class SearchIntTest : ContractIntTest() {
     @Test
+    fun testAllSearch() {
+        val askUuids = mutableListOf<UUID>()
+        val msgs = (0..9).map {
+            val askUuid = UUID.randomUUID()
+            askUuids += askUuid
+            val createAsk = CreateAsk(
+                ask = CoinTradeAsk(
+                    id = askUuid.toString(),
+                    quote = newCoins(100, "nhash"),
+                    base = newCoins(100, "nhash"),
+                ),
+                descriptor = RequestDescriptor(
+                    description = "Description",
+                    effectiveTime = OffsetDateTime.now(),
+                    attributeRequirement = AttributeRequirement(
+                        attributes = listOf("a.pb", "b.pb"),
+                        requirementType = AttributeRequirementType.ALL,
+                    )
+                ),
+            )
+            bilateralClient.generateCreateAskMsg(createAsk, asker.address())
+        }
+        pbClient.estimateAndBroadcastTx(
+            txBody = msgs.map { it.toAny() }.toTxBody(),
+            signers = listOf(BaseReqSigner(asker)),
+            mode = BroadcastMode.BROADCAST_MODE_BLOCK,
+            gasAdjustment = 1.2,
+        ).checkIsSuccess()
+        val searchResult = bilateralClient.searchAsks(
+            ContractSearchRequest(
+                searchType = ContractSearchType.All,
+                pageSize = 11.toBigInteger(),
+            )
+        )
+        assertEquals(
+            expected = 10,
+            actual = searchResult.results.size,
+            message = "Expected all results to be returned",
+        )
+        assertTrue(
+            actual = searchResult.results.map { it.id.toUuid() }.all { askUuid -> askUuid in askUuids },
+            message = "All ask uuids should be present in the search result",
+        )
+        assertEquals(
+            expected = BigInteger.ONE,
+            actual = searchResult.pageNumber,
+            message = "The search result should indicate the first page",
+        )
+        assertEquals(
+            expected = BigInteger.ONE,
+            actual = searchResult.totalPages,
+            message = "The search result should indicate that there is only one total page",
+        )
+        assertEquals(
+            expected = 11.toBigInteger(),
+            actual = searchResult.pageSize,
+            message = "The page size of the search result should reflect the input",
+        )
+        // Clean up outstanding asks
+        pbClient.estimateAndBroadcastTx(
+            txBody = askUuids.map { askUuid ->
+                bilateralClient.generateCancelAskMsg(
+                    askId = askUuid.toString(),
+                    senderAddress = asker.address(),
+                ).toAny()
+            }.toTxBody(),
+            signers = BaseReqSigner(asker).let(::listOf),
+            mode = BroadcastMode.BROADCAST_MODE_BLOCK,
+        ).checkIsSuccess()
+    }
+
+    @Test
     fun testOwnerSearch() {
         val askUuids = mutableListOf<UUID>()
         val msgs = (0..9).map {
@@ -40,9 +112,9 @@ class SearchIntTest : ContractIntTest() {
                 descriptor = RequestDescriptor(
                     description = "Description",
                     effectiveTime = OffsetDateTime.now(),
-                    attributeRequirement = AttributeRequirement.new(
+                    attributeRequirement = AttributeRequirement(
                         attributes = listOf("a.pb", "b.pb"),
-                        type = AttributeRequirementType.ALL,
+                        requirementType = AttributeRequirementType.ALL,
                     )
                 ),
             )
@@ -56,7 +128,7 @@ class SearchIntTest : ContractIntTest() {
         ).checkIsSuccess()
         val searchResult = bilateralClient.searchAsks(
             ContractSearchRequest(
-                searchType = ContractSearchType.byOwner(asker.address()),
+                searchType = ContractSearchType.Owner(asker.address()),
                 pageSize = 11.toBigInteger(),
             )
         )
@@ -112,9 +184,9 @@ class SearchIntTest : ContractIntTest() {
                 descriptor = RequestDescriptor(
                     description = "Description",
                     effectiveTime = OffsetDateTime.now(),
-                    attributeRequirement = AttributeRequirement.new(
+                    attributeRequirement = AttributeRequirement(
                         attributes = listOf("a.pb", "b.pb"),
-                        type = AttributeRequirementType.NONE,
+                        requirementType = AttributeRequirementType.NONE,
                     )
                 )
             )
@@ -128,7 +200,7 @@ class SearchIntTest : ContractIntTest() {
         ).checkIsSuccess()
         val searchResult = bilateralClient.searchBids(
             ContractSearchRequest(
-                searchType = ContractSearchType.byOwner(bidder.address()),
+                searchType = ContractSearchType.Owner(bidder.address()),
                 pageSize = 11.toBigInteger(),
             )
         )

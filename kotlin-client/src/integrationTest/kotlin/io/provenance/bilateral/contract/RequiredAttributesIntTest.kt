@@ -10,8 +10,8 @@ import io.provenance.bilateral.execute.CreateAsk
 import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
 import io.provenance.bilateral.models.AttributeRequirement
-import io.provenance.bilateral.models.AttributeRequirementType
 import io.provenance.bilateral.models.RequestDescriptor
+import io.provenance.bilateral.models.enums.AttributeRequirementType
 import io.provenance.client.grpc.BaseReqSigner
 import io.provenance.client.grpc.Signer
 import io.provenance.client.protobuf.extensions.toAny
@@ -234,7 +234,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
-                attributeRequirement = AttributeRequirement.new(attributes, requirementType),
+                attributeRequirement = AttributeRequirement(attributes, requirementType),
             ),
         )
         val createResponse = createAsk(createAsk)
@@ -259,7 +259,7 @@ class RequiredAttributesIntTest : ContractIntTest() {
             descriptor = RequestDescriptor(
                 description = "Example description",
                 effectiveTime = OffsetDateTime.now(),
-                attributeRequirement = AttributeRequirement.new(attributes, requirementType),
+                attributeRequirement = AttributeRequirement(attributes, requirementType),
             ),
         )
         val createResponse = createBid(createBid)

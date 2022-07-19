@@ -20,11 +20,12 @@ import io.provenance.bilateral.extensions.attribute
 import io.provenance.bilateral.extensions.attributeOrNull
 import io.provenance.bilateral.extensions.executeContractDataToJsonBytes
 import io.provenance.bilateral.extensions.singleWasmEvent
-import io.provenance.bilateral.interfaces.ContractExecuteMsg
-import io.provenance.bilateral.interfaces.ContractQueryMsg
+import io.provenance.bilateral.interfaces.BilateralContractExecuteMsg
+import io.provenance.bilateral.interfaces.BilateralContractQueryMsg
 import io.provenance.bilateral.models.AskOrder
 import io.provenance.bilateral.models.BidOrder
 import io.provenance.bilateral.models.ContractInfo
+import io.provenance.bilateral.models.ContractSearchResult
 import io.provenance.bilateral.models.MatchReport
 import io.provenance.bilateral.models.executeresponse.CancelAskResponse
 import io.provenance.bilateral.models.executeresponse.CancelBidResponse
@@ -35,7 +36,6 @@ import io.provenance.bilateral.models.executeresponse.UpdateAskResponse
 import io.provenance.bilateral.models.executeresponse.UpdateBidResponse
 import io.provenance.bilateral.models.executeresponse.UpdateSettingsResponse
 import io.provenance.bilateral.query.ContractSearchRequest
-import io.provenance.bilateral.query.ContractSearchResult
 import io.provenance.bilateral.query.GetAsk
 import io.provenance.bilateral.query.GetAskByCollateralId
 import io.provenance.bilateral.query.GetBid
@@ -627,7 +627,7 @@ class BilateralContractClient private constructor(
      * Converts a class that inherits from ContractExecuteMsg to a MsgExecuteContract.  This ensures
      */
     private fun generateProtoExecuteMsg(
-        executeMsg: ContractExecuteMsg,
+        executeMsg: BilateralContractExecuteMsg,
         senderAddress: String,
         funds: List<Coin>,
         includeLogs: Boolean = true,
@@ -653,7 +653,7 @@ class BilateralContractClient private constructor(
      * Throws exceptions if the PbClient is misconfigured or if a Provenance Blockchain or smart contract error occurs.
      */
     private fun executeContract(
-        executeMsg: ContractExecuteMsg,
+        executeMsg: BilateralContractExecuteMsg,
         signer: Signer,
         options: BilateralBroadcastOptions,
         funds: List<Coin>,
@@ -694,7 +694,7 @@ class BilateralContractClient private constructor(
      * types that include lists of values or other generic parameters need this instead of a class reference for proper
      * deserialization inference.
      */
-    private inline fun <T : ContractQueryMsg, reified U : Any> queryContractBase(
+    private inline fun <T : BilateralContractQueryMsg, reified U : Any> queryContractBase(
         query: T,
         throwExceptions: Boolean,
         typeReference: TypeReference<U>?,
@@ -728,7 +728,7 @@ class BilateralContractClient private constructor(
      * Funnels input through queryContractBase, ensuring that no exceptions will be thrown if issues occur during
      * Provenance Blockchain communications, request serialization, or response deserialization.
      */
-    private inline fun <T : ContractQueryMsg, reified U : Any> queryContractOrNull(
+    private inline fun <T : BilateralContractQueryMsg, reified U : Any> queryContractOrNull(
         query: T,
         typeReference: TypeReference<U>? = null,
     ): U? = queryContractBase(
@@ -740,7 +740,7 @@ class BilateralContractClient private constructor(
     /**
      * Funnels input through queryContractBase, allowing all exceptions to be thrown if they occur.
      */
-    private inline fun <T : ContractQueryMsg, reified U : Any> queryContract(
+    private inline fun <T : BilateralContractQueryMsg, reified U : Any> queryContract(
         query: T,
         typeReference: TypeReference<U>? = null,
     ): U = queryContractBase(

@@ -11,13 +11,21 @@ import io.provenance.bilateral.models.AskCollateral.CoinTrade
 import io.provenance.bilateral.models.AskCollateral.MarkerShareSale
 import io.provenance.bilateral.models.AskCollateral.MarkerTrade
 import io.provenance.bilateral.models.AskCollateral.ScopeTrade
+import io.provenance.bilateral.models.enums.BilateralRequestType
+import io.provenance.bilateral.models.enums.ShareSaleType
 import io.provenance.bilateral.serialization.CosmWasmUintToBigIntegerDeserializer
 import java.math.BigInteger
 
+/**
+ * Represents the current state of an ask in the smart contract's storage.
+ *
+ * @param id The unique identifier for the ask.
+ * @param askType The
+ */
 @JsonNaming(SnakeCaseStrategy::class)
 data class AskOrder(
     val id: String,
-    val askType: String,
+    val askType: BilateralRequestType,
     val owner: String,
     val collateral: AskCollateral,
     val descriptor: RequestDescriptor?

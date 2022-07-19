@@ -7,7 +7,7 @@ import cosmwasm.wasm.v1.Tx.MsgInstantiateContract
 import cosmwasm.wasm.v1.Tx.MsgStoreCode
 import cosmwasm.wasm.v1.Types.AccessConfig
 import cosmwasm.wasm.v1.Types.AccessType
-import io.provenance.bilateral.interfaces.ContractMsg
+import io.provenance.bilateral.interfaces.BilateralContractMsg
 import io.provenance.client.grpc.BaseReqSigner
 import io.provenance.client.grpc.PbClient
 import io.provenance.client.grpc.Signer
@@ -91,7 +91,7 @@ object BilateralSmartContractUtil {
 data class MetadataBilateralExchangeInstantiateMsg(
     val bindName: String,
     val contractName: String,
-) : ContractMsg {
+) : BilateralContractMsg {
     override fun toLoggingString(): String = "metadataBilateralExchangeInstantiateMsg, bindName = [$bindName], contractName = [$contractName]"
 }
 

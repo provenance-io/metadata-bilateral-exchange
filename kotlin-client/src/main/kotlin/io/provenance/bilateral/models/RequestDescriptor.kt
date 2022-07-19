@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
+import io.provenance.bilateral.models.enums.AttributeRequirementType
 import io.provenance.bilateral.serialization.CosmWasmUTCOffsetDateTimeToTimestampSerializer
 import io.provenance.bilateral.serialization.CosmWasmUTCTimestampToOffsetDateTimeDeserializer
 import java.time.OffsetDateTime
@@ -26,18 +27,5 @@ data class RequestDescriptor(
 @JsonNaming(SnakeCaseStrategy::class)
 data class AttributeRequirement(
     val attributes: List<String>,
-    val requirementType: String,
-) {
-    companion object {
-        fun new(attributes: List<String>, type: AttributeRequirementType): AttributeRequirement = AttributeRequirement(
-            attributes = attributes,
-            requirementType = type.contractName,
-        )
-    }
-}
-
-enum class AttributeRequirementType(val contractName: String) {
-    ALL("all"),
-    ANY("any"),
-    NONE("none"),
-}
+    val requirementType: AttributeRequirementType,
+)

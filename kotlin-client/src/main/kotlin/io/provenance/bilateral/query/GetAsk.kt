@@ -4,11 +4,11 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
-import io.provenance.bilateral.interfaces.ContractQueryMsg
+import io.provenance.bilateral.interfaces.BilateralContractQueryMsg
 
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("get_ask")
-data class GetAsk(val id: String) : ContractQueryMsg {
+data class GetAsk(val id: String) : BilateralContractQueryMsg {
     override fun toLoggingString(): String = "getAsk, id = [$id]"
 }
