@@ -21,7 +21,6 @@ pub fn cancel_ask(
         }
         .to_err();
     }
-
     // return error if funds sent
     if !info.funds.is_empty() {
         return ContractError::InvalidFundsProvided {
@@ -135,7 +134,7 @@ mod tests {
     #[test]
     fn test_cancel_ask_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = cancel_ask(
             deps.as_mut(),
             mock_env(),
@@ -221,7 +220,7 @@ mod tests {
 
     fn do_coin_trade_cancel_ask<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(&mut deps.storage);
+        default_instantiate(deps.as_mut());
 
         // create ask data
         let asker_info = mock_info("asker", &coins(200, "base_1"));
@@ -276,7 +275,7 @@ mod tests {
 
     fn do_marker_trade_cancel_ask<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(&mut deps.storage);
+        default_instantiate(deps.as_mut());
         let ask_id = "ask_id".to_string();
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
@@ -303,7 +302,7 @@ mod tests {
 
     fn do_marker_share_sale_cancel_ask<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let ask_id = "ask_id".to_string();
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
@@ -384,7 +383,7 @@ mod tests {
 
     fn do_scope_trade_cancel_test<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let ask_id = "ask_id".to_string();
         deps.querier
             .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));

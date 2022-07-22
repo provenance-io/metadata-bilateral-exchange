@@ -333,7 +333,7 @@ mod tests {
     #[test]
     fn test_execute_match_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = execute_match(
             deps.as_mut(),
             mock_env(),
@@ -644,7 +644,7 @@ mod tests {
 
     fn do_coin_trade_test<S: Into<String>>(match_sender_address: S, mismatched_quotes: bool) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_ask(
             deps.as_mut(),
             mock_env(),
@@ -664,6 +664,7 @@ mod tests {
         );
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &bid_quote),
             Bid::new_coin_trade("bid_id", &coins(100, "base")),
             None,
@@ -723,7 +724,7 @@ mod tests {
         withdraw_shares: Option<bool>,
     ) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -742,6 +743,7 @@ mod tests {
         };
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &bid_quote),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, withdraw_shares),
             None,
@@ -848,7 +850,7 @@ mod tests {
         mismatched_quotes: bool,
     ) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -873,6 +875,7 @@ mod tests {
         };
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &bid_quote),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
             None,
@@ -971,7 +974,7 @@ mod tests {
         mismatched_quotes: bool,
     ) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -997,6 +1000,7 @@ mod tests {
         // Create the first bid that only buys half the shares for sale
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &first_bid_quote),
             Bid::new_marker_share_sale("bid_id_1", DEFAULT_MARKER_DENOM, 50),
             None,
@@ -1124,6 +1128,7 @@ mod tests {
         };
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &second_bid_quote),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 50),
             None,
@@ -1218,7 +1223,7 @@ mod tests {
 
     fn do_scope_trade_test<S: Into<String>>(match_sender_address: S, mismatched_quotes: bool) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
         create_ask(
@@ -1237,6 +1242,7 @@ mod tests {
         };
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &bid_quote),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,

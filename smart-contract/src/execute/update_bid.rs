@@ -4,11 +4,12 @@ use crate::types::request::bid_types::bid::Bid;
 use crate::types::request::request_descriptor::RequestDescriptor;
 use crate::util::create_bid_order_utilities::{create_bid_order, BidCreationType};
 use crate::util::extensions::ResultExtensions;
-use cosmwasm_std::{to_binary, BankMsg, CosmosMsg, DepsMut, MessageInfo, Response};
+use cosmwasm_std::{to_binary, BankMsg, CosmosMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
 
 pub fn update_bid(
     deps: DepsMut<ProvenanceQuery>,
+    env: Env,
     info: MessageInfo,
     bid: Bid,
     descriptor: Option<RequestDescriptor>,
@@ -19,7 +20,7 @@ pub fn update_bid(
     }
     let refunded_quote = existing_bid_order.collateral.get_quote();
     let new_bid_order =
-        create_bid_order(&deps, &info, bid, descriptor, BidCreationType::Update)?.bid_order;
+        create_bid_order(&deps, &env, &info, bid, descriptor, BidCreationType::Update)?.bid_order;
     update_bid_order(deps.storage, &new_bid_order)?;
     Response::new()
         .add_attribute("action", "update_bid")
@@ -47,7 +48,7 @@ mod tests {
     use crate::types::request::bid_types::bid_order::BidOrder;
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
-    use cosmwasm_std::testing::mock_info;
+    use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::{coins, from_binary, BankMsg, Coin, CosmosMsg, Response};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::ProvenanceMsg;
@@ -55,9 +56,10 @@ mod tests {
     #[test]
     fn test_invalid_update_for_missing_bid() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_coin_trade("bid_id", &coins(100, "base")),
             None,
@@ -73,9 +75,10 @@ mod tests {
     #[test]
     fn test_invalid_update_for_different_owner() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_coin_trade("bid_id", &coins(100, "base")),
             None,
@@ -83,6 +86,7 @@ mod tests {
         .expect("the bid should be created");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder2", &coins(150, "quote")),
             Bid::new_coin_trade("bid_id", &coins(150, "base")),
             None,
@@ -97,9 +101,10 @@ mod tests {
     #[test]
     fn test_valid_coin_trade_update_to_same_type() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(150, "quote")),
             Bid::new_coin_trade("bid_id", &coins(150, "base")),
             None,
@@ -111,6 +116,7 @@ mod tests {
         );
         let response = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_coin_trade("bid_id", &coins(100, "base")),
             Some(descriptor.clone()),
@@ -139,9 +145,10 @@ mod tests {
     #[test]
     fn test_valid_coin_trade_update_to_new_type() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(150, "quote")),
             Bid::new_coin_trade("bid_id", &coins(150, "base")),
             None,
@@ -153,6 +160,7 @@ mod tests {
         );
         let response = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(descriptor.clone()),
@@ -180,9 +188,10 @@ mod tests {
     #[test]
     fn test_invalid_coin_trade_update_scenarios() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_coin_trade("bid_id", &coins(100, "base")),
             None,
@@ -190,6 +199,7 @@ mod tests {
         .expect("the bid should be created successfully");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(150, "quote")),
             Bid::new_coin_trade("bid_id", &[]),
             None,
@@ -198,6 +208,7 @@ mod tests {
         assert_missing_field_error(err, "base");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &[]),
             Bid::new_coin_trade("bid_id", &coins(150, "base")),
             None,
@@ -210,6 +221,7 @@ mod tests {
         );
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_scope_trade("bid_id_2", DEFAULT_SCOPE_ADDR),
             None,
@@ -217,6 +229,7 @@ mod tests {
         .expect("the bid should be created successfully");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(150, "quote")),
             Bid::new_coin_trade("bid_id", &coins(150, "base")),
             Some(RequestDescriptor::new_populated_attributes(
@@ -231,11 +244,12 @@ mod tests {
     #[test]
     fn test_valid_marker_trade_update_to_same_type() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         // Create a new contract-owned marker to ensure the creation functions see it
         deps.querier.with_markers(vec![MockMarker::new_marker()]);
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(1400, "quote")),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
@@ -247,6 +261,7 @@ mod tests {
         );
         let response = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(200, "quote")),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             Some(descriptor.clone()),
@@ -279,11 +294,12 @@ mod tests {
     #[test]
     fn test_valid_marker_trade_update_to_new_type() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         // Create a new contract-owned marker to ensure the creation functions see it
         deps.querier.with_markers(vec![MockMarker::new_marker()]);
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(1400, "quote")),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
@@ -295,6 +311,7 @@ mod tests {
         );
         let response = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(200, "quote")),
             Bid::new_coin_trade("bid_id", &coins(100, "base")),
             Some(descriptor.clone()),
@@ -323,11 +340,12 @@ mod tests {
     #[test]
     fn test_invalid_marker_trade_update_scenarios() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         // Create a new contract-owned marker to ensure the creation functions see it
         deps.querier.with_markers(vec![MockMarker::new_marker()]);
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(10, "quote")),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
@@ -335,6 +353,7 @@ mod tests {
         .expect("the bid should be created successfully");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_marker_trade("bid_id", "", None),
             None,
@@ -343,6 +362,7 @@ mod tests {
         assert_missing_field_error(err, "marker_denom");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &[]),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
@@ -355,6 +375,7 @@ mod tests {
         );
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(150, "quote")),
             Bid::new_coin_trade("bid_id_2", &coins(150, "base")),
             None,
@@ -362,6 +383,7 @@ mod tests {
         .expect("expected the second bid to be created successfully");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_marker_trade("bid_id", "some other denom", None),
             None,
@@ -376,6 +398,7 @@ mod tests {
         );
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(45332, "quote")),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             Some(RequestDescriptor::new_populated_attributes(
@@ -390,11 +413,12 @@ mod tests {
     #[test]
     fn test_valid_marker_share_sale_update_to_same_type() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         // Create a new contract-owned marker to ensure the creation functions see it
         deps.querier.with_markers(vec![MockMarker::new_marker()]);
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(10, "quote")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
             None,
@@ -406,6 +430,7 @@ mod tests {
         );
         let response = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(444, "quote")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 25),
             Some(descriptor.clone()),
@@ -443,11 +468,12 @@ mod tests {
     #[test]
     fn test_valid_marker_share_sale_update_to_new_type() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         // Create a new contract-owned marker to ensure the creation functions see it
         deps.querier.with_markers(vec![MockMarker::new_marker()]);
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(10, "quote")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
             None,
@@ -459,6 +485,7 @@ mod tests {
         );
         let response = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(444, "quote")),
             Bid::new_coin_trade("bid_id", &coins(234, "base")),
             Some(descriptor.clone()),
@@ -487,7 +514,7 @@ mod tests {
     #[test]
     fn test_invalid_marker_share_sale_update_scenarios() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         // Set up a valid marker, alongside some bad markers for testing
         deps.querier.with_markers(vec![
             MockMarker::new_marker(),
@@ -506,6 +533,7 @@ mod tests {
         ]);
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
             None,
@@ -513,6 +541,7 @@ mod tests {
         .expect("expected the bid to be created");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_marker_share_sale("bid_id", "", 10),
             None,
@@ -521,6 +550,7 @@ mod tests {
         assert_missing_field_error(err, "marker_denom");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 0),
             None,
@@ -532,6 +562,7 @@ mod tests {
         );
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &[]),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
             None,
@@ -544,6 +575,7 @@ mod tests {
         );
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_marker_share_sale("bid_id", "some random marker", 10),
             None,
@@ -558,6 +590,7 @@ mod tests {
         );
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_marker_share_sale("bid_id", "nocoin", 10),
             None,
@@ -569,6 +602,7 @@ mod tests {
         );
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_marker_share_sale("bid_id", "fewshares", 2),
             None,
@@ -582,6 +616,7 @@ mod tests {
         );
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_coin_trade("bid_id_2", &coins(100, "base")),
             None,
@@ -589,6 +624,7 @@ mod tests {
         .expect("expected the second bid to be created successfully");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(10, "quote")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
             Some(RequestDescriptor::new_populated_attributes(
@@ -603,9 +639,10 @@ mod tests {
     #[test]
     fn test_valid_scope_trade_update_to_same_type() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(11, "quote")),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
@@ -617,6 +654,7 @@ mod tests {
         );
         let response = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(111, "quote")),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(descriptor.clone()),
@@ -644,9 +682,10 @@ mod tests {
     #[test]
     fn test_valid_scope_trade_update_to_new_type() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(11, "quote")),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
@@ -658,6 +697,7 @@ mod tests {
         );
         let response = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(111, "quote")),
             Bid::new_coin_trade("bid_id", &coins(555, "base")),
             Some(descriptor.clone()),
@@ -686,9 +726,10 @@ mod tests {
     #[test]
     fn test_invalid_scope_trade_update_scenarios() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
@@ -696,6 +737,7 @@ mod tests {
         .expect("the bid should be created successfully");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_scope_trade("bid_id", ""),
             None,
@@ -704,6 +746,7 @@ mod tests {
         assert_missing_field_error(err, "scope_address");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &[]),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
@@ -716,6 +759,7 @@ mod tests {
         );
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_coin_trade("bid_id_2", &coins(100, "base")),
             None,
@@ -723,6 +767,7 @@ mod tests {
         .expect("the second bid should be created successfully");
         let err = update_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(123, "quote")),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(RequestDescriptor::new_populated_attributes(

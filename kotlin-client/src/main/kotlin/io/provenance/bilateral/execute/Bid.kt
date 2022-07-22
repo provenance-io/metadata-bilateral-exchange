@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
-import io.provenance.bilateral.util.CoinUtil
 import java.math.BigInteger
 
 /**
@@ -126,17 +125,13 @@ sealed interface Bid {
     /**
      * Maps each type of bid to its funds that will be required during its creation.  This function is used to establish
      * the correct amount of funds that must be sent by the bidder when creating a bid.
-     *
-     * @param bidFee The amount of fee required to be paid to create a bid, set in the contract's ContractInfo.
      */
-    fun mapToFunds(bidFee: List<Coin>? = null): List<Coin> = map(
+    fun mapToFunds(): List<Coin> = map(
         coinTrade = { coinTrade -> coinTrade.quote },
         markerTrade = { markerTrade -> markerTrade.quote },
         markerShareSale = { markerShareSale -> markerShareSale.quote },
         scopeTrade = { scopeTrade -> scopeTrade.quote },
-    ).let { funds ->
-        bidFee?.let { CoinUtil.combineFunds(funds, bidFee) } ?: funds
-    }
+    )
 }
 
 /**

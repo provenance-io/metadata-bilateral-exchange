@@ -2,18 +2,18 @@ use crate::storage::bid_order_storage::{get_bid_order_by_id, insert_bid_order};
 use crate::types::core::error::ContractError;
 use crate::types::request::bid_types::bid::Bid;
 use crate::types::request::request_descriptor::RequestDescriptor;
-use crate::util::cosmos_utilities::get_send_amount;
 use crate::util::create_bid_order_utilities::{
     create_bid_order, BidCreationType, BidOrderCreationResponse,
 };
 use crate::util::extensions::ResultExtensions;
-use crate::util::provenance_utilities::format_coin_display;
-use cosmwasm_std::{to_binary, DepsMut, MessageInfo, Response};
+use crate::util::provenance_utilities::get_custom_fee_amount_display;
+use cosmwasm_std::{to_binary, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
 
 // create bid entrypoint
 pub fn create_bid(
     deps: DepsMut<ProvenanceQuery>,
+    env: Env,
     info: MessageInfo,
     bid: Bid,
     descriptor: Option<RequestDescriptor>,
@@ -27,24 +27,22 @@ pub fn create_bid(
     }
     let BidOrderCreationResponse {
         bid_order,
-        fee_send_msg,
-    } = create_bid_order(&deps, &info, bid, descriptor, BidCreationType::New)?;
+        bid_fee_msg,
+    } = create_bid_order(&deps, &env, &info, bid, descriptor, BidCreationType::New)?;
     insert_bid_order(deps.storage, &bid_order)?;
-    let response = Response::new()
+    let mut response = Response::new()
         .add_attribute("action", "create_bid")
         .add_attribute("bid_id", &bid_order.id)
         .set_data(to_binary(&bid_order)?);
-    if let Some(fee_send_msg) = fee_send_msg {
-        response
+    if let Some(bid_fee_msg) = bid_fee_msg {
+        response = response
             .add_attribute(
-                "bid_fee_paid",
-                format_coin_display(&get_send_amount(&fee_send_msg)?),
+                "bid_fee_charged",
+                get_custom_fee_amount_display(&bid_fee_msg)?,
             )
-            .add_message(fee_send_msg)
-    } else {
-        response
+            .add_message(bid_fee_msg);
     }
-    .to_ok()
+    response.to_ok()
 }
 
 #[cfg(test)]
@@ -58,7 +56,7 @@ mod tests {
     };
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM};
     use crate::test::mock_scope::DEFAULT_SCOPE_ADDR;
-    use crate::test::request_helpers::{mock_bid_order, set_bid_fee};
+    use crate::test::request_helpers::mock_bid_order;
     use crate::types::core::error::ContractError;
     use crate::types::core::msg::ExecuteMsg;
     use crate::types::request::bid_types::bid::Bid;
@@ -66,11 +64,11 @@ mod tests {
     use crate::types::request::bid_types::bid_order::BidOrder;
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
-    use crate::util::provenance_utilities::format_coin_display;
-    use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{coin, coins, from_binary, BankMsg, Coin, CosmosMsg, Response, Storage};
+    use crate::util::constants::NHASH;
+    use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
+    use cosmwasm_std::{coins, from_binary, CosmosMsg, Response, Storage, Uint128};
     use provwasm_mocks::mock_dependencies;
-    use provwasm_std::ProvenanceMsg;
+    use provwasm_std::{MsgFeesMsgParams, ProvenanceMsg, ProvenanceMsgParams};
 
     #[test]
     fn test_coin_trade_with_valid_data() {
@@ -79,7 +77,7 @@ mod tests {
 
     #[test]
     fn test_coin_trade_with_valid_data_and_bid_fee() {
-        do_valid_data_coin_trade(Some(coins(100, "bidfee")));
+        do_valid_data_coin_trade(Some(100));
     }
 
     #[test]
@@ -89,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_marker_trade_with_valid_data_and_bid_fee() {
-        do_valid_data_marker_trade(Some(coins(1500, "bidcoin")));
+        do_valid_data_marker_trade(Some(1500));
     }
 
     #[test]
@@ -99,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_marker_share_sale_with_valid_data_and_bid_fee() {
-        do_valid_data_marker_share_sale(Some(vec![coin(100, "bidfee"), coin(150, "otherfee")]));
+        do_valid_data_marker_share_sale(Some(150));
     }
 
     #[test]
@@ -109,17 +107,13 @@ mod tests {
 
     #[test]
     fn test_scope_trade_with_valid_data_and_bid_fee() {
-        do_valid_data_scope_trade(Some(vec![
-            coin(10000, "feea"),
-            coin(12, "feeb"),
-            coin(111, "feec"),
-        ]));
+        do_valid_data_scope_trade(Some(12));
     }
 
     #[test]
     fn test_new_bid_is_rejected_for_existing_id() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let bid_order = mock_bid_order(BidCollateral::coin_trade(&[], &[]));
         assert_eq!(
             "bid_id", bid_order.id,
@@ -129,6 +123,7 @@ mod tests {
             .expect("expected bid order insert to succeed");
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &[]),
             Bid::new_coin_trade(
                 // Matches the mock bid id, which should trigger the error
@@ -145,38 +140,9 @@ mod tests {
     }
 
     #[test]
-    fn test_new_bid_is_rejected_for_missing_bid_fee() {
-        let mut deps = mock_dependencies(&[]);
-        test_instantiate(
-            deps.as_mut().storage,
-            TestInstantiate {
-                bid_fee: Some(coins(1, "bidfee")),
-                ..TestInstantiate::default()
-            },
-        );
-        let err = create_bid(
-            deps.as_mut(),
-            mock_info("bidder", &coins(100, "quote_1")),
-            Bid::new_coin_trade("bid_id", &coins(100, "base_1")),
-            None,
-        )
-        .expect_err("an error should occur when a bid fee exists and is not paid");
-        match err {
-            ContractError::GenericError { message } => {
-                assert_eq!(
-                    "bid fee calculation: unable to find matching coin of denom [bidfee] in funds. funds: [100quote_1], fees: [1bidfee]",
-                    message,
-                    "unexpected message encountered",
-                );
-            }
-            e => panic!("unexpected error encountered: {:?}", e),
-        }
-    }
-
-    #[test]
     fn test_coin_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
 
         // create bid missing id
         let create_bid_msg = ExecuteMsg::CreateBid {
@@ -247,30 +213,7 @@ mod tests {
         match create_bid_response {
             ContractError::InvalidFundsProvided { message } => {
                 assert_eq!(
-                    "coin trade bid requests should include enough funds for bid fee + quote",
-                    message,
-                );
-            }
-            e => panic!(
-                "unexpected error when no funds provided to create bid: {:?}",
-                e
-            ),
-        };
-
-        set_bid_fee(&mut deps, Some(coins(100, "bidfee")));
-
-        let create_bid_response = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("bidder", &[coin(100, "bidfee")]),
-            create_bid_msg,
-        ).expect_err("when just enough funds to pay the bid fee but not provide the quote are sent, an error should occur");
-
-        // verify execute create bid response returns ContractError::InvalidFundsProvided
-        match create_bid_response {
-            ContractError::InvalidFundsProvided { message } => {
-                assert_eq!(
-                    "coin trade bid requests should include enough funds for bid fee + quote",
+                    "coin trade bid requests should include enough funds for a quote",
                     message,
                 );
             }
@@ -284,9 +227,10 @@ mod tests {
     #[test]
     fn test_marker_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_trade("", "somedenom", None),
             None,
@@ -300,6 +244,7 @@ mod tests {
         }
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_trade("bid_id", "", None),
             None,
@@ -316,6 +261,7 @@ mod tests {
         };
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &[]),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
@@ -328,6 +274,7 @@ mod tests {
         );
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
@@ -342,6 +289,7 @@ mod tests {
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             Some(RequestDescriptor::new_populated_attributes(
@@ -355,26 +303,15 @@ mod tests {
             "validation errors in the produced BidOrder should trigger a validation error, but got: {:?}",
             err,
         );
-        set_bid_fee(&mut deps, Some(coins(100, "bidfee")));
-        let err = create_bid(
-            deps.as_mut(),
-            mock_info("bidder", &coins(100, "bidfee")),
-            Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
-            None,
-        ).expect_err("an error should occur when just enough funds are sent to pay the bid fee but not enough for the quote");
-        assert!(
-            matches!(err, ContractError::InvalidFundsProvided { .. }),
-            "an invalid funds error should occur, but got: {:?}",
-            err,
-        );
     }
 
     #[test]
     fn test_marker_share_sale_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_share_sale("", DEFAULT_MARKER_DENOM, 100),
             None,
@@ -388,6 +325,7 @@ mod tests {
         };
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_share_sale("bid_id", "", 100),
             None,
@@ -404,6 +342,7 @@ mod tests {
         };
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 0),
             None,
@@ -426,6 +365,7 @@ mod tests {
         };
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &[]),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 100),
             None,
@@ -438,6 +378,7 @@ mod tests {
         );
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 100),
             None,
@@ -456,6 +397,7 @@ mod tests {
         deps.querier.with_markers(vec![invalid_marker]);
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 100),
             None,
@@ -474,6 +416,7 @@ mod tests {
         deps.querier.with_markers(vec![invalid_marker]);
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
             None,
@@ -500,6 +443,7 @@ mod tests {
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
             Some(RequestDescriptor::new_populated_attributes(
@@ -519,26 +463,15 @@ mod tests {
             }
             e => panic!("unexpected error: {:?}", e),
         };
-        set_bid_fee(&mut deps, Some(coins(100, "bidfee")));
-        let err = create_bid(
-            deps.as_mut(),
-            mock_info("bidder", &coins(100, "bidfee")),
-            Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
-            None,
-        ).expect_err("an error should occur when only enough funds for the bid fee are provided, but not enough for quote");
-        assert!(
-            matches!(err, ContractError::InvalidFundsProvided { .. }),
-            "an invalid funds error should be produced when not enough funds for the quote are provided, but got: {:?}",
-            err,
-        );
     }
 
     #[test]
     fn test_scope_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_scope_trade("", DEFAULT_SCOPE_ADDR),
             None,
@@ -552,6 +485,7 @@ mod tests {
         }
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_scope_trade("bid_id", ""),
             None,
@@ -568,6 +502,7 @@ mod tests {
         };
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &[]),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
@@ -580,6 +515,7 @@ mod tests {
         );
         let err = create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "nhash")),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(RequestDescriptor::new_populated_attributes(
@@ -599,25 +535,13 @@ mod tests {
             }
             e => panic!("unexpected error: {:?}", e),
         };
-        set_bid_fee(&mut deps, Some(coins(100, "bidfee")));
-        let err = create_bid(
-            deps.as_mut(),
-            mock_info("bidder", &coins(100, "bidfee")),
-            Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
-            None,
-        ).expect_err("an error should occur when enough funds for the fee are provided but not enough for the quote");
-        assert!(
-            matches!(err, ContractError::InvalidFundsProvided { .. }),
-            "an invalid funds error should be produced, but got: {:?}",
-            err,
-        );
     }
 
     fn assert_valid_response(
         storage: &dyn Storage,
         response: &Response<ProvenanceMsg>,
         expected_bid_type: RequestType,
-        expected_bid_fee: Option<Vec<Coin>>,
+        expected_bid_fee: Option<u128>,
         descriptor: &RequestDescriptor,
     ) -> BidOrder {
         if let Some(ref expected_bid_fee) = &expected_bid_fee {
@@ -627,22 +551,50 @@ mod tests {
                 "the correct number of messages should be sent",
             );
             match &response.messages.first().unwrap().msg {
-                CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                CosmosMsg::Custom(ProvenanceMsg {
+                    params:
+                        ProvenanceMsgParams::MsgFees(MsgFeesMsgParams::AssessCustomFee {
+                            amount,
+                            from,
+                            name,
+                            recipient,
+                        }),
+                    ..
+                }) => {
                     assert_eq!(
-                        DEFAULT_ADMIN_ADDRESS, to_address,
-                        "bid fees should always be sent to the contract admin",
+                        *expected_bid_fee,
+                        amount.amount.u128(),
+                        "the correct fee amount should be sent",
                     );
                     assert_eq!(
-                        expected_bid_fee, amount,
-                        "the correct fee amount should be sent",
+                        NHASH, amount.denom,
+                        "the fee should always be paid in nhash"
+                    );
+                    assert_eq!(
+                        MOCK_CONTRACT_ADDR,
+                        from.as_str(),
+                        "the fee msg should always be built with the contract's address",
+                    );
+                    assert_eq!(
+                        "bid creation nhash fee",
+                        name.as_ref().expect("the name value should be set"),
+                        "the name for the fee should be formatted correctly",
+                    );
+                    assert_eq!(
+                        DEFAULT_ADMIN_ADDRESS,
+                        recipient
+                            .as_ref()
+                            .expect("the recipient should be set")
+                            .as_str(),
+                        "the admin should always receive the fee",
                     );
                 }
                 msg => panic!("unexpected message found for bid fee: {:?}", msg),
             }
             assert_eq!(
-                format_coin_display(&expected_bid_fee),
-                single_attribute_for_key(&response, "bid_fee_paid"),
-                "expected the correct bid_fee_paid attribute value",
+                format!("{}{}", expected_bid_fee, NHASH),
+                single_attribute_for_key(response, "bid_fee_charged"),
+                "expected the correct bid_fee_charged attribute value",
             );
         } else {
             assert!(
@@ -701,12 +653,12 @@ mod tests {
         bid_order
     }
 
-    fn do_valid_data_coin_trade(bid_fee: Option<Vec<Coin>>) {
+    fn do_valid_data_coin_trade(bid_fee: Option<u128>) {
         let mut deps = mock_dependencies(&[]);
         test_instantiate(
-            deps.as_mut().storage,
+            deps.as_mut(),
             TestInstantiate {
-                bid_fee: bid_fee.clone(),
+                create_bid_nhash_fee: bid_fee.map(Uint128::new).clone(),
                 ..TestInstantiate::default()
             },
         );
@@ -722,16 +674,8 @@ mod tests {
             descriptor: Some(request_descriptor.clone()),
         };
 
-        let bidder_info = mock_info(
-            "bidder",
-            &if let Some(ref bid_fee) = &bid_fee {
-                let mut coins = bid_fee.to_vec();
-                coins.push(coin(2, "mark_2"));
-                coins
-            } else {
-                coins(2, "mark_2")
-            },
-        );
+        let bidder_info = mock_info("bidder", &coins(2, "mark_2"));
+
         // execute create bid
         let response = execute(
             deps.as_mut(),
@@ -762,12 +706,12 @@ mod tests {
         );
     }
 
-    fn do_valid_data_marker_trade(bid_fee: Option<Vec<Coin>>) {
+    fn do_valid_data_marker_trade(bid_fee: Option<u128>) {
         let mut deps = mock_dependencies(&[]);
         test_instantiate(
-            deps.as_mut().storage,
+            deps.as_mut(),
             TestInstantiate {
-                bid_fee: bid_fee.clone(),
+                create_bid_nhash_fee: bid_fee.map(Uint128::new).clone(),
                 ..TestInstantiate::default()
             },
         );
@@ -779,16 +723,8 @@ mod tests {
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         let response = create_bid(
             deps.as_mut(),
-            mock_info(
-                "bidder",
-                &if let Some(ref bid_fee) = &bid_fee {
-                    let mut coins = bid_fee.to_vec();
-                    coins.push(coin(100, "nhash"));
-                    coins
-                } else {
-                    coins(100, "nhash")
-                },
-            ),
+            mock_env(),
+            mock_info("bidder", &coins(100, "nhash")),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             Some(descriptor.clone()),
         )
@@ -816,12 +752,12 @@ mod tests {
         );
     }
 
-    fn do_valid_data_marker_share_sale(bid_fee: Option<Vec<Coin>>) {
+    fn do_valid_data_marker_share_sale(bid_fee: Option<u128>) {
         let mut deps = mock_dependencies(&[]);
         test_instantiate(
-            deps.as_mut().storage,
+            deps.as_mut(),
             TestInstantiate {
-                bid_fee: bid_fee.clone(),
+                create_bid_nhash_fee: bid_fee.map(Uint128::new).clone(),
                 ..TestInstantiate::default()
             },
         );
@@ -833,16 +769,8 @@ mod tests {
         );
         let response = create_bid(
             deps.as_mut(),
-            mock_info(
-                "bidder",
-                &if let Some(ref bid_fee) = &bid_fee {
-                    let mut coins = bid_fee.to_vec();
-                    coins.push(coin(1000, "nhash"));
-                    coins
-                } else {
-                    coins(1000, "nhash")
-                },
-            ),
+            mock_env(),
+            mock_info("bidder", &coins(1000, "nhash")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
             Some(descriptor.clone()),
         )
@@ -876,12 +804,12 @@ mod tests {
         );
     }
 
-    fn do_valid_data_scope_trade(bid_fee: Option<Vec<Coin>>) {
+    fn do_valid_data_scope_trade(bid_fee: Option<u128>) {
         let mut deps = mock_dependencies(&[]);
         test_instantiate(
-            deps.as_mut().storage,
+            deps.as_mut(),
             TestInstantiate {
-                bid_fee: bid_fee.clone(),
+                create_bid_nhash_fee: bid_fee.map(Uint128::new).clone(),
                 ..TestInstantiate::default()
             },
         );
@@ -891,16 +819,8 @@ mod tests {
         );
         let response = create_bid(
             deps.as_mut(),
-            mock_info(
-                "bidder",
-                &if let Some(ref bid_fee) = &bid_fee {
-                    let mut coins = bid_fee.to_vec();
-                    coins.push(coin(150, "nhash"));
-                    coins
-                } else {
-                    coins(150, "nhash")
-                },
-            ),
+            mock_env(),
+            mock_info("bidder", &coins(150, "nhash")),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(descriptor.clone()),
         )

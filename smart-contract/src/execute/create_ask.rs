@@ -2,12 +2,11 @@ use crate::storage::ask_order_storage::{get_ask_order_by_id, insert_ask_order};
 use crate::types::core::error::ContractError;
 use crate::types::request::ask_types::ask::Ask;
 use crate::types::request::request_descriptor::RequestDescriptor;
-use crate::util::cosmos_utilities::get_send_amount;
 use crate::util::create_ask_order_utilities::{
     create_ask_order, AskCreationType, AskOrderCreationResponse,
 };
 use crate::util::extensions::ResultExtensions;
-use crate::util::provenance_utilities::format_coin_display;
+use crate::util::provenance_utilities::get_custom_fee_amount_display;
 use cosmwasm_std::{to_binary, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
 
@@ -33,22 +32,20 @@ pub fn create_ask(
         ask_fee_msg,
     } = create_ask_order(&deps, &env, &info, ask, descriptor, AskCreationType::New)?;
     insert_ask_order(deps.storage, &ask_order)?;
-    let response = Response::new()
+    let mut response = Response::new()
         .add_messages(messages)
         .add_attribute("action", "create_ask")
         .add_attribute("ask_id", &ask_order.id)
         .set_data(to_binary(&ask_order)?);
     if let Some(ask_fee_msg) = ask_fee_msg {
-        response
+        response = response
             .add_attribute(
-                "ask_fee_paid",
-                format_coin_display(&get_send_amount(&ask_fee_msg)?),
+                "ask_fee_charged",
+                get_custom_fee_amount_display(&ask_fee_msg)?,
             )
-            .add_message(ask_fee_msg)
-    } else {
-        response
+            .add_message(ask_fee_msg);
     }
-    .to_ok()
+    response.to_ok()
 }
 
 #[cfg(test)]
@@ -64,7 +61,6 @@ mod tests {
         MockMarker, DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM, DEFAULT_MARKER_HOLDINGS,
     };
     use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ADDR};
-    use crate::test::request_helpers::set_ask_fee;
     use crate::types::core::error::ContractError;
     use crate::types::core::msg::ExecuteMsg;
     use crate::types::request::ask_types::ask::Ask;
@@ -73,13 +69,11 @@ mod tests {
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
     use crate::types::request::share_sale_type::ShareSaleType;
-    use crate::util::provenance_utilities::format_coin_display;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{
-        coin, coins, from_binary, Addr, BankMsg, Coin, CosmosMsg, Response, Storage,
-    };
+    use cosmwasm_std::{coin, coins, from_binary, Addr, CosmosMsg, Response, Storage, Uint128};
     use provwasm_mocks::mock_dependencies;
-    use provwasm_std::{MarkerMsgParams, ProvenanceMsg, ProvenanceMsgParams};
+    use provwasm_std::{MarkerMsgParams, MsgFeesMsgParams, ProvenanceMsg, ProvenanceMsgParams};
 
     #[test]
     fn test_coin_trade_with_valid_data() {
@@ -88,7 +82,7 @@ mod tests {
 
     #[test]
     fn test_coin_trade_with_valid_data_and_ask_fee() {
-        do_valid_coin_trade_ask(Some(coins(10000, "askfee")));
+        do_valid_coin_trade_ask(Some(10000));
     }
 
     #[test]
@@ -98,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_marker_trade_with_valid_data_and_ask_fee() {
-        do_valid_marker_trade_ask(Some(coins(100, "askfee")));
+        do_valid_marker_trade_ask(Some(100));
     }
 
     #[test]
@@ -108,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_marker_share_sale_with_valid_data_and_ask_fee() {
-        do_valid_marker_share_sale_ask(Some(vec![coin(10, "askfee1"), coin(20, "askfee2")]));
+        do_valid_marker_share_sale_ask(Some(10));
     }
 
     #[test]
@@ -118,13 +112,13 @@ mod tests {
 
     #[test]
     fn test_scope_trade_with_valid_data_and_ask_fee() {
-        do_valid_scope_trade(Some(coins(10, "askfee")));
+        do_valid_scope_trade(Some(10));
     }
 
     #[test]
     fn test_new_ask_is_rejected_for_existing_id() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let fake_ask = AskOrder::new_unchecked(
             "ask_id",
             Addr::unchecked("asker"),
@@ -153,40 +147,9 @@ mod tests {
     }
 
     #[test]
-    fn test_new_ask_is_rejected_for_inability_to_pay_ask_fee() {
-        let mut deps = mock_dependencies(&[]);
-        test_instantiate(
-            deps.as_mut().storage,
-            TestInstantiate {
-                ask_fee: Some(coins(1, "askfee")),
-                ..TestInstantiate::default()
-            },
-        );
-        // Create a valid coin trade ask that is simply missing the ask fee entirely
-        let err = create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &coins(100, "base_1")),
-            Ask::new_coin_trade("ask_id", &coins(100, "quote_1")),
-            None,
-        )
-        .expect_err("an error should occur because the ask fee funds were not included");
-        match err {
-            ContractError::GenericError { message } => {
-                assert_eq!(
-                    "ask fee calculation: unable to find matching coin of denom [askfee] in funds. funds: [100base_1], fees: [1askfee]",
-                    message,
-                    "unexpected message when ask fee is missing",
-                );
-            }
-            e => panic!("unexpected error: {:?}", e),
-        };
-    }
-
-    #[test]
     fn test_coin_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         // create ask invalid data
         let create_ask_msg = ExecuteMsg::CreateAsk {
             ask: Ask::new_coin_trade("", &[]),
@@ -204,7 +167,7 @@ mod tests {
         match create_ask_response {
             ContractError::InvalidFundsProvided { message } => {
                 assert_eq!(
-                    "coin trade ask requests should include enough funds for ask fee + base",
+                    "coin trade ask requests should include funds for a base",
                     message,
                 )
             }
@@ -277,27 +240,12 @@ mod tests {
                 error => panic!("unexpected error: {:?}", error),
             },
         }
-        // just enough to pay the fee, but not enough to provide a base
-        set_ask_fee(&mut deps, Some(coins(100, "askfeecoin")));
-        let create_ask_response = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &coins(100, "askfeecoin")),
-            create_ask_msg,
-        );
-        match create_ask_response {
-            Ok(_) => panic!("expected error, but execute_create_ask_response ok"),
-            Err(error) => match error {
-                ContractError::InvalidFundsProvided { .. } => {}
-                error => panic!("unexpected error: {:?}", error),
-            },
-        };
     }
 
     #[test]
     fn test_marker_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(&mut deps.storage);
+        default_instantiate(deps.as_mut());
         let error = create_ask(
             deps.as_mut(),
             mock_env(),
@@ -326,26 +274,12 @@ mod tests {
             "a missing marker should cause a standard cosmwasm error, but got: {:?}",
             error,
         );
-        set_ask_fee(&mut deps, Some(coins(100, "askfee")));
-        let error = create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &coins(101, "askfee")),
-            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &coins(100, "nhash")),
-            None,
-        )
-        .expect_err("when the ask fee is overpaid, the marker trade should be rejected");
-        assert!(
-            matches!(error, ContractError::InvalidFundsProvided { .. }),
-            "an ask fee overpay should result in an invalid funds error, but got: {:?}",
-            error,
-        );
     }
 
     #[test]
     fn test_marker_share_sale_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let mut ask = Ask::new_marker_share_sale(
             "ask_id",
             DEFAULT_MARKER_DENOM,
@@ -419,32 +353,12 @@ mod tests {
             "a validation error should be returned because the ask had no quote-per-share, but got: {:?}",
             err,
         );
-        set_ask_fee(&mut deps, Some(coins(100, "askfee")));
-        let err = create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &coins(101, "askfee")),
-            Ask::new_marker_share_sale(
-                "ask_id",
-                DEFAULT_MARKER_DENOM,
-                10,
-                &coins(100, "nhash"),
-                ShareSaleType::SingleTransaction,
-            ),
-            None,
-        )
-        .expect_err("when the ask fee is overpaid, the marker trade should be rejected");
-        assert!(
-            matches!(err, ContractError::InvalidFundsProvided { .. }),
-            "an ask fee overpay should result in an invalid funds error, but got: {:?}",
-            err,
-        );
     }
 
     #[test]
     fn test_scope_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let mut ask = Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, "nhash"));
         let err = create_ask(
             deps.as_mut(),
@@ -510,27 +424,13 @@ mod tests {
             "a validation error should occur when the ask request is improperly formed, but got: {:?}",
             err,
         );
-        set_ask_fee(&mut deps, Some(coins(100, "askfee")));
-        let err = create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &coins(101, "askfee")),
-            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, "nhash")),
-            None,
-        )
-        .expect_err("an error should occur when a scope trade overpays the ask fee");
-        assert!(
-            matches!(err, ContractError::InvalidFundsProvided { .. }),
-            "an ask fee overpay should result in an invalid funds error, but got: {:?}",
-            err,
-        );
     }
 
     fn assert_valid_response(
         storage: &dyn Storage,
         response: &Response<ProvenanceMsg>,
         // This function implicitly assumes an ask fee is expected if this is not None
-        expected_ask_fee_charge: Option<Vec<Coin>>,
+        expected_ask_fee_charge: Option<u128>,
     ) -> AskOrder {
         assert_eq!(
             2 + if expected_ask_fee_charge.is_some() {
@@ -553,9 +453,9 @@ mod tests {
         );
         if let Some(expected_ask_fee) = expected_ask_fee_charge {
             assert_eq!(
-                format_coin_display(&expected_ask_fee),
-                single_attribute_for_key(response, "ask_fee_paid"),
-                "expected the correct ask_fee_paid attribute value",
+                format!("{}{}", expected_ask_fee, NHASH),
+                single_attribute_for_key(response, "ask_fee_charged"),
+                "expected the correct ask_fee_charged attribute value",
             );
         }
         let ask_order: AskOrder = if let Some(ask_order_binary) = &response.data {
@@ -573,12 +473,12 @@ mod tests {
         ask_order
     }
 
-    fn do_valid_coin_trade_ask(ask_fee: Option<Vec<Coin>>) {
+    fn do_valid_coin_trade_ask(ask_fee: Option<u128>) {
         let mut deps = mock_dependencies(&[]);
         test_instantiate(
-            deps.as_mut().storage,
+            deps.as_mut(),
             TestInstantiate {
-                ask_fee: ask_fee.clone(),
+                create_ask_nhash_fee: ask_fee.map(Uint128::new).clone(),
                 ..TestInstantiate::default()
             },
         );
@@ -588,17 +488,7 @@ mod tests {
             descriptor: None,
         };
 
-        // Send 12 base_1 coin, paying 10 into the ask fee, and using 2 as the base itself
-        let asker_info = mock_info(
-            "asker",
-            &if let Some(ref ask_fee) = &ask_fee {
-                let mut coins = ask_fee.to_vec();
-                coins.push(coin(2, "base_1"));
-                coins
-            } else {
-                coins(2, "base_1")
-            },
-        );
+        let asker_info = mock_info("asker", &coins(2, "base_1"));
 
         // handle create ask
         let create_ask_response = execute(deps.as_mut(), mock_env(), asker_info, create_ask_msg)
@@ -610,12 +500,43 @@ mod tests {
                 "one message should be sent when an ask fee is requested",
             );
             match &create_ask_response.messages.first().unwrap().msg {
-                CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                CosmosMsg::Custom(ProvenanceMsg {
+                    params:
+                        ProvenanceMsgParams::MsgFees(MsgFeesMsgParams::AssessCustomFee {
+                            amount,
+                            from,
+                            name,
+                            recipient,
+                        }),
+                    ..
+                }) => {
                     assert_eq!(
-                        DEFAULT_ADMIN_ADDRESS, to_address,
-                        "the admin should receive the ask fee",
+                        *ask_fee,
+                        amount.amount.u128(),
+                        "the correct fee amount should be sent",
                     );
-                    assert_eq!(ask_fee, amount, "the ask fee should be charged in full",);
+                    assert_eq!(
+                        NHASH, amount.denom,
+                        "the fee should always be paid in nhash"
+                    );
+                    assert_eq!(
+                        MOCK_CONTRACT_ADDR,
+                        from.as_str(),
+                        "the fee msg should always be built with the contract's address",
+                    );
+                    assert_eq!(
+                        "ask creation nhash fee",
+                        name.as_ref().expect("the name value should be set"),
+                        "the name for the fee should be formatted correctly",
+                    );
+                    assert_eq!(
+                        DEFAULT_ADMIN_ADDRESS,
+                        recipient
+                            .as_ref()
+                            .expect("the recipient should be set")
+                            .as_str(),
+                        "the admin should always receive the fee",
+                    );
                 }
                 msg => panic!("unexpected message sent with ask fee: {:?}", msg),
             }
@@ -635,12 +556,12 @@ mod tests {
         assert_eq!(coins(100, "quote_1"), collateral.quote);
     }
 
-    fn do_valid_marker_trade_ask(ask_fee: Option<Vec<Coin>>) {
+    fn do_valid_marker_trade_ask(ask_fee: Option<u128>) {
         let mut deps = mock_dependencies(&[]);
         test_instantiate(
-            &mut deps.storage,
+            deps.as_mut(),
             TestInstantiate {
-                ask_fee: ask_fee.clone(),
+                create_ask_nhash_fee: ask_fee.map(Uint128::new).clone(),
                 ..TestInstantiate::default()
             },
         );
@@ -650,14 +571,7 @@ mod tests {
         let response = create_ask(
             deps.as_mut(),
             mock_env(),
-            mock_info(
-                "asker",
-                &if let Some(ref ask_fee) = &ask_fee {
-                    ask_fee.to_vec()
-                } else {
-                    vec![]
-                },
-            ),
+            mock_info("asker", &[]),
             Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &[coin(150, "nhash")]),
             Some(descriptor.to_owned()),
         )
@@ -683,20 +597,44 @@ mod tests {
                     "the asker address should be revoked its access from the marker on a successful ask",
                 );
             },
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+            CosmosMsg::Custom(ProvenanceMsg {
+                                  params:
+                                  ProvenanceMsgParams::MsgFees(MsgFeesMsgParams::AssessCustomFee {
+                                                                   amount,
+                                                                   from,
+                                                                   name,
+                                                                   recipient,
+                                                               }),
+                                  ..
+                              }) => {
                 if let Some(ref ask_fee) = &ask_fee {
                     assert_eq!(
-                        DEFAULT_ADMIN_ADDRESS,
-                        to_address,
-                        "the ask fee should be sent to the admin",
+                        *ask_fee,
+                        amount.amount.u128(),
+                        "the correct fee amount should be charged",
                     );
                     assert_eq!(
-                        ask_fee,
-                        amount,
-                        "the correct fee amount should be sent",
+                        NHASH,
+                        amount.denom,
+                        "all fees should be charged in nhash",
+                    );
+                    assert_eq!(
+                        MOCK_CONTRACT_ADDR,
+                        from.as_str(),
+                        "the fee msg should always be built with the contract's address",
+                    );
+                    assert_eq!(
+                        "ask creation nhash fee",
+                        name.as_ref().expect("the name value should be set"),
+                        "the name for the fee should be formatted correctly",
+                    );
+                    assert_eq!(
+                        DEFAULT_ADMIN_ADDRESS,
+                        recipient.as_ref().expect("the recipient should be set").as_str(),
+                        "the admin should always receive the fee",
                     );
                 } else {
-                    panic!("a send message should not be sent when no ask fee is required");
+                    panic!("a fee message should not be sent when no ask fee is required");
                 }
             }
             msg => panic!("unexpected message in marker trade: {:?}", msg),
@@ -745,12 +683,12 @@ mod tests {
         );
     }
 
-    fn do_valid_marker_share_sale_ask(ask_fee: Option<Vec<Coin>>) {
+    fn do_valid_marker_share_sale_ask(ask_fee: Option<u128>) {
         let mut deps = mock_dependencies(&[]);
         test_instantiate(
-            deps.as_mut().storage,
+            deps.as_mut(),
             TestInstantiate {
-                ask_fee: ask_fee.clone(),
+                create_ask_nhash_fee: ask_fee.map(Uint128::new).clone(),
                 ..TestInstantiate::default()
             },
         );
@@ -763,14 +701,7 @@ mod tests {
         let response = create_ask(
             deps.as_mut(),
             mock_env(),
-            mock_info(
-                "asker",
-                &if let Some(ref ask_fee) = &ask_fee {
-                    ask_fee.to_vec()
-                } else {
-                    vec![]
-                },
-            ),
+            mock_info("asker", &[]),
             Ask::new_marker_share_sale(
                 "ask_id",
                 DEFAULT_MARKER_DENOM,
@@ -802,22 +733,46 @@ mod tests {
                     "the asker address should be revoked its access from the marker on a successful ask",
                 );
             },
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+            CosmosMsg::Custom(ProvenanceMsg {
+                                  params:
+                                  ProvenanceMsgParams::MsgFees(MsgFeesMsgParams::AssessCustomFee {
+                                                                   amount,
+                                                                   from,
+                                                                   name,
+                                                                   recipient,
+                                                               }),
+                                  ..
+                              }) => {
                 if let Some(ref ask_fee) = &ask_fee {
                     assert_eq!(
-                        DEFAULT_ADMIN_ADDRESS,
-                        to_address,
-                        "the ask fee should be sent to the admin",
+                        *ask_fee,
+                        amount.amount.u128(),
+                        "the correct fee amount should be charged",
                     );
                     assert_eq!(
-                        ask_fee,
-                        amount,
-                        "the correct fee amount should be sent",
+                        NHASH,
+                        amount.denom,
+                        "all fees should be charged in nhash",
+                    );
+                    assert_eq!(
+                        MOCK_CONTRACT_ADDR,
+                        from.as_str(),
+                        "the fee msg should always be built with the contract's address",
+                    );
+                    assert_eq!(
+                        "ask creation nhash fee",
+                        name.as_ref().expect("the name value should be set"),
+                        "the name for the fee should be formatted correctly",
+                    );
+                    assert_eq!(
+                        DEFAULT_ADMIN_ADDRESS,
+                        recipient.as_ref().expect("the recipient should be set").as_str(),
+                        "the admin should always receive the fee",
                     );
                 } else {
-                    panic!("a send message should not be sent when no ask fee is required");
+                    panic!("a fee message should not be sent when no ask fee is required");
                 }
-            },
+            }
             msg => panic!("unexpected message in marker trade: {:?}", msg),
         });
         let ask_order = assert_valid_response(deps.as_ref().storage, &response, ask_fee);
@@ -900,12 +855,12 @@ mod tests {
         );
     }
 
-    fn do_valid_scope_trade(ask_fee: Option<Vec<Coin>>) {
+    fn do_valid_scope_trade(ask_fee: Option<u128>) {
         let mut deps = mock_dependencies(&[]);
         test_instantiate(
-            deps.as_mut().storage,
+            deps.as_mut(),
             TestInstantiate {
-                ask_fee: ask_fee.clone(),
+                create_ask_nhash_fee: ask_fee.map(Uint128::new).clone(),
                 ..TestInstantiate::default()
             },
         );
@@ -918,14 +873,7 @@ mod tests {
         let response = create_ask(
             deps.as_mut(),
             mock_env(),
-            mock_info(
-                "asker",
-                &if let Some(ref ask_fee) = &ask_fee {
-                    ask_fee.to_vec()
-                } else {
-                    vec![]
-                },
-            ),
+            mock_info("asker", &[]),
             Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, "nhash")),
             Some(descriptor.clone()),
         )
@@ -937,14 +885,39 @@ mod tests {
                 "the correct number of messages should be sent when an ask fee is requested",
             );
             match &response.messages.first().unwrap().msg {
-                CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                CosmosMsg::Custom(ProvenanceMsg {
+                    params:
+                        ProvenanceMsgParams::MsgFees(MsgFeesMsgParams::AssessCustomFee {
+                            amount,
+                            from,
+                            name,
+                            recipient,
+                        }),
+                    ..
+                }) => {
                     assert_eq!(
-                        DEFAULT_ADMIN_ADDRESS, to_address,
-                        "the ask fee should be sent to the admin",
+                        *ask_fee,
+                        amount.amount.u128(),
+                        "the correct fee amount should be charged",
+                    );
+                    assert_eq!(NHASH, amount.denom, "all fees should be charged in nhash",);
+                    assert_eq!(
+                        MOCK_CONTRACT_ADDR,
+                        from.as_str(),
+                        "the fee msg should always be built with the contract's address",
                     );
                     assert_eq!(
-                        ask_fee, amount,
-                        "the correct fee amount should be sent to the admin",
+                        "ask creation nhash fee",
+                        name.as_ref().expect("the name value should be set"),
+                        "the name for the fee should be formatted correctly",
+                    );
+                    assert_eq!(
+                        DEFAULT_ADMIN_ADDRESS,
+                        recipient
+                            .as_ref()
+                            .expect("the recipient should be set")
+                            .as_str(),
+                        "the admin should always receive the fee",
                     );
                 }
                 msg => panic!("unexpected message: {:?}", msg),

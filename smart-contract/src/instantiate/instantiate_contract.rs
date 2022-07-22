@@ -1,4 +1,4 @@
-use crate::storage::contract_info::{get_contract_info, set_contract_info, ContractInfo};
+use crate::storage::contract_info::{get_contract_info, set_contract_info, ContractInfoV2};
 use crate::types::core::error::ContractError;
 use crate::types::core::msg::InstantiateMsg;
 use crate::util::extensions::ResultExtensions;
@@ -15,12 +15,12 @@ pub fn instantiate_contract(
     validate_instantiate_msg(&msg)?;
 
     // set contract info
-    let contract_info = ContractInfo::new(
+    let contract_info = ContractInfoV2::new(
         info.sender,
         msg.bind_name,
         msg.contract_name,
-        msg.ask_fee,
-        msg.bid_fee,
+        msg.create_ask_nhash_fee,
+        msg.create_bid_nhash_fee,
     );
     set_contract_info(deps.storage, &contract_info)?;
 
@@ -48,7 +48,7 @@ mod tests {
     use crate::contract::instantiate;
     use crate::storage::contract_info::{CONTRACT_TYPE, CONTRACT_VERSION};
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{attr, coins, Addr, CosmosMsg};
+    use cosmwasm_std::{attr, Addr, CosmosMsg, Uint128};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::{NameMsgParams, ProvenanceMsgParams, ProvenanceRoute};
 
@@ -60,8 +60,8 @@ mod tests {
         let init_msg = InstantiateMsg {
             bind_name: "contract_bind_name".to_string(),
             contract_name: "contract_name".to_string(),
-            ask_fee: Some(coins(100, "nhash")),
-            bid_fee: Some(coins(200, "nhash")),
+            create_ask_nhash_fee: Some(Uint128::new(100)),
+            create_bid_nhash_fee: Some(Uint128::new(200)),
         };
 
         // initialize
@@ -83,14 +83,14 @@ mod tests {
                         version: "2.0.0".to_string(),
                     })
                 );
-                let expected_contract_info = ContractInfo {
+                let expected_contract_info = ContractInfoV2 {
                     admin: Addr::unchecked("contract_admin"),
                     bind_name: "contract_bind_name".to_string(),
                     contract_name: "contract_name".to_string(),
                     contract_type: CONTRACT_TYPE.into(),
                     contract_version: CONTRACT_VERSION.into(),
-                    ask_fee: Some(coins(100, "nhash")),
-                    bid_fee: Some(coins(200, "nhash")),
+                    create_ask_nhash_fee: Uint128::new(100),
+                    create_bid_nhash_fee: Uint128::new(200),
                 };
 
                 assert_eq!(init_response.attributes.len(), 2);
@@ -112,8 +112,8 @@ mod tests {
         let init_msg = InstantiateMsg {
             bind_name: "".to_string(),
             contract_name: "contract_name".to_string(),
-            ask_fee: Some(coins(10, "nhash")),
-            bid_fee: Some(coins(20, "nhash")),
+            create_ask_nhash_fee: Some(Uint128::new(10)),
+            create_bid_nhash_fee: Some(Uint128::new(20)),
         };
 
         // initialize

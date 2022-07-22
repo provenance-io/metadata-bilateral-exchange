@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn test_invalid_update_for_missing_ask() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = update_ask(
             deps.as_mut(),
             mock_env(),
@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn test_invalid_update_for_different_owner() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_ask(
             deps.as_mut(),
             mock_env(),
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn test_valid_coin_trade_update() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_ask(
             deps.as_mut(),
             mock_env(),
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn test_invalid_coin_trade_update_scenarios() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_ask(
             deps.as_mut(),
             mock_env(),
@@ -248,7 +248,7 @@ mod tests {
     #[test]
     fn test_valid_marker_trade_update() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -312,7 +312,7 @@ mod tests {
     #[test]
     fn test_valid_marker_trade_update_to_share_sale() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn test_invalid_marker_trade_update_scenarios() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -496,7 +496,7 @@ mod tests {
     #[test]
     fn test_valid_marker_share_sale_single_tx_update() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -586,7 +586,7 @@ mod tests {
     #[test]
     fn test_valid_marker_share_sale_single_tx_update_to_marker_trade() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -656,7 +656,7 @@ mod tests {
     #[test]
     fn test_valid_marker_share_sale_multiple_tx_update() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -746,7 +746,7 @@ mod tests {
     #[test]
     fn test_valid_marker_share_sale_multiple_tx_update_to_marker_trade() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -816,7 +816,7 @@ mod tests {
     #[test]
     fn test_invalid_marker_share_sale_update_scenarios() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier.with_markers(vec![
             MockMarker::new_owned_marker("asker"),
             MockMarker {
@@ -981,7 +981,7 @@ mod tests {
     #[test]
     fn test_valid_scope_trade_update() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
         create_ask(
@@ -1025,7 +1025,7 @@ mod tests {
     #[test]
     fn test_invalid_scope_trade_scenarios() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
         create_ask(

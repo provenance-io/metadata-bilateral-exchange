@@ -2,8 +2,8 @@ use crate::types::core::error::ContractError;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{coin, Addr, Coin, CosmosMsg};
 use provwasm_std::{
-    grant_marker_access, revoke_marker_access, AccessGrant, Marker, MarkerAccess, Party, PartyType,
-    ProvenanceMsg, Scope,
+    grant_marker_access, revoke_marker_access, AccessGrant, Marker, MarkerAccess, MsgFeesMsgParams,
+    Party, PartyType, ProvenanceMsg, ProvenanceMsgParams, Scope,
 };
 
 pub fn format_coin_display(coins: &[Coin]) -> String {
@@ -165,14 +165,34 @@ pub fn replace_scope_owner(mut scope: Scope, new_owner: Addr) -> Scope {
     scope
 }
 
+pub fn get_custom_fee_amount_display(
+    msg: &CosmosMsg<ProvenanceMsg>,
+) -> Result<String, ContractError> {
+    match msg {
+        CosmosMsg::Custom(ProvenanceMsg {
+            params: ProvenanceMsgParams::MsgFees(MsgFeesMsgParams::AssessCustomFee { amount, .. }),
+            ..
+        }) => format!("{}{}", amount.amount.u128(), &amount.denom).to_ok(),
+        msg => ContractError::GenericError {
+            message: format!(
+                "expected MsgFees AssessCustomFee provenance msg but got: {:?}",
+                msg
+            ),
+        }
+        .to_err(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test::mock_instantiate::DEFAULT_ADMIN_ADDRESS;
     use crate::test::mock_marker::MockMarker;
     use crate::test::mock_scope::MockScope;
-    use cosmwasm_std::coins;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
-    use provwasm_std::{MarkerMsgParams, ProvenanceMsgParams};
+    use cosmwasm_std::{coins, BankMsg};
+    use provwasm_std::{assess_custom_fee, MarkerMsgParams, ProvenanceMsgParams};
 
     #[test]
     fn test_format_coin_display() {
@@ -567,5 +587,33 @@ mod tests {
             }
             e => panic!("unexpected error type encountered: {:?}", e),
         }
+    }
+
+    #[test]
+    fn test_get_custom_fee_amount_display() {
+        let invalid_msg: CosmosMsg<ProvenanceMsg> = CosmosMsg::Bank(BankMsg::Send {
+            to_address: "some_person".to_string(),
+            amount: coins(100, "nhash"),
+        });
+        let err = get_custom_fee_amount_display(&invalid_msg)
+            .expect_err("when a non custom fees msg is used, an error should be produced");
+        assert!(
+            matches!(err, ContractError::GenericError { .. }),
+            "a generic error should be returned when the wrong msg type is used, but got: {:?}",
+            err,
+        );
+        let valid_msg: CosmosMsg<ProvenanceMsg> = assess_custom_fee(
+            coin(250, NHASH),
+            Some("some_person"),
+            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Some(Addr::unchecked(DEFAULT_ADMIN_ADDRESS)),
+        )
+        .expect("expected custom fee msg to be created with issue");
+        let display_string = get_custom_fee_amount_display(&valid_msg)
+            .expect("a display string should be produced from a fee msg");
+        assert_eq!(
+            "250nhash", display_string,
+            "the display string should be properly formatted",
+        );
     }
 }

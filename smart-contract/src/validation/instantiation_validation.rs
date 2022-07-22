@@ -1,7 +1,6 @@
 use crate::types::core::error::ContractError;
 use crate::types::core::msg::InstantiateMsg;
 use crate::util::extensions::ResultExtensions;
-use crate::validation::generic_validation::validate_coin_vector;
 
 pub fn validate_instantiate_msg(msg: &InstantiateMsg) -> Result<(), ContractError> {
     let mut invalid_fields = vec![];
@@ -10,12 +9,6 @@ pub fn validate_instantiate_msg(msg: &InstantiateMsg) -> Result<(), ContractErro
     }
     if msg.contract_name.is_empty() {
         invalid_fields.push("contract_name value was empty".to_string());
-    }
-    if let Some(ref ask_fee) = &msg.ask_fee {
-        invalid_fields.append(&mut validate_coin_vector("ask_fee", ask_fee));
-    }
-    if let Some(ref bid_fee) = &msg.bid_fee {
-        invalid_fields.append(&mut validate_coin_vector("bid_fee", bid_fee));
     }
     if !invalid_fields.is_empty() {
         ContractError::ValidationError {
@@ -32,7 +25,7 @@ mod tests {
     use crate::types::core::error::ContractError;
     use crate::types::core::msg::InstantiateMsg;
     use crate::validation::instantiation_validation::validate_instantiate_msg;
-    use cosmwasm_std::{coin, coins};
+    use cosmwasm_std::Uint128;
 
     #[test]
     fn test_invalid_bind_name() {
@@ -40,8 +33,8 @@ mod tests {
             InstantiateMsg {
                 bind_name: String::new(),
                 contract_name: "some name".to_string(),
-                ask_fee: None,
-                bid_fee: None,
+                create_ask_nhash_fee: None,
+                create_bid_nhash_fee: None,
             },
             "Empty bind_name provided",
             "bind_name value was empty",
@@ -54,101 +47,11 @@ mod tests {
             InstantiateMsg {
                 bind_name: "somename.pb".to_string(),
                 contract_name: String::new(),
-                ask_fee: None,
-                bid_fee: None,
+                create_ask_nhash_fee: None,
+                create_bid_nhash_fee: None,
             },
             "Empty contract_name provided",
             "contract_name value was empty",
-        );
-    }
-
-    #[test]
-    fn test_invalid_ask_fee() {
-        assert_expected_validation_error(
-            InstantiateMsg {
-                bind_name: "bind_name".to_string(),
-                contract_name: "contract_name".to_string(),
-                ask_fee: Some(vec![]),
-                bid_fee: None,
-            },
-            "empty ask_fee vector provided",
-            "ask_fee was empty",
-        );
-        assert_expected_validation_error(
-            InstantiateMsg {
-                bind_name: "bind_name".to_string(),
-                contract_name: "contract_name".to_string(),
-                ask_fee: Some(coins(100, "")),
-                bid_fee: None,
-            },
-            "ask_fee with blank denom provided",
-            "ask_fee included invalid coins",
-        );
-        assert_expected_validation_error(
-            InstantiateMsg {
-                bind_name: "bind_name".to_string(),
-                contract_name: "contract_name".to_string(),
-                ask_fee: Some(coins(0, "nhash")),
-                bid_fee: None,
-            },
-            "ask_fee with zero coin amount provided",
-            "ask_fee included invalid coins",
-        );
-        // Proves that some valid and some invalid case is detected
-        assert_expected_validation_error(
-            InstantiateMsg {
-                bind_name: "bind_name".to_string(),
-                contract_name: "contract_name".to_string(),
-                ask_fee: Some(vec![coin(100, "nhash"), coin(100, "")]),
-                bid_fee: None,
-            },
-            "ask_fee with zero coin amount provided",
-            "ask_fee included invalid coins",
-        );
-    }
-
-    #[test]
-    fn test_invalid_bid_fee() {
-        assert_expected_validation_error(
-            InstantiateMsg {
-                bind_name: "bind_name".to_string(),
-                contract_name: "contract_name".to_string(),
-                ask_fee: None,
-                bid_fee: Some(vec![]),
-            },
-            "empty bid_fee vector provided",
-            "bid_fee was empty",
-        );
-        assert_expected_validation_error(
-            InstantiateMsg {
-                bind_name: "bind_name".to_string(),
-                contract_name: "contract_name".to_string(),
-                ask_fee: None,
-                bid_fee: Some(coins(100, "")),
-            },
-            "bid_fee with blank denom provided",
-            "bid_fee included invalid coins",
-        );
-        assert_expected_validation_error(
-            InstantiateMsg {
-                bind_name: "bind_name".to_string(),
-                contract_name: "contract_name".to_string(),
-                ask_fee: None,
-                bid_fee: Some(coins(0, "nhash")),
-            },
-            "bid_fee with zero coin amount provided",
-            "bid_fee included invalid coins",
-        );
-        // Proves that some valid and some invalid case is detected
-        assert_expected_validation_error(
-            InstantiateMsg {
-                bind_name: "bind_name".to_string(),
-                contract_name: "contract_name".to_string(),
-                ask_fee: None,
-                bid_fee: Some(vec![coin(100, "nhash"), coin(100, "")]),
-            },
-            "bid_fee with zero coin amount provided",
-            "bid_fee included invalid coins",
         );
     }
 
@@ -157,8 +60,8 @@ mod tests {
         validate_instantiate_msg(&InstantiateMsg {
             bind_name: "name.pb".to_string(),
             contract_name: "some contract".to_string(),
-            ask_fee: Some(coins(10000, "nhash")),
-            bid_fee: Some(coins(109009000, "nhash")),
+            create_ask_nhash_fee: Some(Uint128::new(10000)),
+            create_bid_nhash_fee: Some(Uint128::new(109009000)),
         })
         .expect("fully populated instantiate message should pass validation");
     }

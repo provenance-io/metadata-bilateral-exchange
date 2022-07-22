@@ -42,8 +42,8 @@ pub fn execute(
     match msg {
         ExecuteMsg::CreateAsk { ask, descriptor } => create_ask(deps, env, info, ask, descriptor),
         ExecuteMsg::UpdateAsk { ask, descriptor } => update_ask(deps, env, info, ask, descriptor),
-        ExecuteMsg::CreateBid { bid, descriptor } => create_bid(deps, info, bid, descriptor),
-        ExecuteMsg::UpdateBid { bid, descriptor } => update_bid(deps, info, bid, descriptor),
+        ExecuteMsg::CreateBid { bid, descriptor } => create_bid(deps, env, info, bid, descriptor),
+        ExecuteMsg::UpdateBid { bid, descriptor } => update_bid(deps, env, info, bid, descriptor),
         ExecuteMsg::CancelAsk { id } => cancel_ask(deps, env, info, id),
         ExecuteMsg::CancelBid { id } => cancel_bid(deps, info, id),
         ExecuteMsg::ExecuteMatch {

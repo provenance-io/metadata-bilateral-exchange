@@ -286,7 +286,7 @@ class BilateralContractClient private constructor(
         executeMsg = createAsk,
         signer = signer,
         options = options,
-        funds = createAsk.ask.mapToFunds(askFee = this.getContractInfo().askFee),
+        funds = createAsk.ask.mapToFunds(),
     ).let { (event, data) ->
         CreateAskResponse(
             askId = event.attribute("ask_id"),
@@ -335,7 +335,7 @@ class BilateralContractClient private constructor(
         executeMsg = createBid,
         signer = signer,
         options = options,
-        funds = createBid.bid.mapToFunds(bidFee = this.getContractInfo().bidFee),
+        funds = createBid.bid.mapToFunds(),
     ).let { (event, data) ->
         CreateBidResponse(
             bidId = event.attribute("bid_id"),
@@ -494,7 +494,7 @@ class BilateralContractClient private constructor(
     ): MsgExecuteContract = generateProtoExecuteMsg(
         executeMsg = createAsk,
         senderAddress = senderAddress,
-        funds = createAsk.ask.mapToFunds(askFee = this.getContractInfo().askFee),
+        funds = createAsk.ask.mapToFunds(),
     )
 
     /**
@@ -528,7 +528,7 @@ class BilateralContractClient private constructor(
     ): MsgExecuteContract = generateProtoExecuteMsg(
         executeMsg = createBid,
         senderAddress = senderAddress,
-        funds = createBid.bid.mapToFunds(bidFee = this.getContractInfo().bidFee),
+        funds = createBid.bid.mapToFunds(),
     )
 
     /**

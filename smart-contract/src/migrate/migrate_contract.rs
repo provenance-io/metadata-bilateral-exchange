@@ -1,5 +1,5 @@
 use crate::storage::contract_info::{
-    get_contract_info, set_contract_info, ContractInfo, CONTRACT_VERSION,
+    get_contract_info, set_contract_info, ContractInfoV2, CONTRACT_VERSION,
 };
 use crate::types::core::error::ContractError;
 use crate::util::extensions::ResultExtensions;
@@ -21,7 +21,9 @@ pub fn migrate_contract(
         .to_ok()
 }
 
-pub fn check_valid_migration_versioning(contract_info: &ContractInfo) -> Result<(), ContractError> {
+pub fn check_valid_migration_versioning(
+    contract_info: &ContractInfoV2,
+) -> Result<(), ContractError> {
     let existing_contract_version = contract_info.contract_version.parse::<Version>()?;
     let new_contract_version = CONTRACT_VERSION.parse::<Version>()?;
     if existing_contract_version > new_contract_version {
@@ -48,7 +50,7 @@ mod tests {
     #[test]
     fn test_successful_migrate_without_options() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let mut contract_info =
             get_contract_info(deps.as_ref().storage).expect("contract info should load");
         contract_info.contract_version = "0.0.1".to_string();
@@ -93,7 +95,7 @@ mod tests {
     #[test]
     fn test_bad_version_rejection() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let mut contract_info =
             get_contract_info(deps.as_ref().storage).expect("expected contract info to load");
         contract_info.contract_version = "999.999.999".to_string();

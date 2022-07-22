@@ -8,10 +8,10 @@ use crate::types::request::request_descriptor::RequestDescriptor;
 use crate::types::request::request_type::RequestType;
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::{check_scope_owners, get_single_marker_coin_holding};
-use crate::util::request_fee::generate_request_fee;
+use crate::util::request_fee::generate_request_fee_msg;
 use crate::validation::ask_order_validation::validate_ask_order;
 use crate::validation::marker_exchange_validation::validate_marker_for_ask;
-use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo};
+use cosmwasm_std::{Addr, BankMsg, CosmosMsg, DepsMut, Env, MessageInfo};
 use provwasm_std::{
     revoke_marker_access, AccessGrant, Marker, MarkerAccess, ProvenanceMsg, ProvenanceQuerier,
     ProvenanceQuery,
@@ -36,44 +36,34 @@ pub fn create_ask_order(
     descriptor: Option<RequestDescriptor>,
     creation_type: AskCreationType,
 ) -> Result<AskOrderCreationResponse, ContractError> {
-    let (fee_send_msg, funds_after_fee) = match &creation_type {
-        AskCreationType::New => {
-            // TODO: Refactor this after provwasm fees are available. That will deeply simplify the fee charge process
-            let resp = generate_request_fee("ask fee", &deps.as_ref(), info, |c| &c.ask_fee)?;
-            (resp.fee_send_msg, resp.funds_after_fee)
-        }
-        AskCreationType::Update { .. } => (None, info.funds.to_owned()),
+    let ask_fee_msg = match &creation_type {
+        AskCreationType::New => generate_request_fee_msg(
+            "ask creation",
+            &deps.as_ref(),
+            env.contract.address.clone(),
+            |c| c.create_ask_nhash_fee.u128(),
+        )?,
+        // Updates do not charge creation fees
+        AskCreationType::Update { .. } => None,
     };
     let AskCreationData {
         collateral,
         messages,
     } = match &ask {
-        Ask::CoinTrade(coin_ask) => {
-            create_coin_trade_ask_collateral(creation_type, info, &funds_after_fee, coin_ask)
+        Ask::CoinTrade(coin_ask) => create_coin_trade_ask_collateral(creation_type, info, coin_ask),
+        Ask::MarkerTrade(marker_ask) => {
+            create_marker_trade_ask_collateral(creation_type, deps, info, env, marker_ask)
         }
-        Ask::MarkerTrade(marker_ask) => create_marker_trade_ask_collateral(
-            creation_type,
-            deps,
-            info,
-            env,
-            &funds_after_fee,
-            marker_ask,
-        ),
         Ask::MarkerShareSale(marker_share_sale) => create_marker_share_sale_ask_collateral(
             creation_type,
             deps,
             info,
             env,
-            &funds_after_fee,
             marker_share_sale,
         ),
-        Ask::ScopeTrade(scope_trade) => create_scope_trade_ask_collateral(
-            creation_type,
-            deps,
-            env,
-            &funds_after_fee,
-            scope_trade,
-        ),
+        Ask::ScopeTrade(scope_trade) => {
+            create_scope_trade_ask_collateral(creation_type, deps, info, env, scope_trade)
+        }
     }?;
     let ask_order = AskOrder {
         id: ask.get_id().to_string(),
@@ -86,7 +76,7 @@ pub fn create_ask_order(
     AskOrderCreationResponse {
         ask_order,
         messages,
-        ask_fee_msg: fee_send_msg,
+        ask_fee_msg,
     }
     .to_ok()
 }
@@ -100,13 +90,11 @@ struct AskCreationData {
 fn create_coin_trade_ask_collateral(
     creation_type: AskCreationType,
     info: &MessageInfo,
-    base_funds: &[Coin],
     coin_trade: &CoinTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if base_funds.is_empty() {
+    if info.funds.is_empty() {
         return ContractError::InvalidFundsProvided {
-            message: "coin trade ask requests should include enough funds for ask fee + base"
-                .to_string(),
+            message: "coin trade ask requests should include funds for a base".to_string(),
         }
         .to_err();
     }
@@ -143,7 +131,7 @@ fn create_coin_trade_ask_collateral(
         }
     };
     AskCreationData {
-        collateral: AskCollateral::coin_trade(base_funds, &coin_trade.quote),
+        collateral: AskCollateral::coin_trade(&info.funds, &coin_trade.quote),
         messages,
     }
     .to_ok()
@@ -154,14 +142,13 @@ fn create_marker_trade_ask_collateral(
     deps: &DepsMut<ProvenanceQuery>,
     info: &MessageInfo,
     env: &Env,
-    base_funds: &[Coin],
     marker_trade: &MarkerTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if !base_funds.is_empty() {
+    if !info.funds.is_empty() {
         return ContractError::InvalidFundsProvided {
-            message: "marker trade ask requests should not include funds greater than the amount needed for ask fees".to_string(),
+            message: "marker trade ask requests should not include funds".to_string(),
         }
-            .to_err();
+        .to_err();
     }
     let marker =
         ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.marker_denom)?;
@@ -230,14 +217,13 @@ fn create_marker_share_sale_ask_collateral(
     deps: &DepsMut<ProvenanceQuery>,
     info: &MessageInfo,
     env: &Env,
-    base_funds: &[Coin],
     marker_share_sale: &MarkerShareSaleAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if !base_funds.is_empty() {
+    if !info.funds.is_empty() {
         return ContractError::InvalidFundsProvided {
-            message: "marker share sale ask requests should not include funds greater than the amount needed for ask fees".to_string(),
+            message: "marker share sale ask requests should not include funds".to_string(),
         }
-            .to_err();
+        .to_err();
     }
     let marker = ProvenanceQuerier::new(&deps.querier)
         .get_marker_by_denom(&marker_share_sale.marker_denom)?;
@@ -306,15 +292,15 @@ fn create_marker_share_sale_ask_collateral(
 fn create_scope_trade_ask_collateral(
     creation_type: AskCreationType,
     deps: &DepsMut<ProvenanceQuery>,
+    info: &MessageInfo,
     env: &Env,
-    base_funds: &[Coin],
     scope_trade: &ScopeTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if !base_funds.is_empty() {
+    if !info.funds.is_empty() {
         return ContractError::InvalidFundsProvided {
-            message: "scope trade ask requests should not include funds greater than the amount needed for ask fees".to_string(),
+            message: "scope trade ask requests should not include funds".to_string(),
         }
-            .to_err();
+        .to_err();
     }
     check_scope_owners(
         &ProvenanceQuerier::new(&deps.querier).get_scope(&scope_trade.scope_address)?,

@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import io.provenance.bilateral.models.enums.ShareSaleType
 import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
-import io.provenance.bilateral.util.CoinUtil
 import java.math.BigInteger
 
 /**
@@ -142,17 +141,13 @@ sealed interface Ask {
     /**
      * Maps each type of ask to its funds that will be required during its creation.  This function is used to establish
      * the correct amount of funds that must be sent by the asker when creating an ask.
-     *
-     * @param askFee The amount of fee required to be paid to create an ask, set in the contract's ContractInfo.
      */
-    fun mapToFunds(askFee: List<Coin>? = null): List<Coin> = map(
+    fun mapToFunds(): List<Coin> = map(
         coinTrade = { coinTrade -> coinTrade.base },
         markerTrade = { emptyList() },
         markerShareSale = { emptyList() },
         scopeTrade = { emptyList() },
-    ).let { funds ->
-        askFee?.let { CoinUtil.combineFunds(funds, it) } ?: funds
-    }
+    )
 }
 
 /**

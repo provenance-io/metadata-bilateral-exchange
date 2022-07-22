@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test
 import testconfiguration.ContractIntTest
 import testconfiguration.extensions.clearFees
 import testconfiguration.extensions.getBalance
+import testconfiguration.extensions.getBalanceMap
 import testconfiguration.extensions.setFees
 import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.giveTestDenom
@@ -15,23 +16,25 @@ import testconfiguration.functions.newCoin
 import testconfiguration.functions.newCoins
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class FeesIntTest : ContractIntTest() {
     @Test
     fun testCreateAskWithFee() {
         val askerDenom = "cointradecreateaskwithfeebase"
-        val askFeeDenom = "cointradecreateaskwithfeefee"
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, askerDenom),
             receiverAddress = asker.address(),
         )
-        giveTestDenom(
-            pbClient = pbClient,
-            initialHoldings = newCoin(3, askFeeDenom),
-            receiverAddress = asker.address(),
+        // Fee == 1000 hash
+        val askFee = 1_000_000_000_000
+        bilateralClient.setFees(askFee = newCoins(askFee, "nhash"))
+        val startingHashBalance = pbClient.getBalance(asker.address(), "nhash")
+        assertTrue(
+            actual = startingHashBalance > askFee * 3,
+            message = "The asker account does not have enough hash to perform this test :(",
         )
-        bilateralClient.setFees(askFee = newCoins(1, askFeeDenom))
         val quote = newCoins(1000, "somequote")
         val base = newCoins(1000, askerDenom)
         val askUuid = UUID.randomUUID()
@@ -46,16 +49,11 @@ class FeesIntTest : ContractIntTest() {
                 ),
             )
         }
-        assertEquals(
-            expected = 2,
-            actual = pbClient.getBalance(asker.address(), askFeeDenom),
-            message = "The correct fee should be removed from the asker's account",
-        )
-        cancelAsk(askUuid.toString())
-        assertEquals(
-            expected = 2,
-            actual = pbClient.getBalance(asker.address(), askFeeDenom),
-            message = "The fee should not be refunded after canceling the ask",
+        val paidNhashForAskCreation = startingHashBalance - pbClient.getBalance(asker.address(), "nhash")
+        println("Paid: $paidNhashForAskCreation")
+        assertTrue(
+            actual = paidNhashForAskCreation >= askFee,
+            message = "The ask fee should be paid out during the transaction, but the asker only paid: ${paidNhashForAskCreation}nhash",
         )
         bilateralClient.clearFees()
     }

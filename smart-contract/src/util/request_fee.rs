@@ -1,40 +1,39 @@
-use crate::storage::contract_info::{get_contract_info, ContractInfo};
+use crate::storage::contract_info::{get_contract_info, ContractInfoV2};
 use crate::types::core::error::ContractError;
-use crate::util::coin_utilities::funds_minus_fees;
+use crate::util::constants::NHASH;
 use crate::util::extensions::ResultExtensions;
-use cosmwasm_std::{BankMsg, Coin, CosmosMsg, Deps, MessageInfo};
-use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
+use cosmwasm_std::{coin, Addr, CosmosMsg, Deps};
+use provwasm_std::{assess_custom_fee, ProvenanceMsg, ProvenanceQuery};
 
-#[derive(Debug)]
-pub struct RequestFeeDetail {
-    pub fee_send_msg: Option<CosmosMsg<ProvenanceMsg>>,
-    pub funds_after_fee: Vec<Coin>,
-}
-
-pub fn generate_request_fee<S: Into<String>, F: Fn(&ContractInfo) -> &Option<Vec<Coin>>>(
+pub fn generate_request_fee_msg<S: Into<String>, F: Fn(&ContractInfoV2) -> u128>(
     fee_type: S,
     deps: &Deps<ProvenanceQuery>,
-    message_info: &MessageInfo,
+    contract_addr: Addr,
     fee_extractor: F,
-) -> Result<RequestFeeDetail, ContractError> {
+) -> Result<Option<CosmosMsg<ProvenanceMsg>>, ContractError> {
+    let fee_type = fee_type.into();
     let contract_info = get_contract_info(deps.storage)?;
-    let fee_amount = fee_extractor(&contract_info);
-    match fee_amount {
-        Some(fee) => RequestFeeDetail {
-            fee_send_msg: Some(CosmosMsg::Bank(BankMsg::Send {
-                to_address: contract_info.admin.to_string(),
-                amount: fee.clone(),
-            })),
-            funds_after_fee: funds_minus_fees(
-                format!("{} calculation", fee_type.into()),
-                &message_info.funds,
-                fee,
-            )?,
-        },
-        None => RequestFeeDetail {
-            fee_send_msg: None,
-            funds_after_fee: message_info.funds.clone(),
-        },
+    let nhash_fee_amount = fee_extractor(&contract_info);
+    // Only dispatch a fee message if the fee amount is greater than zero. Charging a fee of zero
+    // means nothing
+    if nhash_fee_amount > 0 {
+        Some(assess_custom_fee(
+            // Provenance Blockchain fees are required to be sent as either usd or nhash.  This
+            // contract only supports nhash for now
+            coin(nhash_fee_amount, NHASH),
+            // Specify a somewhat descriptive message to ensure that signers using the Provenance
+            // Blockchain wallet can understand the reason for the fee
+            Some(format!("{} {} fee", &fee_type, NHASH)),
+            // The contract's address must be used as the "from" value.  This does not mean that
+            // the contract sends the fee, but it is required for the contract to sign and dispatch
+            // the message that will charge the request sender the fee
+            contract_addr,
+            // Always send fees charged to the admin address.  This ensures that the admin is
+            // always funded in order to make future requests
+            Some(contract_info.admin),
+        )?)
+    } else {
+        None
     }
     .to_ok()
 }
@@ -44,61 +43,28 @@ mod tests {
     use crate::test::mock_instantiate::{
         default_instantiate, test_instantiate, TestInstantiate, DEFAULT_ADMIN_ADDRESS,
     };
-    use crate::types::core::error::ContractError;
-    use crate::util::request_fee::generate_request_fee;
-    use cosmwasm_std::testing::mock_info;
-    use cosmwasm_std::{coin, coins, BankMsg, CosmosMsg};
+    use crate::util::constants::NHASH;
+    use crate::util::request_fee::generate_request_fee_msg;
+    use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
+    use cosmwasm_std::{coin, Addr, CosmosMsg, Uint128};
     use provwasm_mocks::mock_dependencies;
-
-    #[test]
-    fn test_generate_request_fee_invalid_coin_difference() {
-        let mut deps = mock_dependencies(&[]);
-        test_instantiate(
-            deps.as_mut().storage,
-            TestInstantiate {
-                ask_fee: Some(coins(100, "nhash")),
-                ..TestInstantiate::default()
-            },
-        );
-        let err = generate_request_fee(
-            "some fee",
-            &deps.as_ref(),
-            &mock_info("some asker", &coins(99, "nhash")),
-            |c| &c.ask_fee,
-        )
-        .expect_err("an error should occur when the coin difference is impossible to calculate");
-        match err {
-            ContractError::GenericError { message } => {
-                assert_eq!(
-                    "some fee calculation: expected at least [100nhash] to be provided in funds. funds: [99nhash], fees: [100nhash]",
-                    message,
-                    "unexpected message produced",
-                );
-            }
-            e => panic!("unexpected error produced: {:?}", e),
-        };
-    }
+    use provwasm_std::{MsgFeesMsgParams, ProvenanceMsg, ProvenanceMsgParams};
 
     #[test]
     fn test_generate_request_fee_no_fee_necessary() {
         let mut deps = mock_dependencies(&[]);
         // Default instantiate creates the contract without any fees
-        default_instantiate(deps.as_mut().storage);
-        let fee_detail = generate_request_fee(
+        default_instantiate(deps.as_mut());
+        let fee_msg_option = generate_request_fee_msg(
             "no fee",
             &deps.as_ref(),
-            &mock_info("some bidder", &coins(1000, "biddercoin")),
-            |c| &c.bid_fee,
+            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            |c| c.create_bid_nhash_fee.u128(),
         )
         .expect("no fees requested should produce a valid response");
-        assert_eq!(
-            None, fee_detail.fee_send_msg,
-            "no fee message should be generated because no fees were charged",
-        );
-        assert_eq!(
-            coins(1000, "biddercoin"),
-            fee_detail.funds_after_fee,
-            "all the bidder's coin should remain",
+        assert!(
+            fee_msg_option.is_none(),
+            "no fee message should be generated when the fee amount is equal to zero",
         );
     }
 
@@ -106,38 +72,52 @@ mod tests {
     fn test_generate_request_fee_with_fee() {
         let mut deps = mock_dependencies(&[]);
         test_instantiate(
-            deps.as_mut().storage,
+            deps.as_mut(),
             TestInstantiate {
-                bid_fee: Some(coins(100, "feecoin")),
+                create_bid_nhash_fee: Some(Uint128::new(100)),
                 ..TestInstantiate::default()
             },
         );
-        let fee_detail = generate_request_fee(
+        let fee_msg_option = generate_request_fee_msg(
             "some fee",
             &deps.as_ref(),
-            &mock_info("bidder", &[coin(100, "feecoin"), coin(100, "quote_1")]),
-            |c| &c.bid_fee,
+            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            |c| c.create_bid_nhash_fee.u128(),
         )
-        .expect("proper fee specification should result in a fee detail");
-        match &fee_detail.fee_send_msg {
-            Some(CosmosMsg::Bank(BankMsg::Send { to_address, amount })) => {
+        .expect("proper fee specification should result in a fee msg");
+        match fee_msg_option {
+            Some(CosmosMsg::Custom(ProvenanceMsg {
+                params:
+                    ProvenanceMsgParams::MsgFees(MsgFeesMsgParams::AssessCustomFee {
+                        amount,
+                        from,
+                        name,
+                        recipient,
+                    }),
+                ..
+            })) => {
                 assert_eq!(
-                    DEFAULT_ADMIN_ADDRESS, to_address,
-                    "the fee should always be sent to the admin",
+                    coin(100, NHASH),
+                    amount,
+                    "the correct amount of nhash should be sent",
                 );
                 assert_eq!(
-                    &coins(100, "feecoin"),
-                    amount,
-                    "the correct fee amount should be sent to the admin",
+                    MOCK_CONTRACT_ADDR,
+                    from.as_str(),
+                    "the from address should be specified as the contract",
+                );
+                assert_eq!(
+                    "some fee nhash fee",
+                    name.expect("the message's name should be set"),
+                    "the name should be set to specify that it is an nhash fee",
+                );
+                assert_eq!(
+                    DEFAULT_ADMIN_ADDRESS,
+                    recipient.expect("a recipient should be set").as_str(),
+                    "the recipient should be the admin",
                 );
             }
-            Some(msg) => panic!("unexpected message generated: {:?}", msg),
-            None => panic!("expected a fee message to be generated from valid input"),
+            other => panic!("unexpected response option: {:?}", other),
         };
-        assert_eq!(
-            coins(100, "quote_1"),
-            fee_detail.funds_after_fee,
-            "the quote funds sent by the bidder should remain after extracting the fee",
-        );
     }
 }
