@@ -20,7 +20,7 @@ import java.math.BigInteger
  * @param contractVersion The current version coded into the contract's Cargo.toml file.  This value is expected to
  * increment with each new migration applied to the contract.
  * @param createAskNhashFee The amount of nhash that is paid as a Provenance Blockchain fee when an account creates an
- * ask. 50% of this value is sent to the contract's admin account.
+ * ask.  50% of this value is sent to the contract's admin account.
  * @param createBidNhashFee The amount of nhash that is paid as a Provenance Blockchain fee when an account creates a
  * bid.  50% of this value is sent to the contract's admin account.
  */

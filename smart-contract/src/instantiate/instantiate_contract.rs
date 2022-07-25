@@ -47,6 +47,9 @@ mod tests {
     use super::*;
     use crate::contract::instantiate;
     use crate::storage::contract_info::{CONTRACT_TYPE, CONTRACT_VERSION};
+    use crate::test::mock_instantiate::{
+        DEFAULT_ADMIN_ADDRESS, DEFAULT_CONTRACT_BIND_NAME, DEFAULT_CONTRACT_NAME,
+    };
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{attr, Addr, CosmosMsg, Uint128};
     use provwasm_mocks::mock_dependencies;
@@ -56,10 +59,10 @@ mod tests {
     fn instantiate_with_valid_data() {
         // create valid init data
         let mut deps = mock_dependencies(&[]);
-        let info = mock_info("contract_admin", &[]);
+        let info = mock_info(DEFAULT_ADMIN_ADDRESS, &[]);
         let init_msg = InstantiateMsg {
-            bind_name: "contract_bind_name".to_string(),
-            contract_name: "contract_name".to_string(),
+            bind_name: DEFAULT_CONTRACT_BIND_NAME.to_string(),
+            contract_name: DEFAULT_CONTRACT_NAME.to_string(),
             create_ask_nhash_fee: Some(Uint128::new(100)),
             create_bid_nhash_fee: Some(Uint128::new(200)),
         };
@@ -84,9 +87,9 @@ mod tests {
                     })
                 );
                 let expected_contract_info = ContractInfoV2 {
-                    admin: Addr::unchecked("contract_admin"),
-                    bind_name: "contract_bind_name".to_string(),
-                    contract_name: "contract_name".to_string(),
+                    admin: Addr::unchecked(DEFAULT_ADMIN_ADDRESS),
+                    bind_name: DEFAULT_CONTRACT_BIND_NAME.to_string(),
+                    contract_name: DEFAULT_CONTRACT_NAME.to_string(),
                     contract_type: CONTRACT_TYPE.into(),
                     contract_version: CONTRACT_VERSION.into(),
                     create_ask_nhash_fee: Uint128::new(100),
@@ -99,9 +102,44 @@ mod tests {
                     attr("contract_info", format!("{:?}", expected_contract_info))
                 );
                 assert_eq!(init_response.attributes[1], attr("action", "init"));
+                let contract_info = get_contract_info(deps.as_ref().storage)
+                    .expect("contract info should load successfully");
+                assert_eq!(
+                    expected_contract_info, contract_info,
+                    "the response contract info should equal the expected value",
+                );
             }
             error => panic!("failed to initialize: {:?}", error),
         }
+    }
+
+    #[test]
+    fn test_instantiate_with_none_fees_equates_to_zero_fees() {
+        let mut deps = mock_dependencies(&[]);
+        instantiate(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            InstantiateMsg {
+                bind_name: DEFAULT_CONTRACT_BIND_NAME.to_string(),
+                contract_name: DEFAULT_CONTRACT_NAME.to_string(),
+                create_ask_nhash_fee: None,
+                create_bid_nhash_fee: None,
+            },
+        )
+        .expect("instantiation should succeed without error");
+        let contract_info = get_contract_info(deps.as_ref().storage)
+            .expect("contract info should load without error");
+        assert_eq!(
+            0,
+            contract_info.create_ask_nhash_fee.u128(),
+            "the create ask fee should be set to zero when none is provided during instantiation",
+        );
+        assert_eq!(
+            0,
+            contract_info.create_bid_nhash_fee.u128(),
+            "the create bid fee should be set to zero when none is provided during instantiation",
+        );
     }
 
     #[test]
