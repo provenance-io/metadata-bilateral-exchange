@@ -231,7 +231,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_trade("", "somedenom", None),
             None,
         )
@@ -245,7 +245,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_trade("bid_id", "", None),
             None,
         )
@@ -275,7 +275,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
         )
@@ -290,7 +290,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             Some(RequestDescriptor::new_populated_attributes(
                 "description",
@@ -312,7 +312,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_share_sale("", DEFAULT_MARKER_DENOM, 100),
             None,
         )
@@ -326,7 +326,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_share_sale("bid_id", "", 100),
             None,
         )
@@ -343,7 +343,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 0),
             None,
         )
@@ -379,7 +379,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 100),
             None,
         )
@@ -398,7 +398,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 100),
             None,
         )
@@ -417,7 +417,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
             None,
         )
@@ -444,7 +444,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
             Some(RequestDescriptor::new_populated_attributes(
                 "description",
@@ -472,7 +472,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_scope_trade("", DEFAULT_SCOPE_ADDR),
             None,
         )
@@ -486,7 +486,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_scope_trade("bid_id", ""),
             None,
         )
@@ -516,7 +516,7 @@ mod tests {
         let err = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(RequestDescriptor::new_populated_attributes(
                 "description",
@@ -724,7 +724,7 @@ mod tests {
         let response = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(100, "nhash")),
+            mock_info("bidder", &coins(100, NHASH)),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             Some(descriptor.clone()),
         )
@@ -746,7 +746,7 @@ mod tests {
             "the correct marker denom should be set on the collateral",
         );
         assert_eq!(
-            coins(100, "nhash"),
+            coins(100, NHASH),
             collateral.quote,
             "the correct quote should be set on the collateral",
         );
@@ -770,7 +770,7 @@ mod tests {
         let response = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(1000, "nhash")),
+            mock_info("bidder", &coins(1000, NHASH)),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 10),
             Some(descriptor.clone()),
         )
@@ -798,7 +798,7 @@ mod tests {
             "the correct share count should be set in the collateral",
         );
         assert_eq!(
-            coins(1000, "nhash"),
+            coins(1000, NHASH),
             collateral.quote,
             "the correct quote should be set in the collateral",
         );
@@ -820,7 +820,7 @@ mod tests {
         let response = create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(150, "nhash")),
+            mock_info("bidder", &coins(150, NHASH)),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             Some(descriptor.clone()),
         )
@@ -838,7 +838,7 @@ mod tests {
             "the correct scope address should be set in the bid collateral",
         );
         assert_eq!(
-            coins(150, "nhash"),
+            coins(150, NHASH),
             collateral.quote,
             "the correct quote should be set in the bid collateral",
         );

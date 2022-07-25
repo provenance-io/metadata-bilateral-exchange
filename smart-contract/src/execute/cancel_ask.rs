@@ -86,6 +86,7 @@ mod tests {
     use crate::types::request::ask_types::ask::Ask;
     use crate::types::request::ask_types::ask_order::AskOrder;
     use crate::types::request::share_sale_type::ShareSaleType;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{coins, from_binary, CosmosMsg, Storage};
     use provwasm_mocks::mock_dependencies;
@@ -160,7 +161,7 @@ mod tests {
         let err = cancel_ask(
             deps.as_mut(),
             mock_env(),
-            mock_info("asker", &coins(100, "nhash")),
+            mock_info("asker", &coins(100, NHASH)),
             "ask_id".to_string(),
         )
         .expect_err("an error should occur when funds are provided");
@@ -283,7 +284,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            Ask::new_marker_trade(&ask_id, DEFAULT_MARKER_DENOM, &coins(150, "nhash")),
+            Ask::new_marker_trade(&ask_id, DEFAULT_MARKER_DENOM, &coins(150, NHASH)),
             None,
         )
         .expect("marker trade ask should be created without issue");
@@ -314,7 +315,7 @@ mod tests {
                 &ask_id,
                 DEFAULT_MARKER_DENOM,
                 DEFAULT_MARKER_HOLDINGS,
-                &coins(150, "nhash"),
+                &coins(150, NHASH),
                 ShareSaleType::SingleTransaction,
             ),
             None,
@@ -391,7 +392,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            Ask::new_scope_trade(&ask_id, DEFAULT_SCOPE_ADDR, &coins(100, "nhash")),
+            Ask::new_scope_trade(&ask_id, DEFAULT_SCOPE_ADDR, &coins(100, NHASH)),
             None,
         )
         .expect("expected the scope trade to be created successfully");

@@ -127,6 +127,7 @@ mod tests {
     };
     use crate::types::request::bid_types::bid_collateral::BidCollateral;
     use crate::types::request::bid_types::bid_order::BidOrder;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::{coins, Addr};
     use provwasm_mocks::mock_dependencies;
 
@@ -154,7 +155,7 @@ mod tests {
         let mut order = BidOrder::new_unchecked(
             "bid",
             Addr::unchecked("bidder"),
-            BidCollateral::scope_trade("scope", &coins(100, "nhash")),
+            BidCollateral::scope_trade("scope", &coins(100, NHASH)),
             None,
         );
         update_bid_order(deps.as_mut().storage, &order)
@@ -222,7 +223,7 @@ mod tests {
                 Addr::unchecked("marker"),
                 "markerdenom",
                 100,
-                &coins(10000, "nhash"),
+                &coins(10000, NHASH),
             ),
             None,
         );

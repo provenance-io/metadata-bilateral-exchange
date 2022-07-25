@@ -70,6 +70,7 @@ mod tests {
     };
     use crate::types::core::error::ContractError;
     use crate::types::request::settings_update::SettingsUpdate;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::mock_info;
     use cosmwasm_std::{coins, Uint128};
     use provwasm_mocks::mock_dependencies;
@@ -121,7 +122,7 @@ mod tests {
         );
         let err = update_settings(
             deps.as_mut(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &coins(1200090, "nhash")),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &coins(1200090, NHASH)),
             valid_update.clone(),
         )
         .expect_err("an error should occur when funds are sent");

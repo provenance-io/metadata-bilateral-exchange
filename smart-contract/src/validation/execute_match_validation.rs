@@ -472,6 +472,7 @@ mod tests {
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
     use crate::types::request::share_sale_type::ShareSaleType;
+    use crate::util::constants::NHASH;
     use crate::validation::ask_order_validation::validate_ask_order;
     use crate::validation::bid_order_validation::validate_bid_order;
     use crate::validation::execute_match_validation::{
@@ -487,7 +488,7 @@ mod tests {
         let mut ask_order = AskOrder::new(
             "ask_id",
             Addr::unchecked("asker"),
-            AskCollateral::coin_trade(&coins(100, "nhash"), &coins(250, "othercoin")),
+            AskCollateral::coin_trade(&coins(100, NHASH), &coins(250, "othercoin")),
             Some(RequestDescriptor::new_populated_attributes(
                 "some description",
                 AttributeRequirement::all(&["attribute.pb"]),
@@ -497,7 +498,7 @@ mod tests {
         let mut bid_order = BidOrder::new(
             "bid_id",
             Addr::unchecked("bidder"),
-            BidCollateral::coin_trade(&coins(100, "nhash"), &coins(250, "othercoin")),
+            BidCollateral::coin_trade(&coins(100, NHASH), &coins(250, "othercoin")),
             // Provwasm has a limitation - it will only allow one address to have mocked attributes
             // at a time, so we can't simultaneously test the presence of attributes on both asker
             // and bidder.  Testing all and none together is the best we can do
@@ -542,7 +543,7 @@ mod tests {
                 Addr::unchecked("marker"),
                 "targetcoin",
                 10,
-                &coins(100, "nhash"),
+                &coins(100, NHASH),
                 &[AccessGrant {
                     address: Addr::unchecked("asker"),
                     permissions: vec![MarkerAccess::Admin],
@@ -562,7 +563,7 @@ mod tests {
             BidCollateral::marker_trade(
                 Addr::unchecked("marker"),
                 "targetcoin",
-                &coins(1000, "nhash"),
+                &coins(1000, NHASH),
                 None,
             ),
             Some(RequestDescriptor::new_populated_attributes(
@@ -576,7 +577,7 @@ mod tests {
         replace_ask_quote(
             &mut ask_order,
             &[
-                coin(10, "nhash"),
+                coin(10, NHASH),
                 coin(5, "otherthing"),
                 coin(13, "worstthing"),
             ],
@@ -586,7 +587,7 @@ mod tests {
         replace_bid_quote(
             &mut bid_order,
             &[
-                coin(100, "nhash"),
+                coin(100, NHASH),
                 coin(50, "otherthing"),
                 coin(130, "worstthing"),
             ],
@@ -615,7 +616,7 @@ mod tests {
                 "targetcoin",
                 5,
                 5,
-                &coins(100, "nhash"),
+                &coins(100, NHASH),
                 &[AccessGrant {
                     address: Addr::unchecked("asker"),
                     permissions: vec![MarkerAccess::Admin],
@@ -635,7 +636,7 @@ mod tests {
                 Addr::unchecked(DEFAULT_MARKER_ADDRESS),
                 "targetcoin",
                 5,
-                &coins(500, "nhash"),
+                &coins(500, NHASH),
             ),
             Some(RequestDescriptor::new_populated_attributes(
                 "bid description",
@@ -652,13 +653,10 @@ mod tests {
         );
         validate_match(&deps.as_ref(), &ask_order, &bid_order, false)
             .expect("expected match validation to pass with correct parameters");
-        replace_ask_quote(&mut ask_order, &[coin(100, "nhash"), coin(250, "yolocoin")]);
+        replace_ask_quote(&mut ask_order, &[coin(100, NHASH), coin(250, "yolocoin")]);
         validate_ask_order(&ask_order)
             .expect("expected ask order to pass validation with a multi coin quote per share");
-        replace_bid_quote(
-            &mut bid_order,
-            &[coin(500, "nhash"), coin(1250, "yolocoin")],
-        );
+        replace_bid_quote(&mut bid_order, &[coin(500, NHASH), coin(1250, "yolocoin")]);
         validate_bid_order(&bid_order)
             .expect("expected bid order to pass validation with multi coin quote");
         validate_match(&deps.as_ref(), &ask_order, &bid_order, false).expect(
@@ -684,7 +682,7 @@ mod tests {
                 "targetcoin",
                 5,
                 5,
-                &coins(100, "nhash"),
+                &coins(100, NHASH),
                 &[AccessGrant {
                     address: Addr::unchecked("asker"),
                     permissions: vec![MarkerAccess::Admin],
@@ -706,7 +704,7 @@ mod tests {
                 Addr::unchecked(DEFAULT_MARKER_ADDRESS),
                 "targetcoin",
                 5,
-                &coins(500, "nhash"),
+                &coins(500, NHASH),
             ),
             Some(RequestDescriptor::new_populated_attributes(
                 "bid description",
@@ -716,13 +714,10 @@ mod tests {
         .expect("expected bid order to pass validation");
         validate_match(&deps.as_ref(), &ask_order, &bid_order, false)
             .expect("expected match validation to pass with correct parameters");
-        replace_ask_quote(&mut ask_order, &[coin(100, "nhash"), coin(250, "yolocoin")]);
+        replace_ask_quote(&mut ask_order, &[coin(100, NHASH), coin(250, "yolocoin")]);
         validate_ask_order(&ask_order)
             .expect("expected ask order to pass validation with a multi coin quote per share");
-        replace_bid_quote(
-            &mut bid_order,
-            &[coin(500, "nhash"), coin(1250, "yolocoin")],
-        );
+        replace_bid_quote(&mut bid_order, &[coin(500, NHASH), coin(1250, "yolocoin")]);
         validate_bid_order(&bid_order)
             .expect("expected bid order to pass validation with multi coin quote");
         validate_match(&deps.as_ref(), &ask_order, &bid_order, false).expect(
@@ -736,7 +731,7 @@ mod tests {
         let mut ask_order = AskOrder::new(
             "ask_id",
             Addr::unchecked("asker"),
-            AskCollateral::scope_trade("scope", &coins(100, "nhash")),
+            AskCollateral::scope_trade("scope", &coins(100, NHASH)),
             Some(RequestDescriptor::new_populated_attributes(
                 "ask description",
                 AttributeRequirement::all(&["a.pb", "b.pb", "c.pb"]),
@@ -746,7 +741,7 @@ mod tests {
         let mut bid_order = BidOrder::new(
             "bid_id",
             Addr::unchecked("bidder"),
-            BidCollateral::scope_trade("scope", &coins(100, "nhash")),
+            BidCollateral::scope_trade("scope", &coins(100, NHASH)),
             Some(RequestDescriptor::new_populated_attributes(
                 "bid description",
                 AttributeRequirement::none(&["no-u.pio"]),
@@ -1058,8 +1053,8 @@ mod tests {
     #[test]
     fn test_mismatched_coin_trade_bases() {
         let deps = mock_dependencies(&[]);
-        let mut ask_order = mock_ask_order(AskCollateral::coin_trade(&coins(150, "nhash"), &[]));
-        let mut bid_order = mock_bid_order(BidCollateral::coin_trade(&coins(100, "nhash"), &[]));
+        let mut ask_order = mock_ask_order(AskCollateral::coin_trade(&coins(150, NHASH), &[]));
+        let mut bid_order = mock_bid_order(BidCollateral::coin_trade(&coins(100, NHASH), &[]));
         assert_validation_failure(
             "Ask base denoms match but amounts do not match",
             &deps.as_ref(),
@@ -1103,8 +1098,8 @@ mod tests {
     #[test]
     fn test_mismatched_coin_trade_quotes() {
         let deps = mock_dependencies(&[]);
-        let mut ask_order = mock_ask_order(AskCollateral::coin_trade(&[], &coins(1, "nhash")));
-        let mut bid_order = mock_bid_order(BidCollateral::coin_trade(&[], &coins(2, "nhash")));
+        let mut ask_order = mock_ask_order(AskCollateral::coin_trade(&[], &coins(1, NHASH)));
+        let mut bid_order = mock_bid_order(BidCollateral::coin_trade(&[], &coins(2, NHASH)));
         assert_validation_failure(
             "Ask quote denoms match but amounts do not match",
             &deps.as_ref(),
@@ -1195,7 +1190,7 @@ mod tests {
         let mut deps = mock_dependencies(&[]);
         let mut marker = MockMarker {
             denom: "targetcoin".to_string(),
-            coins: vec![coin(100, "nhash"), coin(50, "mydenom")],
+            coins: vec![coin(100, NHASH), coin(50, "mydenom")],
             ..MockMarker::default()
         }
         .to_marker();
@@ -1269,12 +1264,12 @@ mod tests {
                 "marker",
                 "targetcoin",
                 10,
-                &coins(50, "nhash"),
+                &coins(50, NHASH),
             )),
             &mock_bid_order(mock_bid_marker_trade(
                 "marker",
                 "targetcoin",
-                &coins(200, "nhash"),
+                &coins(200, NHASH),
                 None,
             )),
             marker_trade_error("Ask quote [500nhash] did not match bid quote [200nhash]"),
@@ -1448,14 +1443,14 @@ mod tests {
             "fakecoin",
             10,
             10,
-            &coins(100, "nhash"),
+            &coins(100, NHASH),
             ShareSaleType::SingleTransaction,
         ));
         let mut bid_order = mock_bid_order(mock_bid_marker_share(
             "marker",
             "fakecoin",
             10,
-            &coins(999, "nhash"),
+            &coins(999, NHASH),
         ));
         assert_validation_failure(
             "Ask wants 100nhash for 10 fakecoin, but the bidder only offers 999nhash instead of 1000",
@@ -1465,8 +1460,8 @@ mod tests {
             marker_share_sale_error("Ask share price did not result in the same quote [1000nhash] as the bid quote [999nhash]"),
             false,
         );
-        replace_ask_quote(&mut ask_order, &[coin(10, "nhash"), coin(20, "bitcoin")]);
-        replace_bid_quote(&mut bid_order, &[coin(100, "nhash"), coin(201, "bitcoin")]);
+        replace_ask_quote(&mut ask_order, &[coin(10, NHASH), coin(20, "bitcoin")]);
+        replace_bid_quote(&mut bid_order, &[coin(100, NHASH), coin(201, "bitcoin")]);
         assert_validation_failure(
             "Ask wants 100nhash and 200bitcoin total but receives a little more bitcoin (boo hoo)",
             &deps.as_ref(),
@@ -1495,8 +1490,8 @@ mod tests {
     #[test]
     fn test_scope_trade_quote_mismatch() {
         let deps = mock_dependencies(&[]);
-        let mut ask_order = mock_ask_order(mock_ask_scope_trade("scope", &coins(100, "nhash")));
-        let mut bid_order = mock_bid_order(mock_bid_scope_trade("scope", &coins(99, "nhash")));
+        let mut ask_order = mock_ask_order(mock_ask_scope_trade("scope", &coins(100, NHASH)));
+        let mut bid_order = mock_bid_order(mock_bid_scope_trade("scope", &coins(99, NHASH)));
         assert_validation_failure(
             "Ask wants 100nhash but bid offers 99nhash",
             &deps.as_ref(),
@@ -1505,8 +1500,8 @@ mod tests {
             scope_trade_error("Ask quote [100nhash] does not match bid quote [99nhash]"),
             false,
         );
-        replace_ask_quote(&mut ask_order, &[coin(100, "nhash"), coin(20, "bitcoin")]);
-        replace_bid_quote(&mut bid_order, &[coin(100, "nhash")]);
+        replace_ask_quote(&mut ask_order, &[coin(100, NHASH), coin(20, "bitcoin")]);
+        replace_bid_quote(&mut bid_order, &[coin(100, NHASH)]);
         assert_validation_failure(
             "Ask wants 100nhash and 20bitcoin but bid \"forgot\" to add the 20bitcoin",
             &deps.as_ref(),

@@ -58,6 +58,7 @@ mod tests {
     use crate::types::request::bid_types::bid::Bid;
     use crate::types::request::bid_types::bid_collateral::BidCollateral;
     use crate::types::request::bid_types::bid_order::BidOrder;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::{coin, coins, from_binary, BankMsg, Coin, CosmosMsg, Response, Storage};
     use provwasm_mocks::mock_dependencies;
@@ -126,7 +127,7 @@ mod tests {
         };
         let err = cancel_bid(
             deps.as_mut(),
-            mock_info("bidder", &coins(150, "nhash")),
+            mock_info("bidder", &coins(150, NHASH)),
             "bid_id".to_string(),
         )
         .expect_err("an error should occur when the sender adds funds");
@@ -242,7 +243,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &[coin(10, "bitcoin"), coin(10, "nhash")]),
+            mock_info("bidder", &[coin(10, "bitcoin"), coin(10, NHASH)]),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
@@ -258,7 +259,7 @@ mod tests {
         assert_cancel_bid_succeeded(
             deps.as_ref().storage,
             &response,
-            &[coin(10, "bitcoin"), coin(10, "nhash")],
+            &[coin(10, "bitcoin"), coin(10, NHASH)],
         );
     }
 

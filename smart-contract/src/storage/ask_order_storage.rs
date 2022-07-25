@@ -151,6 +151,7 @@ mod tests {
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::ask_types::ask_order::AskOrder;
     use crate::types::request::share_sale_type::ShareSaleType;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::{coins, Addr};
     use provwasm_mocks::mock_dependencies;
 
@@ -164,7 +165,7 @@ mod tests {
                 Addr::unchecked("marker-address"),
                 "marker-denom",
                 100,
-                &coins(100, "nhash"),
+                &coins(100, NHASH),
                 &[],
             ),
             None,
@@ -189,7 +190,7 @@ mod tests {
         let mut order = AskOrder::new_unchecked(
             "ask",
             Addr::unchecked("asker"),
-            AskCollateral::scope_trade("scope", &coins(100, "nhash")),
+            AskCollateral::scope_trade("scope", &coins(100, NHASH)),
             None,
         );
         update_ask_order(deps.as_mut().storage, &order)
@@ -208,7 +209,7 @@ mod tests {
         let order = AskOrder::new_unchecked(
             "ask",
             Addr::unchecked("asker"),
-            AskCollateral::scope_trade("scope", &coins(100, "nhash")),
+            AskCollateral::scope_trade("scope", &coins(100, NHASH)),
             None,
         );
         get_ask_order_by_id(deps.as_ref().storage, &order.id).expect_err("expected a get for the ask order by id to fail when the order does not yet exist in storage");
@@ -229,7 +230,7 @@ mod tests {
         let order = AskOrder::new_unchecked(
             "ask",
             Addr::unchecked("asker"),
-            AskCollateral::scope_trade("scope", &coins(100, "nhash")),
+            AskCollateral::scope_trade("scope", &coins(100, NHASH)),
             None,
         );
         assert!(
@@ -317,7 +318,7 @@ mod tests {
         let order = AskOrder::new_unchecked(
             "ask",
             Addr::unchecked("asker"),
-            AskCollateral::coin_trade(&[], &coins(100, "nhash")),
+            AskCollateral::coin_trade(&[], &coins(100, NHASH)),
             None,
         );
         insert_ask_order(deps.as_mut().storage, &order)

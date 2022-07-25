@@ -203,7 +203,7 @@ mod tests {
         );
         assert_eq!(
             "150nhash",
-            format_coin_display(&coins(150, "nhash")),
+            format_coin_display(&coins(150, NHASH)),
             "single coin display should produce a simple result",
         );
         assert_eq!(
@@ -389,7 +389,7 @@ mod tests {
             "good", marker_coin.denom,
             "expected the coin's denom to be unaltered",
         );
-        good_marker.coins = vec![marker_coin.clone(), coin(10, "bitcoin"), coin(15, "nhash")];
+        good_marker.coins = vec![marker_coin.clone(), coin(10, "bitcoin"), coin(15, NHASH)];
         let extra_holdings_coin = get_single_marker_coin_holding(&good_marker).expect("expected a marker containing a single entry of its own denom and some other holdings to produce a coin response");
         assert_eq!(
             marker_coin, extra_holdings_coin,
@@ -593,7 +593,7 @@ mod tests {
     fn test_get_custom_fee_amount_display() {
         let invalid_msg: CosmosMsg<ProvenanceMsg> = CosmosMsg::Bank(BankMsg::Send {
             to_address: "some_person".to_string(),
-            amount: coins(100, "nhash"),
+            amount: coins(100, NHASH),
         });
         let err = get_custom_fee_amount_display(&invalid_msg)
             .expect_err("when a non custom fees msg is used, an error should be produced");

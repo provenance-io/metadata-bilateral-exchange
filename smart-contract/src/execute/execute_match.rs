@@ -323,6 +323,7 @@ mod tests {
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::bid_types::bid::Bid;
     use crate::types::request::share_sale_type::ShareSaleType;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{coins, BankMsg, Coin, CosmosMsg, Response, Storage, Uint128};
     use provwasm_mocks::mock_dependencies;
@@ -357,7 +358,7 @@ mod tests {
         let err = execute_match(
             deps.as_mut(),
             mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &coins(100, "nhash")),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &coins(100, NHASH)),
             "ask_id".to_string(),
             "bid_id".to_string(),
             None,

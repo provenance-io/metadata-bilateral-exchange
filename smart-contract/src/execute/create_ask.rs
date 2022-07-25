@@ -129,8 +129,8 @@ mod tests {
         let err = create_ask(
             deps.as_mut(),
             mock_env(),
-            mock_info("asker", &coins(100, "nhash")),
-            Ask::new_coin_trade("ask_id", &coins(100, "nhash")),
+            mock_info("asker", &coins(100, NHASH)),
+            Ask::new_coin_trade("ask_id", &coins(100, NHASH)),
             None,
         )
         .expect_err("expected an error to be returned when the ask had a duplicate id");
@@ -249,7 +249,7 @@ mod tests {
         let error = create_ask(
             deps.as_mut(),
             mock_env(),
-            mock_info("asker", &coins(100, "nhash")),
+            mock_info("asker", &coins(100, NHASH)),
             Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &[]),
             None,
         )
@@ -263,7 +263,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &coins(100, "nhash")),
+            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &coins(100, NHASH)),
             None,
         )
         .expect_err(
@@ -284,13 +284,13 @@ mod tests {
             "ask_id",
             DEFAULT_MARKER_DENOM,
             100,
-            &coins(100, "nhash"),
+            &coins(100, NHASH),
             ShareSaleType::SingleTransaction,
         );
         let err = create_ask(
             deps.as_mut(),
             mock_env(),
-            mock_info("asker", &coins(100, "nhash")),
+            mock_info("asker", &coins(100, NHASH)),
             ask.clone(),
             None,
         )
@@ -359,7 +359,7 @@ mod tests {
     fn test_scope_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut());
-        let mut ask = Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, "nhash"));
+        let mut ask = Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, NHASH));
         let err = create_ask(
             deps.as_mut(),
             mock_env(),
@@ -572,7 +572,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &[coin(150, "nhash")]),
+            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &[coin(150, NHASH)]),
             Some(descriptor.to_owned()),
         )
         .expect("expected the ask to be accepted");
@@ -677,7 +677,7 @@ mod tests {
             "the correct marker share count should be set in the marker trade collateral",
         );
         assert_eq!(
-            coins(150, "nhash"),
+            coins(150, NHASH),
             marker_trade_collateral.quote_per_share,
             "the correct quote per share should be set in the marker trade collateral",
         );
@@ -706,7 +706,7 @@ mod tests {
                 "ask_id",
                 DEFAULT_MARKER_DENOM,
                 50,
-                &coins(100, "nhash"),
+                &coins(100, NHASH),
                 ShareSaleType::SingleTransaction,
             ),
             Some(descriptor.to_owned()),
@@ -818,7 +818,7 @@ mod tests {
             "the correct remaiining shares in sale value should be set in the collateral",
         );
         assert_eq!(
-            coins(100, "nhash"),
+            coins(100, NHASH),
             collateral.quote_per_share,
             "the correct quote should be returned in the ask",
         );
@@ -874,7 +874,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, "nhash")),
+            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, NHASH)),
             Some(descriptor.clone()),
         )
         .expect("expected the ask to be created successfully");
@@ -956,7 +956,7 @@ mod tests {
             "the proper scope address should be set in the ask order's collateral",
         );
         assert_eq!(
-            coins(100, "nhash"),
+            coins(100, NHASH),
             collateral.quote,
             "the quote should be properly copied into the ask order's collateral",
         );
