@@ -49,8 +49,8 @@ impl ContractInfoV2 {
             contract_name: contract_name.into(),
             contract_type: CONTRACT_TYPE.to_string(),
             contract_version: CONTRACT_VERSION.to_string(),
-            create_ask_nhash_fee: create_ask_nhash_fee.unwrap_or_else(|| Uint128::zero()),
-            create_bid_nhash_fee: create_bid_nhash_fee.unwrap_or_else(|| Uint128::zero()),
+            create_ask_nhash_fee: create_ask_nhash_fee.unwrap_or_else(Uint128::zero),
+            create_bid_nhash_fee: create_bid_nhash_fee.unwrap_or_else(Uint128::zero),
         }
     }
 }
