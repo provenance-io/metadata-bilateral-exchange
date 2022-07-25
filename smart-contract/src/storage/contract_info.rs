@@ -1,29 +1,15 @@
-use cosmwasm_std::{Addr, Coin, Storage, Uint128};
+use cosmwasm_std::{Addr, Storage, Uint128};
 use cw_storage_plus::Item;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::types::core::error::ContractError;
 
-// TODO: Delete contract info v1 constants and structs after a successful migration
-const NAMESPACE_CONTRACT_INFO: &str = "contract_info";
 const NAMESPACE_CONTRACT_INFO_V2: &str = "contract_info_v2";
 pub const CONTRACT_TYPE: &str = env!("CARGO_CRATE_NAME");
 pub const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub const CONTRACT_INFO: Item<ContractInfo> = Item::new(NAMESPACE_CONTRACT_INFO);
 const CONTRACT_INFO_V2: Item<ContractInfoV2> = Item::new(NAMESPACE_CONTRACT_INFO_V2);
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct ContractInfo {
-    pub admin: Addr,
-    pub bind_name: String,
-    pub contract_name: String,
-    pub contract_type: String,
-    pub contract_version: String,
-    pub ask_fee: Option<Vec<Coin>>,
-    pub bid_fee: Option<Vec<Coin>>,
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct ContractInfoV2 {
