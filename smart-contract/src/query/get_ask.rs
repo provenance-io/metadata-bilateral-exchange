@@ -26,7 +26,7 @@ mod tests {
     pub fn query_with_valid_data() {
         // setup
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
 
         // store valid ask order
         let ask_order = AskOrder {

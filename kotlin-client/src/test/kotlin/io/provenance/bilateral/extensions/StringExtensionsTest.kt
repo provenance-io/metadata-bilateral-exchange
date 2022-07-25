@@ -5,10 +5,11 @@ import cosmos.base.abci.v1beta1.Abci.MsgData
 import cosmos.base.v1beta1.CoinOuterClass
 import cosmwasm.wasm.v1.Tx.MsgExecuteContractResponse
 import io.provenance.bilateral.models.AttributeRequirement
-import io.provenance.bilateral.models.AttributeRequirementType
 import io.provenance.bilateral.models.BidCollateral
 import io.provenance.bilateral.models.BidOrder
 import io.provenance.bilateral.models.RequestDescriptor
+import io.provenance.bilateral.models.enums.AttributeRequirementType
+import io.provenance.bilateral.models.enums.BilateralRequestType
 import io.provenance.bilateral.util.ObjectMapperProvider.OBJECT_MAPPER
 import io.provenance.scope.util.toByteString
 import org.bouncycastle.util.encoders.Hex
@@ -29,7 +30,7 @@ class StringExtensionsTest {
     fun testExecuteContractDataToJsonBytes() {
         val bidOrder = BidOrder(
             id = UUID.randomUUID().toString(),
-            bidType = "coin_trade",
+            bidType = BilateralRequestType.COIN_TRADE,
             owner = "bidder",
             collateral = BidCollateral.CoinTrade(
                 base = listOf(CoinOuterClass.Coin.newBuilder().setAmount("100").setDenom("nhash").build()),
@@ -38,9 +39,9 @@ class StringExtensionsTest {
             descriptor = RequestDescriptor(
                 description = "some description",
                 effectiveTime = OffsetDateTime.now(),
-                attributeRequirement = AttributeRequirement.new(
+                attributeRequirement = AttributeRequirement(
                     attributes = listOf("a.pb", "b.pb", "c.pb"),
-                    type = AttributeRequirementType.ALL,
+                    requirementType = AttributeRequirementType.ALL,
                 )
             )
         )

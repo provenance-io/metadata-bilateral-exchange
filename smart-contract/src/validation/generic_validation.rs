@@ -16,13 +16,14 @@ pub fn validate_coin_vector<S: Into<String>>(coin_type: S, coins: &[Coin]) -> Ve
 
 #[cfg(test)]
 mod tests {
+    use crate::util::constants::NHASH;
     use crate::validation::generic_validation::validate_coin_vector;
     use cosmwasm_std::{coin, coins, Coin};
 
     #[test]
     fn test_validate_coin_vector_with_valid_data() {
         assert!(
-            validate_coin_vector("some value", &coins(100, "nhash")).is_empty(),
+            validate_coin_vector("some value", &coins(100, NHASH)).is_empty(),
             "valid single coin vector should produce no error messages",
         );
         assert!(
@@ -46,7 +47,7 @@ mod tests {
         );
         assert_single_error_message(
             "test_coin",
-            &[coin(100, "nhash"), coin(1, "")],
+            &[coin(100, NHASH), coin(1, "")],
             "test_coin included invalid coins",
         );
     }

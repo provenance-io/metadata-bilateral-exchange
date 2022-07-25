@@ -8,6 +8,10 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule
 
+/**
+ * An internal object that provides an [ObjectMapper] instance for the client to use.  This is guaranteed to be
+ * compatible with all serialization and deserialization that the client needs to operate.
+ */
 internal object ObjectMapperProvider {
     val OBJECT_MAPPER: ObjectMapper by lazy {
         ObjectMapper()

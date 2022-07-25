@@ -1,11 +1,13 @@
 use crate::storage::contract_info::{get_contract_info, set_contract_info};
 use crate::types::core::error::ContractError;
 use crate::types::request::settings_update::SettingsUpdate;
+use crate::util::constants::NHASH;
 use crate::util::extensions::ResultExtensions;
-use crate::util::provenance_utilities::format_coin_display;
 use crate::validation::settings_update_validation::validate_settings_update;
 use cosmwasm_std::{DepsMut, MessageInfo, Response};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
+
+const DISABLED_FEE_DISPLAY: &str = "disabled";
 
 pub fn update_settings(
     deps: DepsMut<ProvenanceQuery>,
@@ -15,12 +17,12 @@ pub fn update_settings(
     validate_settings_update(&update)?;
     let mut contract_info = get_contract_info(deps.storage)?;
     if info.sender != contract_info.admin {
-        return ContractError::unauthorized().to_err();
+        return ContractError::Unauthorized.to_err();
     }
     if !info.funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds cannot be provided during a settings update",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "funds cannot be provided during a settings update".to_string(),
+        }
         .to_err();
     }
     let mut attributes = vec![];
@@ -28,32 +30,39 @@ pub fn update_settings(
         contract_info.admin = deps.api.addr_validate(new_admin)?;
         attributes.push(("new_admin_address".to_string(), new_admin.to_string()));
     }
-    attributes.push((
-        "new_ask_fee".to_string(),
-        update
-            .ask_fee
-            .as_ref()
-            .map(|ask_fee| format_coin_display(ask_fee))
-            .unwrap_or_else(|| "none".to_string()),
-    ));
-    contract_info.ask_fee = update.ask_fee;
-    attributes.push((
-        "new_bid_fee".to_string(),
-        update
-            .bid_fee
-            .as_ref()
-            .map(|bid_fee| format_coin_display(bid_fee))
-            .unwrap_or_else(|| "none".to_string()),
-    ));
-    contract_info.bid_fee = update.bid_fee;
+    if let Some(ref new_ask_fee) = &update.new_create_ask_nhash_fee {
+        contract_info.create_ask_nhash_fee = new_ask_fee.to_owned();
+        attributes.push((
+            "new_ask_fee".to_string(),
+            if new_ask_fee.is_zero() {
+                DISABLED_FEE_DISPLAY.to_string()
+            } else {
+                format!("{}{}", new_ask_fee.u128(), NHASH)
+            },
+        ));
+    }
+    if let Some(ref new_bid_fee) = &update.new_create_bid_nhash_fee {
+        contract_info.create_bid_nhash_fee = new_bid_fee.to_owned();
+        attributes.push((
+            "new_bid_fee".to_string(),
+            if new_bid_fee.is_zero() {
+                DISABLED_FEE_DISPLAY.to_string()
+            } else {
+                format!("{}{}", new_bid_fee.u128(), NHASH)
+            },
+        ));
+    }
     // Save changes to the contract information
     set_contract_info(deps.storage, &contract_info)?;
-    Response::new().add_attributes(attributes).to_ok()
+    Response::new()
+        .add_attribute("action", "update_settings")
+        .add_attributes(attributes)
+        .to_ok()
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::execute::update_settings::update_settings;
+    use crate::execute::update_settings::{update_settings, DISABLED_FEE_DISPLAY};
     use crate::storage::contract_info::get_contract_info;
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::mock_instantiate::{
@@ -61,21 +70,22 @@ mod tests {
     };
     use crate::types::core::error::ContractError;
     use crate::types::request::settings_update::SettingsUpdate;
-    use cosmwasm_std::coins;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::mock_info;
+    use cosmwasm_std::{coins, Uint128};
     use provwasm_mocks::mock_dependencies;
 
     #[test]
     fn test_update_settings_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = update_settings(
             deps.as_mut(),
             mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
             SettingsUpdate {
                 new_admin_address: Some(String::new()),
-                ask_fee: None,
-                bid_fee: None,
+                new_create_ask_nhash_fee: None,
+                new_create_bid_nhash_fee: None,
             },
         )
         .expect_err("an error should occur when invalid data is provided to the settings update");
@@ -96,8 +106,8 @@ mod tests {
         };
         let valid_update = SettingsUpdate {
             new_admin_address: Some("some admin".to_string()),
-            ask_fee: None,
-            bid_fee: None,
+            new_create_ask_nhash_fee: None,
+            new_create_bid_nhash_fee: None,
         };
         let err = update_settings(
             deps.as_mut(),
@@ -112,7 +122,7 @@ mod tests {
         );
         let err = update_settings(
             deps.as_mut(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &coins(1200090, "nhash")),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &coins(1200090, NHASH)),
             valid_update.clone(),
         )
         .expect_err("an error should occur when funds are sent");
@@ -126,14 +136,14 @@ mod tests {
     #[test]
     fn test_update_settings_with_all_values_set() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let response = update_settings(
             deps.as_mut(),
             mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
             SettingsUpdate {
                 new_admin_address: Some("new_admin".to_string()),
-                ask_fee: Some(coins(100, "askcoin")),
-                bid_fee: Some(coins(100, "bidcoin")),
+                new_create_ask_nhash_fee: Some(Uint128::new(100)),
+                new_create_bid_nhash_fee: Some(Uint128::new(150)),
             },
         )
         .expect("expected a response to be emitted when a valid request is made by the admin");
@@ -142,9 +152,14 @@ mod tests {
             "no messages should be emitted by the settings update",
         );
         assert_eq!(
-            3,
+            4,
             response.attributes.len(),
             "the correct number of attributes should be emitted in the settings update",
+        );
+        assert_eq!(
+            "update_settings",
+            single_attribute_for_key(&response, "action"),
+            "the correct value should be set for the action attribute",
         );
         assert_eq!(
             "new_admin",
@@ -152,12 +167,12 @@ mod tests {
             "the correct value should be set for the new_admin attribute",
         );
         assert_eq!(
-            "100askcoin",
+            "100nhash",
             single_attribute_for_key(&response, "new_ask_fee"),
             "the correct value should be set for the new_ask_fee attribute",
         );
         assert_eq!(
-            "100bidcoin",
+            "150nhash",
             single_attribute_for_key(&response, "new_bid_fee"),
             "the correct value should be set for the new_bid_fee attribute",
         );
@@ -168,64 +183,91 @@ mod tests {
             contract_info.admin.as_str(),
             "the correct admin address should be now set in the contract info",
         );
-        if let Some(ref ask_fee) = &contract_info.ask_fee {
-            assert_eq!(
-                &coins(100, "askcoin"),
-                ask_fee,
-                "the correct ask fee should be set in contract info",
-            );
-        } else {
-            panic!("ask fee was updated, but not stored in contract info");
-        }
-        if let Some(ref bid_fee) = &contract_info.bid_fee {
-            assert_eq!(
-                &coins(100, "bidcoin"),
-                bid_fee,
-                "the correct bid fee should be set in the contract info",
-            );
-        } else {
-            panic!("bid fee was updated, but not stored in contract info");
-        }
+        assert_eq!(
+            100,
+            contract_info.create_ask_nhash_fee.u128(),
+            "the correct ask fee should be set in contract info",
+        );
+        assert_eq!(
+            150,
+            contract_info.create_bid_nhash_fee.u128(),
+            "the correct bid fee should be set in contract info",
+        );
+        // Ensure that disabling the fees will set the proper text
+        let response = update_settings(
+            deps.as_mut(),
+            mock_info("new_admin", &[]),
+            SettingsUpdate {
+                new_admin_address: None,
+                new_create_ask_nhash_fee: Some(Uint128::zero()),
+                new_create_bid_nhash_fee: Some(Uint128::zero()),
+            },
+        )
+        .expect("disabling ask and bid fees with a zero amount should succeed");
+        assert_eq!(
+            3,
+            response.attributes.len(),
+            "three attributes should be returned in the response",
+        );
+        assert_eq!(
+            "update_settings",
+            single_attribute_for_key(&response, "action"),
+            "the correct action attribute value should be set",
+        );
+        assert_eq!(
+            DISABLED_FEE_DISPLAY,
+            single_attribute_for_key(&response, "new_ask_fee"),
+            "the ask fee attribute should display a disabled message",
+        );
+        assert_eq!(
+            DISABLED_FEE_DISPLAY,
+            single_attribute_for_key(&response, "new_bid_fee"),
+            "the bid fee attribute should display a disabled message",
+        );
+        let contract_info = get_contract_info(deps.as_ref().storage)
+            .expect("expected contract info to load correctly");
+        assert_eq!(
+            0,
+            contract_info.create_ask_nhash_fee.u128(),
+            "the new create ask fee should be set to zero",
+        );
+        assert_eq!(
+            0,
+            contract_info.create_bid_nhash_fee.u128(),
+            "the new create bid fee should be set to zero",
+        );
     }
 
     #[test]
-    fn test_update_settings_with_no_fees() {
+    fn test_update_settings_with_no_changes() {
         let mut deps = mock_dependencies(&[]);
         test_instantiate(
-            deps.as_mut().storage,
+            deps.as_mut(),
             TestInstantiate {
-                ask_fee: Some(coins(100, "askcoin")),
-                bid_fee: Some(coins(100, "bidcoin")),
+                create_ask_nhash_fee: Some(Uint128::new(100)),
+                create_bid_nhash_fee: Some(Uint128::new(101)),
                 ..TestInstantiate::default()
             },
         );
-        let contract_info =
+        let contract_info_before_update =
             get_contract_info(deps.as_ref().storage).expect("contract info should load");
-        if let Some(ref ask_fee) = &contract_info.ask_fee {
-            assert_eq!(
-                &coins(100, "askcoin"),
-                ask_fee,
-                "sanity check: ask fee should be set after instantiation completes with a fee",
-            );
-        } else {
-            panic!("expected ask fee to be set after instantiation included it");
-        }
-        if let Some(ref bid_fee) = &contract_info.bid_fee {
-            assert_eq!(
-                &coins(100, "bidcoin"),
-                bid_fee,
-                "sanity check: bid fee should be set after instantiation completes with a fee",
-            );
-        } else {
-            panic!("expected bid fee to be set after instantiation included it");
-        }
+        assert_eq!(
+            100,
+            contract_info_before_update.create_ask_nhash_fee.u128(),
+            "sanity check: the correct ask fee should be set in the contract info",
+        );
+        assert_eq!(
+            101,
+            contract_info_before_update.create_bid_nhash_fee.u128(),
+            "sanity check: the correct bid fee should be set in the contract info",
+        );
         let response = update_settings(
             deps.as_mut(),
             mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
             SettingsUpdate {
                 new_admin_address: None,
-                ask_fee: None,
-                bid_fee: None,
+                new_create_ask_nhash_fee: None,
+                new_create_bid_nhash_fee: None,
             },
         )
         .expect("expected settings update to run with all none values");
@@ -234,29 +276,20 @@ mod tests {
             "settings update should not send any messages",
         );
         assert_eq!(
-            2,
+            1,
             response.attributes.len(),
-            "the update should produce the correct number of attributes",
+            "the update should only produce a single attribute when no changes are made",
         );
         assert_eq!(
-            "none",
-            single_attribute_for_key(&response, "new_ask_fee"),
-            "the correct new_ask_fee value of none should be set after clearing the ask fee",
+            "update_settings",
+            single_attribute_for_key(&response, "action"),
+            "the correct value should be set for the action attribute",
         );
         assert_eq!(
-            "none",
-            single_attribute_for_key(&response, "new_bid_fee"),
-            "the correct new_bid_fee value of none should be set after clearing the bid fee",
-        );
-        let contract_info =
-            get_contract_info(deps.as_ref().storage).expect("contract info should load");
-        assert!(
-            contract_info.ask_fee.is_none(),
-            "ask fee should not be set after clearing it with a settings update",
-        );
-        assert!(
-            contract_info.bid_fee.is_none(),
-            "bid fee should not be set after clearing it with a settings update",
+            contract_info_before_update,
+            get_contract_info(deps.as_ref().storage)
+                .expect("contract info should load after the update"),
+            "the contract info should be unmodified by the update",
         );
     }
 }

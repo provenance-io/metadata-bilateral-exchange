@@ -5,14 +5,22 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.annotation.JsonValue
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
-import io.provenance.bilateral.interfaces.ContractQueryMsg
+import io.provenance.bilateral.interfaces.BilateralContractQueryMsg
+import io.provenance.bilateral.models.enums.BilateralRequestType
 import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
-import io.provenance.bilateral.serialization.CosmWasmUintToBigIntegerDeserializer
 import java.math.BigInteger
 
+/**
+ * The core request structure for searching the contract, using [io.provenance.bilateral.client.BilateralContractClient.searchAsks],
+ * [io.provenance.bilateral.client.BilateralContractClient.searchBids], or the "OrNull" variants of those functions.
+ * The result produced is paginated.
+ *
+ * @param searchType Defines the search target for the request.
+ * @param pageSize The size of page to use for the search.  If not specified, the [DEFAULT_PAGE_SIZE] value is used.
+ * @param pageNumber The page number to request.  If not specified, the [DEFAULT_PAGE_NUMBER] value is used.
+ */
 @JsonNaming(SnakeCaseStrategy::class)
 data class ContractSearchRequest(
     val searchType: ContractSearchType,
@@ -38,70 +46,75 @@ data class ContractSearchRequest(
         is ContractSearchType.Type -> "[type], type = [${this.searchType.valueType}]"
         is ContractSearchType.Id -> "[id], id = [${this.searchType.id}]"
         is ContractSearchType.Owner -> "[owner], owner = [${this.searchType.owner}]"
-    }.let { searchTypeString -> "searchType = $searchTypeString, pageSize = [${pageSize ?: "DEFAULT"}, pageNumber = [${pageNumber ?: "DEFAULT"}]" }
+    }.let { searchTypeString -> "searchType = $searchTypeString, pageSize = [${pageSize ?: "DEFAULT"}], pageNumber = [${pageNumber ?: "DEFAULT"}]" }
 }
 
+/**
+ * An internal model used to search for [io.provenance.bilateral.models.AskOrder] values.
+ *
+ * @param search The search parameters for the request.
+ */
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("search_asks")
-data class SearchAsks(val search: ContractSearchRequest) : ContractQueryMsg {
+data class SearchAsks(val search: ContractSearchRequest) : BilateralContractQueryMsg {
     override fun toLoggingString(): String = "searchAsks, ${search.getLoggingSuffix()}"
 }
 
+/**
+ * An internal model used to search for [io.provenance.bilateral.models.BidOrder] values.
+ *
+ * @param search The search parameters for the request.
+ */
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 @JsonTypeName("search_bids")
-data class SearchBids(val search: ContractSearchRequest) : ContractQueryMsg {
+data class SearchBids(val search: ContractSearchRequest) : BilateralContractQueryMsg {
     override fun toLoggingString(): String = "searchBids, ${search.getLoggingSuffix()}"
 }
 
+/**
+ * The search parameters for a search request.  Each type indicates a different target value by which to locate ask or
+ * bid orders.
+ */
 sealed interface ContractSearchType {
+    /**
+     * Simply retrieves all stored ask or bid orders without any specialized target values.
+     */
     @JsonNaming(SnakeCaseStrategy::class)
     object All : ContractSearchType {
         @JsonValue
         fun serializeAs(): String = "all"
     }
 
+    /**
+     * Retrieves all ask or bid orders that match a specific [BilateralRequestType].
+     */
     @JsonNaming(SnakeCaseStrategy::class)
-    data class Type(val valueType: Body) : ContractSearchType {
-        @JsonNaming(SnakeCaseStrategy::class)
-        data class Body(val valueType: String)
+    class Type private constructor(val valueType: Body) : ContractSearchType {
+        constructor(valueType: BilateralRequestType) : this(Body(valueType))
+
+        class Body(val valueType: BilateralRequestType)
     }
 
+    /**
+     * Retrieves all ask or bid orders that match a specific ask or bid id.  Ask and bid ids are unique, so this should
+     * only ever produce a single result.
+     */
     @JsonNaming(SnakeCaseStrategy::class)
-    data class Id(val id: Body) : ContractSearchType {
-        @JsonNaming(SnakeCaseStrategy::class)
-        data class Body(val id: String)
+    class Id private constructor(val id: Body) : ContractSearchType {
+        constructor(id: String) : this(Body(id))
+
+        class Body(val id: String)
     }
 
+    /**
+     * Retrieves all ask or bid orders that match a specific bech32 address owner.
+     */
     @JsonNaming(SnakeCaseStrategy::class)
-    data class Owner(val owner: Body) : ContractSearchType {
-        @JsonNaming(SnakeCaseStrategy::class)
-        data class Body(val owner: String)
+    class Owner private constructor(val owner: Body) : ContractSearchType {
+        constructor(owner: String) : this(Body(owner))
+
+        class Body(val owner: String)
     }
-
-    companion object {
-        fun all(): ContractSearchType = All
-        fun byType(type: BilateralRequestType): ContractSearchType = Type(Type.Body(type.contractName))
-        fun byId(id: String): ContractSearchType = Id(Id.Body(id))
-        fun byOwner(owner: String): ContractSearchType = Owner(Owner.Body(owner))
-    }
-}
-
-@JsonNaming(SnakeCaseStrategy::class)
-data class ContractSearchResult<T>(
-    val results: List<T>,
-    @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
-    val pageNumber: BigInteger,
-    @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
-    val pageSize: BigInteger,
-    @JsonDeserialize(using = CosmWasmUintToBigIntegerDeserializer::class)
-    val totalPages: BigInteger,
-)
-
-enum class BilateralRequestType(val contractName: String) {
-    COIN_TRADE("coin_trade"),
-    MARKER_TRADE("marker_trade"),
-    MARKER_SHARE_SALE("marker_share_sale"),
-    SCOPE_TRADE("scope_trade"),
 }

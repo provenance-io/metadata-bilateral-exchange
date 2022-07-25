@@ -15,27 +15,29 @@ import testconfiguration.functions.newCoin
 import testconfiguration.functions.newCoins
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class FeesIntTest : ContractIntTest() {
     @Test
     fun testCreateAskWithFee() {
         val askerDenom = "cointradecreateaskwithfeebase"
-        val askFeeDenom = "cointradecreateaskwithfeefee"
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, askerDenom),
             receiverAddress = asker.address(),
         )
-        giveTestDenom(
-            pbClient = pbClient,
-            initialHoldings = newCoin(3, askFeeDenom),
-            receiverAddress = asker.address(),
+        // Fee == 1000 hash
+        val askFee = 1_000_000_000_000
+        bilateralClient.setFees(askFee = askFee.toBigInteger())
+        val startingHashBalance = pbClient.getBalance(asker.address(), "nhash")
+        assertTrue(
+            actual = startingHashBalance > askFee * 3,
+            message = "The asker account does not have enough hash to perform this test :(",
         )
-        bilateralClient.setFees(askFee = newCoins(1, askFeeDenom))
         val quote = newCoins(1000, "somequote")
         val base = newCoins(1000, askerDenom)
         val askUuid = UUID.randomUUID()
-        assertSucceeds("Ask should be created without error") {
+        val response = assertSucceeds("Ask should be created without error") {
             createAsk(
                 createAsk = CreateAsk(
                     ask = CoinTradeAsk(
@@ -47,15 +49,14 @@ class FeesIntTest : ContractIntTest() {
             )
         }
         assertEquals(
-            expected = 2,
-            actual = pbClient.getBalance(asker.address(), askFeeDenom),
-            message = "The correct fee should be removed from the asker's account",
+            expected = "${askFee}nhash",
+            actual = response.askFeeCharged,
+            message = "The correct ask fee charged value should be omitted",
         )
-        cancelAsk(askUuid.toString())
-        assertEquals(
-            expected = 2,
-            actual = pbClient.getBalance(asker.address(), askFeeDenom),
-            message = "The fee should not be refunded after canceling the ask",
+        val paidNhashForAskCreation = startingHashBalance - pbClient.getBalance(asker.address(), "nhash")
+        assertTrue(
+            actual = paidNhashForAskCreation >= askFee,
+            message = "The ask fee should be paid out during the transaction, but the asker only paid: ${paidNhashForAskCreation}nhash",
         )
         bilateralClient.clearFees()
     }
@@ -63,22 +64,23 @@ class FeesIntTest : ContractIntTest() {
     @Test
     fun testCreateBidWithFee() {
         val bidderDenom = "cointradecreatebidwithfeebase"
-        val bidFeeDenom = "cointradecreatebidwithfeefee"
         giveTestDenom(
             pbClient = pbClient,
             initialHoldings = newCoin(1000, bidderDenom),
             receiverAddress = bidder.address(),
         )
-        giveTestDenom(
-            pbClient = pbClient,
-            initialHoldings = newCoin(3, bidFeeDenom),
-            receiverAddress = bidder.address(),
+        // Fee == 1000 hash
+        val bidFee = 1_000_000_000_000
+        bilateralClient.setFees(bidFee = bidFee.toBigInteger())
+        val startingHashBalance = pbClient.getBalance(bidder.address(), "nhash")
+        assertTrue(
+            actual = startingHashBalance > bidFee * 3,
+            message = "The bidder account does not have enough hash to perform this test :(((",
         )
-        bilateralClient.setFees(bidFee = newCoins(1, bidFeeDenom))
         val quote = newCoins(1000, bidderDenom)
         val base = newCoins(1000, "somebasedenom")
         val bidUuid = UUID.randomUUID()
-        assertSucceeds("Bid should be created without error") {
+        val response = assertSucceeds("Bid should be created without error") {
             createBid(
                 createBid = CreateBid(
                     bid = CoinTradeBid(
@@ -90,15 +92,14 @@ class FeesIntTest : ContractIntTest() {
             )
         }
         assertEquals(
-            expected = 2,
-            actual = pbClient.getBalance(bidder.address(), bidFeeDenom),
-            message = "The correct fee should be removed from the bidder's account",
+            expected = "${bidFee}nhash",
+            actual = response.bidFeeCharged,
+            message = "The correct bid fee charged value should be omitted",
         )
-        cancelBid(bidUuid.toString())
-        assertEquals(
-            expected = 2,
-            actual = pbClient.getBalance(bidder.address(), bidFeeDenom),
-            message = "The fee should not be refunded after canceling the bid",
+        val paidNhashForBidCreation = startingHashBalance - pbClient.getBalance(bidder.address(), "nhash")
+        assertTrue(
+            actual = paidNhashForBidCreation >= bidFee,
+            message = "The bid fee should be paid out during the transaction, but the bidder only paid: ${paidNhashForBidCreation}nhash",
         )
         bilateralClient.clearFees()
     }

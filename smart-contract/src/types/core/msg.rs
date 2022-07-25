@@ -3,7 +3,7 @@ use crate::types::request::bid_types::bid::Bid;
 use crate::types::request::request_descriptor::RequestDescriptor;
 use crate::types::request::search::Search;
 use crate::types::request::settings_update::SettingsUpdate;
-use cosmwasm_std::Coin;
+use cosmwasm_std::Uint128;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 pub struct InstantiateMsg {
     pub bind_name: String,
     pub contract_name: String,
-    pub ask_fee: Option<Vec<Coin>>,
-    pub bid_fee: Option<Vec<Coin>>,
+    pub create_ask_nhash_fee: Option<Uint128>,
+    pub create_bid_nhash_fee: Option<Uint128>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

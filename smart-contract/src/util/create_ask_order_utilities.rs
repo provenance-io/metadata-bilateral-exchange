@@ -8,9 +8,10 @@ use crate::types::request::request_descriptor::RequestDescriptor;
 use crate::types::request::request_type::RequestType;
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::{check_scope_owners, get_single_marker_coin_holding};
-use crate::util::request_fee::generate_request_fee;
+use crate::util::request_fee::generate_request_fee_msg;
+use crate::validation::ask_order_validation::validate_ask_order;
 use crate::validation::marker_exchange_validation::validate_marker_for_ask;
-use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo};
+use cosmwasm_std::{Addr, BankMsg, CosmosMsg, DepsMut, Env, MessageInfo};
 use provwasm_std::{
     revoke_marker_access, AccessGrant, Marker, MarkerAccess, ProvenanceMsg, ProvenanceQuerier,
     ProvenanceQuery,
@@ -35,50 +36,47 @@ pub fn create_ask_order(
     descriptor: Option<RequestDescriptor>,
     creation_type: AskCreationType,
 ) -> Result<AskOrderCreationResponse, ContractError> {
-    let (fee_send_msg, funds_after_fee) = match &creation_type {
-        AskCreationType::New => {
-            // TODO: Refactor this after provwasm fees are available. That will deeply simplify the fee charge process
-            let resp = generate_request_fee("ask fee", &deps.as_ref(), info, |c| &c.ask_fee)?;
-            (resp.fee_send_msg, resp.funds_after_fee)
-        }
-        AskCreationType::Update { .. } => (None, info.funds.to_owned()),
+    let ask_fee_msg = match &creation_type {
+        AskCreationType::New => generate_request_fee_msg(
+            "ask creation",
+            &deps.as_ref(),
+            env.contract.address.clone(),
+            |c| c.create_ask_nhash_fee.u128(),
+        )?,
+        // Updates do not charge creation fees
+        AskCreationType::Update { .. } => None,
     };
     let AskCreationData {
         collateral,
         messages,
     } = match &ask {
-        Ask::CoinTrade(coin_ask) => {
-            create_coin_trade_ask_collateral(creation_type, info, &funds_after_fee, coin_ask)
+        Ask::CoinTrade(coin_ask) => create_coin_trade_ask_collateral(creation_type, info, coin_ask),
+        Ask::MarkerTrade(marker_ask) => {
+            create_marker_trade_ask_collateral(creation_type, deps, info, env, marker_ask)
         }
-        Ask::MarkerTrade(marker_ask) => create_marker_trade_ask_collateral(
-            creation_type,
-            deps,
-            info,
-            env,
-            &funds_after_fee,
-            marker_ask,
-        ),
         Ask::MarkerShareSale(marker_share_sale) => create_marker_share_sale_ask_collateral(
             creation_type,
             deps,
             info,
             env,
-            &funds_after_fee,
             marker_share_sale,
         ),
-        Ask::ScopeTrade(scope_trade) => create_scope_trade_ask_collateral(
-            creation_type,
-            deps,
-            env,
-            &funds_after_fee,
-            scope_trade,
-        ),
+        Ask::ScopeTrade(scope_trade) => {
+            create_scope_trade_ask_collateral(creation_type, deps, info, env, scope_trade)
+        }
     }?;
-    let ask_order = AskOrder::new(ask.get_id(), info.sender.clone(), collateral, descriptor)?;
+    let ask_order = AskOrder {
+        id: ask.get_id().to_string(),
+        ask_type: RequestType::from_ask_collateral(&collateral),
+        owner: info.sender.clone(),
+        collateral,
+        descriptor,
+    };
+    validate_ask_order(&ask_order)?;
     AskOrderCreationResponse {
         ask_order,
         messages,
-        ask_fee_msg: fee_send_msg,
+        ask_fee_msg,
     }
     .to_ok()
 }
@@ -92,20 +90,25 @@ struct AskCreationData {
 fn create_coin_trade_ask_collateral(
     creation_type: AskCreationType,
     info: &MessageInfo,
-    base_funds: &[Coin],
     coin_trade: &CoinTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if base_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "coin trade ask requests should include enough funds for ask fee + base",
-        )
+    if info.funds.is_empty() {
+        return ContractError::InvalidFundsProvided {
+            message: "coin trade ask requests should include funds for a base".to_string(),
+        }
         .to_err();
     }
     if coin_trade.id.is_empty() {
-        return ContractError::missing_field("id").to_err();
+        return ContractError::MissingField {
+            field: "id".to_string(),
+        }
+        .to_err();
     }
     if coin_trade.quote.is_empty() {
-        return ContractError::missing_field("quote").to_err();
+        return ContractError::MissingField {
+            field: "quote".to_string(),
+        }
+        .to_err();
     }
     let messages = match creation_type {
         AskCreationType::New => vec![],
@@ -128,7 +131,7 @@ fn create_coin_trade_ask_collateral(
         }
     };
     AskCreationData {
-        collateral: AskCollateral::coin_trade(base_funds, &coin_trade.quote),
+        collateral: AskCollateral::coin_trade(&info.funds, &coin_trade.quote),
         messages,
     }
     .to_ok()
@@ -139,14 +142,13 @@ fn create_marker_trade_ask_collateral(
     deps: &DepsMut<ProvenanceQuery>,
     info: &MessageInfo,
     env: &Env,
-    base_funds: &[Coin],
     marker_trade: &MarkerTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if !base_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "marker trade ask requests should not include funds greater than the amount needed for ask fees",
-        )
-            .to_err();
+    if !info.funds.is_empty() {
+        return ContractError::InvalidFundsProvided {
+            message: "marker trade ask requests should not include funds".to_string(),
+        }
+        .to_err();
     }
     let marker =
         ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&marker_trade.marker_denom)?;
@@ -176,14 +178,14 @@ fn create_marker_trade_ask_collateral(
             )?;
             let existing_marker_denom = get_update_marker_denom(existing_ask_order)?;
             if existing_marker_denom != &marker_trade.marker_denom {
-                return ContractError::invalid_update(
-                    format!(
-                        "marker trade with id [{}] cannot change marker denom with an update. current denom [{}], proposed new denom [{}]", 
+                return ContractError::InvalidUpdate {
+                    explanation: format!(
+                        "marker trade with id [{}] cannot change marker denom with an update. current denom [{}], proposed new denom [{}]",
                         existing_ask_order.id,
                         existing_marker_denom,
-                        marker_trade.marker_denom
+                        marker_trade.marker_denom,
                     )
-                ).to_err();
+                }.to_err();
             }
             vec![]
         }
@@ -215,14 +217,13 @@ fn create_marker_share_sale_ask_collateral(
     deps: &DepsMut<ProvenanceQuery>,
     info: &MessageInfo,
     env: &Env,
-    base_funds: &[Coin],
     marker_share_sale: &MarkerShareSaleAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if !base_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "marker share sale ask requests should not include funds greater than the amount needed for ask fees",
-        )
-            .to_err();
+    if !info.funds.is_empty() {
+        return ContractError::InvalidFundsProvided {
+            message: "marker share sale ask requests should not include funds".to_string(),
+        }
+        .to_err();
     }
     let marker = ProvenanceQuerier::new(&deps.querier)
         .get_marker_by_denom(&marker_share_sale.marker_denom)?;
@@ -252,14 +253,14 @@ fn create_marker_share_sale_ask_collateral(
             )?;
             let existing_marker_denom = get_update_marker_denom(existing_ask_order)?;
             if existing_marker_denom != &marker_share_sale.marker_denom {
-                return ContractError::invalid_update(
-                    format!(
+                return ContractError::InvalidUpdate {
+                    explanation: format!(
                         "marker share sale with id [{}] cannot change marker denom with an update. current denom [{}], proposed new denom [{}]",
                         existing_ask_order.id,
                         existing_marker_denom,
                         marker_share_sale.marker_denom,
                     )
-                ).to_err();
+                }.to_err();
             }
             vec![]
         }
@@ -291,15 +292,15 @@ fn create_marker_share_sale_ask_collateral(
 fn create_scope_trade_ask_collateral(
     creation_type: AskCreationType,
     deps: &DepsMut<ProvenanceQuery>,
+    info: &MessageInfo,
     env: &Env,
-    base_funds: &[Coin],
     scope_trade: &ScopeTradeAsk,
 ) -> Result<AskCreationData, ContractError> {
-    if !base_funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "scope trade ask requests should not include funds greater than the amount needed for ask fees",
-        )
-            .to_err();
+    if !info.funds.is_empty() {
+        return ContractError::InvalidFundsProvided {
+            message: "scope trade ask requests should not include funds".to_string(),
+        }
+        .to_err();
     }
     check_scope_owners(
         &ProvenanceQuerier::new(&deps.querier).get_scope(&scope_trade.scope_address)?,
@@ -316,14 +317,14 @@ fn create_scope_trade_ask_collateral(
             )?;
             let existing_collateral = existing_ask_order.collateral.get_scope_trade()?;
             if existing_collateral.scope_address != scope_trade.scope_address {
-                return ContractError::invalid_update(
-                    format!(
+                return ContractError::InvalidUpdate {
+                    explanation: format!(
                         "scope trade with id [{}] cannot change scope address with an update. current address [{}], proposed new address [{}]",
                         existing_ask_order.id,
                         existing_collateral.scope_address,
                         scope_trade.scope_address,
                     )
-                ).to_err();
+                }.to_err();
             }
         }
     }
@@ -365,12 +366,14 @@ fn check_ask_type<S: Into<String>>(
         ask_type => ask_type == expected_ask_type,
     };
     if !valid_update {
-        ContractError::invalid_update(format!(
-            "ask with id [{}] cannot change ask type from [{}] to [{}]",
-            ask_id.into(),
-            existing_ask_type.get_name(),
-            expected_ask_type.get_name(),
-        ))
+        ContractError::InvalidUpdate {
+            explanation: format!(
+                "ask with id [{}] cannot change ask type from [{}] to [{}]",
+                ask_id.into(),
+                existing_ask_type.get_name(),
+                expected_ask_type.get_name(),
+            ),
+        }
         .to_err()
     } else {
         ().to_ok()
@@ -382,11 +385,13 @@ fn get_update_marker_denom(ask_order: &AskOrder) -> Result<&String, ContractErro
         AskCollateral::MarkerTrade(ref c) => &c.marker_denom,
         AskCollateral::MarkerShareSale(ref c) => &c.marker_denom,
         _ => {
-            return ContractError::invalid_update(format!(
-                "update for ask [{}] of type [{}] attempted to use marker collateral",
-                &ask_order.id,
-                ask_order.ask_type.get_name(),
-            ))
+            return ContractError::InvalidUpdate {
+                explanation: format!(
+                    "update for ask [{}] of type [{}] attempted to use marker collateral",
+                    &ask_order.id,
+                    ask_order.ask_type.get_name(),
+                ),
+            }
             .to_err();
         }
     }
@@ -400,11 +405,13 @@ fn get_update_marker_removed_permissions(
         AskCollateral::MarkerTrade(ref c) => c.removed_permissions.to_owned(),
         AskCollateral::MarkerShareSale(ref c) => c.removed_permissions.to_owned(),
         _ => {
-            return ContractError::invalid_update(format!(
-                "update for ask [{}] of type [{}] attempted to use marker collateral",
-                &ask_order.id,
-                ask_order.ask_type.get_name(),
-            ))
+            return ContractError::InvalidUpdate {
+                explanation: format!(
+                    "update for ask [{}] of type [{}] attempted to use marker collateral",
+                    &ask_order.id,
+                    ask_order.ask_type.get_name(),
+                ),
+            }
             .to_err();
         }
     }

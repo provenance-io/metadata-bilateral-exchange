@@ -1,4 +1,4 @@
-use crate::storage::contract_info::{get_contract_info, set_contract_info, ContractInfo};
+use crate::storage::contract_info::{get_contract_info, set_contract_info, ContractInfoV2};
 use crate::types::core::error::ContractError;
 use crate::types::core::msg::InstantiateMsg;
 use crate::util::extensions::ResultExtensions;
@@ -15,12 +15,12 @@ pub fn instantiate_contract(
     validate_instantiate_msg(&msg)?;
 
     // set contract info
-    let contract_info = ContractInfo::new(
+    let contract_info = ContractInfoV2::new(
         info.sender,
         msg.bind_name,
         msg.contract_name,
-        msg.ask_fee,
-        msg.bid_fee,
+        msg.create_ask_nhash_fee,
+        msg.create_bid_nhash_fee,
     );
     set_contract_info(deps.storage, &contract_info)?;
 
@@ -47,8 +47,11 @@ mod tests {
     use super::*;
     use crate::contract::instantiate;
     use crate::storage::contract_info::{CONTRACT_TYPE, CONTRACT_VERSION};
+    use crate::test::mock_instantiate::{
+        DEFAULT_ADMIN_ADDRESS, DEFAULT_CONTRACT_BIND_NAME, DEFAULT_CONTRACT_NAME,
+    };
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{attr, coins, Addr, CosmosMsg};
+    use cosmwasm_std::{attr, Addr, CosmosMsg, Uint128};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::{NameMsgParams, ProvenanceMsgParams, ProvenanceRoute};
 
@@ -56,12 +59,12 @@ mod tests {
     fn instantiate_with_valid_data() {
         // create valid init data
         let mut deps = mock_dependencies(&[]);
-        let info = mock_info("contract_admin", &[]);
+        let info = mock_info(DEFAULT_ADMIN_ADDRESS, &[]);
         let init_msg = InstantiateMsg {
-            bind_name: "contract_bind_name".to_string(),
-            contract_name: "contract_name".to_string(),
-            ask_fee: Some(coins(100, "nhash")),
-            bid_fee: Some(coins(200, "nhash")),
+            bind_name: DEFAULT_CONTRACT_BIND_NAME.to_string(),
+            contract_name: DEFAULT_CONTRACT_NAME.to_string(),
+            create_ask_nhash_fee: Some(Uint128::new(100)),
+            create_bid_nhash_fee: Some(Uint128::new(200)),
         };
 
         // initialize
@@ -83,14 +86,14 @@ mod tests {
                         version: "2.0.0".to_string(),
                     })
                 );
-                let expected_contract_info = ContractInfo {
-                    admin: Addr::unchecked("contract_admin"),
-                    bind_name: "contract_bind_name".to_string(),
-                    contract_name: "contract_name".to_string(),
+                let expected_contract_info = ContractInfoV2 {
+                    admin: Addr::unchecked(DEFAULT_ADMIN_ADDRESS),
+                    bind_name: DEFAULT_CONTRACT_BIND_NAME.to_string(),
+                    contract_name: DEFAULT_CONTRACT_NAME.to_string(),
                     contract_type: CONTRACT_TYPE.into(),
                     contract_version: CONTRACT_VERSION.into(),
-                    ask_fee: Some(coins(100, "nhash")),
-                    bid_fee: Some(coins(200, "nhash")),
+                    create_ask_nhash_fee: Uint128::new(100),
+                    create_bid_nhash_fee: Uint128::new(200),
                 };
 
                 assert_eq!(init_response.attributes.len(), 2);
@@ -99,9 +102,44 @@ mod tests {
                     attr("contract_info", format!("{:?}", expected_contract_info))
                 );
                 assert_eq!(init_response.attributes[1], attr("action", "init"));
+                let contract_info = get_contract_info(deps.as_ref().storage)
+                    .expect("contract info should load successfully");
+                assert_eq!(
+                    expected_contract_info, contract_info,
+                    "the response contract info should equal the expected value",
+                );
             }
             error => panic!("failed to initialize: {:?}", error),
         }
+    }
+
+    #[test]
+    fn test_instantiate_with_none_fees_equates_to_zero_fees() {
+        let mut deps = mock_dependencies(&[]);
+        instantiate(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            InstantiateMsg {
+                bind_name: DEFAULT_CONTRACT_BIND_NAME.to_string(),
+                contract_name: DEFAULT_CONTRACT_NAME.to_string(),
+                create_ask_nhash_fee: None,
+                create_bid_nhash_fee: None,
+            },
+        )
+        .expect("instantiation should succeed without error");
+        let contract_info = get_contract_info(deps.as_ref().storage)
+            .expect("contract info should load without error");
+        assert_eq!(
+            0,
+            contract_info.create_ask_nhash_fee.u128(),
+            "the create ask fee should be set to zero when none is provided during instantiation",
+        );
+        assert_eq!(
+            0,
+            contract_info.create_bid_nhash_fee.u128(),
+            "the create bid fee should be set to zero when none is provided during instantiation",
+        );
     }
 
     #[test]
@@ -112,8 +150,8 @@ mod tests {
         let init_msg = InstantiateMsg {
             bind_name: "".to_string(),
             contract_name: "contract_name".to_string(),
-            ask_fee: Some(coins(10, "nhash")),
-            bid_fee: Some(coins(20, "nhash")),
+            create_ask_nhash_fee: Some(Uint128::new(10)),
+            create_bid_nhash_fee: Some(Uint128::new(20)),
         };
 
         // initialize

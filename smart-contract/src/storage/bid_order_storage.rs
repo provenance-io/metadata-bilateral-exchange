@@ -51,11 +51,13 @@ pub fn insert_bid_order(
 ) -> Result<(), ContractError> {
     let state = bid_orders();
     if let Ok(existing_bid) = state.load(storage, bid_order.id.as_bytes()) {
-        return ContractError::storage_error(format!(
-            "a bid with id [{}] for owner [{}] already exists",
-            existing_bid.id,
-            existing_bid.owner.as_str(),
-        ))
+        return ContractError::StorageError {
+            message: format!(
+                "a bid with id [{}] for owner [{}] already exists",
+                existing_bid.id,
+                existing_bid.owner.as_str(),
+            ),
+        }
         .to_err();
     }
     store_bid_order(storage, bid_order)
@@ -70,10 +72,12 @@ pub fn update_bid_order(
         delete_bid_order_by_id(storage, &bid_order.id)?;
         store_bid_order(storage, bid_order)
     } else {
-        ContractError::storage_error(format!(
-            "attempted to replace bid with id [{}] in storage, but no bid with that id existed",
-            &bid_order.id,
-        ))
+        ContractError::StorageError {
+            message: format!(
+                "attempted to replace bid with id [{}] in storage, but no bid with that id existed",
+                &bid_order.id,
+            ),
+        }
         .to_err()
     }
 }
@@ -95,9 +99,11 @@ pub fn get_bid_order_by_id<S: Into<String>>(
     id: S,
 ) -> Result<BidOrder, ContractError> {
     let id = id.into();
-    bid_orders().load(storage, id.as_bytes()).map_err(|e| {
-        ContractError::storage_error(format!("failed to find BidOrder by id [{}]: {:?}", id, e))
-    })
+    bid_orders()
+        .load(storage, id.as_bytes())
+        .map_err(|e| ContractError::StorageError {
+            message: format!("failed to find BidOrder by id [{}]: {:?}", id, e),
+        })
 }
 
 pub fn delete_bid_order_by_id<S: Into<String>>(
@@ -105,9 +111,11 @@ pub fn delete_bid_order_by_id<S: Into<String>>(
     id: S,
 ) -> Result<(), ContractError> {
     let id = id.into();
-    bid_orders().remove(storage, id.as_bytes()).map_err(|e| {
-        ContractError::storage_error(format!("failed to remove BidOrder by id [{}]: {:?}", id, e))
-    })?;
+    bid_orders()
+        .remove(storage, id.as_bytes())
+        .map_err(|e| ContractError::StorageError {
+            message: format!("failed to remove BidOrder by id [{}]: {:?}", id, e),
+        })?;
     ().to_ok()
 }
 
@@ -119,6 +127,7 @@ mod tests {
     };
     use crate::types::request::bid_types::bid_collateral::BidCollateral;
     use crate::types::request::bid_types::bid_order::BidOrder;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::{coins, Addr};
     use provwasm_mocks::mock_dependencies;
 
@@ -146,7 +155,7 @@ mod tests {
         let mut order = BidOrder::new_unchecked(
             "bid",
             Addr::unchecked("bidder"),
-            BidCollateral::scope_trade("scope", &coins(100, "nhash")),
+            BidCollateral::scope_trade("scope", &coins(100, NHASH)),
             None,
         );
         update_bid_order(deps.as_mut().storage, &order)
@@ -214,7 +223,7 @@ mod tests {
                 Addr::unchecked("marker"),
                 "markerdenom",
                 100,
-                &coins(10000, "nhash"),
+                &coins(10000, NHASH),
             ),
             None,
         );

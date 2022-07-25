@@ -558,28 +558,30 @@
     "SettingsUpdate": {
       "type": "object",
       "properties": {
-        "ask_fee": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/Coin"
-          }
-        },
-        "bid_fee": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/Coin"
-          }
-        },
         "new_admin_address": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "new_create_ask_nhash_fee": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "new_create_bid_nhash_fee": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       }

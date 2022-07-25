@@ -13,21 +13,22 @@ pub fn cancel_bid(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     // return error if id is empty
     if id.is_empty() {
-        return ContractError::validation_error(&["an id must be provided when cancelling a bid"])
-            .to_err();
+        return ContractError::ValidationError {
+            messages: vec!["an id must be provided when cancelling a bid".to_string()],
+        }
+        .to_err();
     }
-
     // return error if funds sent
     if !info.funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds should not be provided when cancelling a bid",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "funds should not be provided when cancelling a bid".to_string(),
+        }
         .to_err();
     }
     let bid_order = get_bid_order_by_id(deps.storage, &id)?;
     // Only the owner of the bid and the admin can cancel a bid
     if info.sender != bid_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
-        return ContractError::unauthorized().to_err();
+        return ContractError::Unauthorized.to_err();
     }
     let coin_to_send = bid_order.collateral.get_quote();
     // Remove the bid order from storage now that it is no longer needed
@@ -57,7 +58,8 @@ mod tests {
     use crate::types::request::bid_types::bid::Bid;
     use crate::types::request::bid_types::bid_collateral::BidCollateral;
     use crate::types::request::bid_types::bid_order::BidOrder;
-    use cosmwasm_std::testing::mock_info;
+    use crate::util::constants::NHASH;
+    use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::{coin, coins, from_binary, BankMsg, Coin, CosmosMsg, Response, Storage};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::ProvenanceMsg;
@@ -105,7 +107,7 @@ mod tests {
     #[test]
     fn test_cancel_bid_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = cancel_bid(deps.as_mut(), mock_info("bidder", &[]), String::new())
             .expect_err("an error should occur when the bid id is missing");
         match err {
@@ -125,7 +127,7 @@ mod tests {
         };
         let err = cancel_bid(
             deps.as_mut(),
-            mock_info("bidder", &coins(150, "nhash")),
+            mock_info("bidder", &coins(150, NHASH)),
             "bid_id".to_string(),
         )
         .expect_err("an error should occur when the sender adds funds");
@@ -167,9 +169,10 @@ mod tests {
 
     fn do_coin_trade_cancel_bid<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(100, "quote")),
             Bid::new_coin_trade("bid_id", &coins(100, "base")),
             None,
@@ -188,11 +191,12 @@ mod tests {
 
     fn do_marker_trade_cancel_bid<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(150, "quotecoin")),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, None),
             None,
@@ -211,11 +215,12 @@ mod tests {
 
     fn do_marker_share_sale_cancel_bid<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &coins(1000, "coincoin")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 100),
             None,
@@ -234,10 +239,11 @@ mod tests {
 
     fn do_scope_trade_bid_cancel<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_bid(
             deps.as_mut(),
-            mock_info("bidder", &[coin(10, "bitcoin"), coin(10, "nhash")]),
+            mock_env(),
+            mock_info("bidder", &[coin(10, "bitcoin"), coin(10, NHASH)]),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,
         )
@@ -253,7 +259,7 @@ mod tests {
         assert_cancel_bid_succeeded(
             deps.as_ref().storage,
             &response,
-            &[coin(10, "bitcoin"), coin(10, "nhash")],
+            &[coin(10, "bitcoin"), coin(10, NHASH)],
         );
     }
 

@@ -10,7 +10,7 @@ import io.provenance.bilateral.execute.ExecuteMatch
 import io.provenance.bilateral.execute.UpdateAsk
 import io.provenance.bilateral.execute.UpdateBid
 import io.provenance.bilateral.models.RequestDescriptor
-import io.provenance.bilateral.models.ShareSaleType
+import io.provenance.bilateral.models.enums.ShareSaleType
 import io.provenance.marker.v1.Access
 import mu.KLogging
 import org.junit.jupiter.api.Test

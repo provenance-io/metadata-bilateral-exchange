@@ -1,5 +1,5 @@
 pub mod coin_utilities;
-pub mod cosmos_utilities;
+pub mod constants;
 pub mod create_ask_order_utilities;
 pub mod create_bid_order_utilities;
 pub mod extensions;

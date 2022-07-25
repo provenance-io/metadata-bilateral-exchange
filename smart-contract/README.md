@@ -13,6 +13,15 @@ This a [CosmWasm](https://crates.io/crates/cosmwasm-std) smart contract that pro
 [license-badge]: https://img.shields.io/github/license/provenance-io/metadata-bilateral-exchange.svg
 [license-url]: https://github.com/provenance-io/metadata-bilateral-exchange/blob/main/LICENSE
 
+## Compatibility
+
+The smart contract is compatible with the Provenance Blockchain in the following versions:
+
+| Smart Contract   | Provenance Blockchain |
+|------------------|-----------------------|
+| v1.0.8+          | v1.11.x+              |
+| v1.0.7 and below | v1.10.x               |
+
 ## Functions and Terminology
 
 The contract functions by allowing two parties to exchange owned goods on the blockchain with a three step process:

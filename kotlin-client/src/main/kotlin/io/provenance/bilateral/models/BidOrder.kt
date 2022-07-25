@@ -11,13 +11,14 @@ import io.provenance.bilateral.models.BidCollateral.CoinTrade
 import io.provenance.bilateral.models.BidCollateral.MarkerShareSale
 import io.provenance.bilateral.models.BidCollateral.MarkerTrade
 import io.provenance.bilateral.models.BidCollateral.ScopeTrade
+import io.provenance.bilateral.models.enums.BilateralRequestType
 import io.provenance.bilateral.serialization.CosmWasmUintToBigIntegerDeserializer
 import java.math.BigInteger
 
 @JsonNaming(SnakeCaseStrategy::class)
 data class BidOrder(
     val id: String,
-    val bidType: String,
+    val bidType: BilateralRequestType,
     val owner: String,
     val collateral: BidCollateral,
     val descriptor: RequestDescriptor?,

@@ -58,11 +58,13 @@ pub fn insert_ask_order(
 ) -> Result<(), ContractError> {
     let state = ask_orders();
     if let Ok(existing_ask) = state.load(storage, ask_order.id.as_bytes()) {
-        return ContractError::storage_error(format!(
-            "an ask with id [{}] for owner [{}] already exists",
-            existing_ask.id,
-            existing_ask.owner.as_str(),
-        ))
+        return ContractError::StorageError {
+            message: format!(
+                "an ask with id [{}] for owner [{}] already exists",
+                existing_ask.id,
+                existing_ask.owner.as_str(),
+            ),
+        }
         .to_err();
     }
     store_ask_order(storage, ask_order)
@@ -77,10 +79,12 @@ pub fn update_ask_order(
         delete_ask_order_by_id(storage, &ask_order.id)?;
         store_ask_order(storage, ask_order)
     } else {
-        ContractError::storage_error(format!(
-            "attempted to replace ask with id [{}] in storage, but no ask with that id existed",
-            &ask_order.id
-        ))
+        ContractError::StorageError {
+            message: format!(
+                "attempted to replace ask with id [{}] in storage, but no ask with that id existed",
+                &ask_order.id
+            ),
+        }
         .to_err()
     }
 }
@@ -102,9 +106,11 @@ pub fn get_ask_order_by_id<S: Into<String>>(
     id: S,
 ) -> Result<AskOrder, ContractError> {
     let id = id.into();
-    ask_orders().load(storage, id.as_bytes()).map_err(|e| {
-        ContractError::storage_error(format!("failed to find AskOrder by id [{}]: {:?}", id, e))
-    })
+    ask_orders()
+        .load(storage, id.as_bytes())
+        .map_err(|e| ContractError::StorageError {
+            message: format!("failed to find AskOrder by id [{}]: {:?}", id, e),
+        })
 }
 
 pub fn may_get_ask_order_by_collateral_id<S: Into<String>>(
@@ -124,9 +130,11 @@ pub fn delete_ask_order_by_id<S: Into<String>>(
     id: S,
 ) -> Result<(), ContractError> {
     let id = id.into();
-    ask_orders().remove(storage, id.as_bytes()).map_err(|e| {
-        ContractError::storage_error(format!("failed to remove AskOrder by id [{}]: {:?}", id, e))
-    })?;
+    ask_orders()
+        .remove(storage, id.as_bytes())
+        .map_err(|e| ContractError::StorageError {
+            message: format!("failed to remove AskOrder by id [{}]: {:?}", id, e),
+        })?;
     ().to_ok()
 }
 
@@ -143,6 +151,7 @@ mod tests {
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::ask_types::ask_order::AskOrder;
     use crate::types::request::share_sale_type::ShareSaleType;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::{coins, Addr};
     use provwasm_mocks::mock_dependencies;
 
@@ -156,7 +165,7 @@ mod tests {
                 Addr::unchecked("marker-address"),
                 "marker-denom",
                 100,
-                &coins(100, "nhash"),
+                &coins(100, NHASH),
                 &[],
             ),
             None,
@@ -181,7 +190,7 @@ mod tests {
         let mut order = AskOrder::new_unchecked(
             "ask",
             Addr::unchecked("asker"),
-            AskCollateral::scope_trade("scope", &coins(100, "nhash")),
+            AskCollateral::scope_trade("scope", &coins(100, NHASH)),
             None,
         );
         update_ask_order(deps.as_mut().storage, &order)
@@ -200,7 +209,7 @@ mod tests {
         let order = AskOrder::new_unchecked(
             "ask",
             Addr::unchecked("asker"),
-            AskCollateral::scope_trade("scope", &coins(100, "nhash")),
+            AskCollateral::scope_trade("scope", &coins(100, NHASH)),
             None,
         );
         get_ask_order_by_id(deps.as_ref().storage, &order.id).expect_err("expected a get for the ask order by id to fail when the order does not yet exist in storage");
@@ -221,7 +230,7 @@ mod tests {
         let order = AskOrder::new_unchecked(
             "ask",
             Addr::unchecked("asker"),
-            AskCollateral::scope_trade("scope", &coins(100, "nhash")),
+            AskCollateral::scope_trade("scope", &coins(100, NHASH)),
             None,
         );
         assert!(
@@ -309,7 +318,7 @@ mod tests {
         let order = AskOrder::new_unchecked(
             "ask",
             Addr::unchecked("asker"),
-            AskCollateral::coin_trade(&[], &coins(100, "nhash")),
+            AskCollateral::coin_trade(&[], &coins(100, NHASH)),
             None,
         );
         insert_ask_order(deps.as_mut().storage, &order)

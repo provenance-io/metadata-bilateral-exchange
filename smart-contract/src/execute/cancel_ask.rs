@@ -16,21 +16,22 @@ pub fn cancel_ask(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     // return error if id is empty
     if id.is_empty() {
-        return ContractError::validation_error(&["an id must be provided when cancelling an ask"])
-            .to_err();
+        return ContractError::ValidationError {
+            messages: vec!["an id must be provided when cancelling an ask".to_string()],
+        }
+        .to_err();
     }
-
     // return error if funds sent
     if !info.funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds should not be provided when cancelling an ask",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "funds should not be provided when cancelling an ask".to_string(),
+        }
         .to_err();
     }
     let ask_order = get_ask_order_by_id(deps.storage, &id)?;
     // Only the owner of the ask and the admin can cancel an ask
     if info.sender != ask_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
-        return ContractError::unauthorized().to_err();
+        return ContractError::Unauthorized.to_err();
     }
     let mut messages: Vec<CosmosMsg<ProvenanceMsg>> = vec![];
     match &ask_order.collateral {
@@ -85,6 +86,7 @@ mod tests {
     use crate::types::request::ask_types::ask::Ask;
     use crate::types::request::ask_types::ask_order::AskOrder;
     use crate::types::request::share_sale_type::ShareSaleType;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{coins, from_binary, CosmosMsg, Storage};
     use provwasm_mocks::mock_dependencies;
@@ -133,7 +135,7 @@ mod tests {
     #[test]
     fn test_cancel_ask_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = cancel_ask(
             deps.as_mut(),
             mock_env(),
@@ -159,7 +161,7 @@ mod tests {
         let err = cancel_ask(
             deps.as_mut(),
             mock_env(),
-            mock_info("asker", &coins(100, "nhash")),
+            mock_info("asker", &coins(100, NHASH)),
             "ask_id".to_string(),
         )
         .expect_err("an error should occur when funds are provided");
@@ -219,7 +221,7 @@ mod tests {
 
     fn do_coin_trade_cancel_ask<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(&mut deps.storage);
+        default_instantiate(deps.as_mut());
 
         // create ask data
         let asker_info = mock_info("asker", &coins(200, "base_1"));
@@ -274,7 +276,7 @@ mod tests {
 
     fn do_marker_trade_cancel_ask<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(&mut deps.storage);
+        default_instantiate(deps.as_mut());
         let ask_id = "ask_id".to_string();
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
@@ -282,7 +284,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            Ask::new_marker_trade(&ask_id, DEFAULT_MARKER_DENOM, &coins(150, "nhash")),
+            Ask::new_marker_trade(&ask_id, DEFAULT_MARKER_DENOM, &coins(150, NHASH)),
             None,
         )
         .expect("marker trade ask should be created without issue");
@@ -301,7 +303,7 @@ mod tests {
 
     fn do_marker_share_sale_cancel_ask<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let ask_id = "ask_id".to_string();
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
@@ -313,7 +315,7 @@ mod tests {
                 &ask_id,
                 DEFAULT_MARKER_DENOM,
                 DEFAULT_MARKER_HOLDINGS,
-                &coins(150, "nhash"),
+                &coins(150, NHASH),
                 ShareSaleType::SingleTransaction,
             ),
             None,
@@ -382,7 +384,7 @@ mod tests {
 
     fn do_scope_trade_cancel_test<S: Into<String>>(sender_address: S) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let ask_id = "ask_id".to_string();
         deps.querier
             .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
@@ -390,7 +392,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("asker", &[]),
-            Ask::new_scope_trade(&ask_id, DEFAULT_SCOPE_ADDR, &coins(100, "nhash")),
+            Ask::new_scope_trade(&ask_id, DEFAULT_SCOPE_ADDR, &coins(100, NHASH)),
             None,
         )
         .expect("expected the scope trade to be created successfully");

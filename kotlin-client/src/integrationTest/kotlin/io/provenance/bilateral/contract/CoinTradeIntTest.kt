@@ -9,8 +9,8 @@ import io.provenance.bilateral.execute.ExecuteMatch
 import io.provenance.bilateral.execute.UpdateAsk
 import io.provenance.bilateral.execute.UpdateBid
 import io.provenance.bilateral.models.AttributeRequirement
-import io.provenance.bilateral.models.AttributeRequirementType
 import io.provenance.bilateral.models.RequestDescriptor
+import io.provenance.bilateral.models.enums.AttributeRequirementType
 import org.junit.jupiter.api.Test
 import testconfiguration.ContractIntTest
 import testconfiguration.extensions.getBalance
@@ -57,7 +57,7 @@ class CoinTradeIntTest : ContractIntTest() {
                     descriptor = RequestDescriptor(
                         description = "Example description",
                         effectiveTime = OffsetDateTime.now(),
-                        attributeRequirement = AttributeRequirement.new(listOf("a.pb", "b.pb"), AttributeRequirementType.NONE),
+                        attributeRequirement = AttributeRequirement(listOf("a.pb", "b.pb"), AttributeRequirementType.NONE),
                     )
                 )
             )
@@ -79,7 +79,7 @@ class CoinTradeIntTest : ContractIntTest() {
                     descriptor = RequestDescriptor(
                         description = "Example description",
                         effectiveTime = OffsetDateTime.now(),
-                        attributeRequirement = AttributeRequirement.new(listOf("c.pb"), AttributeRequirementType.NONE),
+                        attributeRequirement = AttributeRequirement(listOf("c.pb"), AttributeRequirementType.NONE),
                     ),
                 )
             )
@@ -151,7 +151,7 @@ class CoinTradeIntTest : ContractIntTest() {
                     descriptor = RequestDescriptor(
                         description = "Example description",
                         effectiveTime = OffsetDateTime.now(),
-                        attributeRequirement = AttributeRequirement.new(listOf("a.pb", "b.pb"), AttributeRequirementType.NONE),
+                        attributeRequirement = AttributeRequirement(listOf("a.pb", "b.pb"), AttributeRequirementType.NONE),
                     ),
                 )
             )
@@ -173,7 +173,7 @@ class CoinTradeIntTest : ContractIntTest() {
                     descriptor = RequestDescriptor(
                         description = "Example description",
                         effectiveTime = OffsetDateTime.now(),
-                        attributeRequirement = AttributeRequirement.new(listOf("c.pb"), AttributeRequirementType.NONE),
+                        attributeRequirement = AttributeRequirement(listOf("c.pb"), AttributeRequirementType.NONE),
                     ),
                 )
             )

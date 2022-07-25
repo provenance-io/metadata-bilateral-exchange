@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.JsonSerializer
 import com.fasterxml.jackson.databind.SerializerProvider
 import java.math.BigInteger
 
+/**
+ * Serializes a [BigInteger] value as a CosmWasm Uint value.  This essentially represents a string-quoted integer value.
+ */
 class CosmWasmBigIntegerToUintSerializer : JsonSerializer<BigInteger>() {
     override fun serialize(value: BigInteger?, gen: JsonGenerator?, serializers: SerializerProvider?) {
         value?.also { bigInt ->

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
-import io.provenance.bilateral.interfaces.ContractExecuteMsg
+import io.provenance.bilateral.interfaces.BilateralContractExecuteMsg
 
 /**
  * An execute match call must be executed by the asker or the admin address.
@@ -23,6 +23,6 @@ data class ExecuteMatch(
     val askId: String,
     val bidId: String,
     val acceptMismatchedBids: Boolean? = null,
-) : ContractExecuteMsg {
+) : BilateralContractExecuteMsg {
     override fun toLoggingString(): String = "executeMatch, askId = [$askId], bidId = [$bidId], acceptMismatchedBids = [$acceptMismatchedBids]"
 }

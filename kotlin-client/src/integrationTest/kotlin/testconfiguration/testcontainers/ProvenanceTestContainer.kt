@@ -12,11 +12,11 @@ import org.testcontainers.containers.wait.strategy.AbstractWaitStrategy
 import testconfiguration.util.CoroutineUtil
 import java.net.URI
 
-class ProvenanceTestContainer : GenericContainer<ProvenanceTestContainer>("provenanceio/provenance:v1.10.0") {
+class ProvenanceTestContainer : GenericContainer<ProvenanceTestContainer>("provenanceio/provenance:v1.11.1") {
     private companion object : KLogging()
 
     init {
-        logger.info("Starting Provenance Blockchain container version v1.10.0")
+        logger.info("Starting Provenance Blockchain container version v1.11.1")
     }
 }
 

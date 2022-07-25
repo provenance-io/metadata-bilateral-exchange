@@ -8,11 +8,22 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import cosmos.base.v1beta1.CoinOuterClass.Coin
 import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
-import io.provenance.bilateral.util.CoinUtil
 import java.math.BigInteger
 
+/**
+ * The structure required to create a Bid within the Metadata Bilateral Exchange smart contract.  Each implementation
+ * represents a different bid type.
+ */
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 sealed interface Bid {
+    /**
+     * A bid that specifies coin as the collateral [quote] and requests to match with an ask with the listed [base].
+     *
+     * @param id The unique identifier for the bid.
+     * @param quote The amount of funds sent by the bidder.  This amount will be transferred to the asker on a
+     * successful match.
+     * @param base The amount of funds to be received by the bidder on a successful match.
+     */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy::class)
     @JsonTypeName("coin_trade")
     data class CoinTradeBid(
@@ -23,6 +34,16 @@ sealed interface Bid {
         val base: List<Coin>,
     ) : Bid
 
+    /**
+     * A bid that specifies coin as the collateral [quote] and requests to receive a marker in exchange.
+     *
+     * @param id The unique identifier for the bid.
+     * @param markerDenom The denomination of the marker that the bid requests in exchange for the [quote].
+     * @param withdrawSharesAfterMatch If set to true, all shares of the marker's denom will be withdrawn and sent to
+     * the bidder after a successful match is made.
+     * @param quote The amount of funds sent by the bidder.  This amount will be transferred to the asker on a successful
+     * match.
+     */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy::class)
     @JsonTypeName("marker_trade")
     data class MarkerTradeBid(
@@ -34,6 +55,17 @@ sealed interface Bid {
         val quote: List<Coin>,
     ) : Bid
 
+    /**
+     * A bid that specifies coin as the collateral [quote] and requests to receive a specific number of marker shares
+     * in exchange.
+     *
+     * @param id The unique identifier for the bid.
+     * @param markerDenom The denomination of the marker shares that the bid requests in exchange for the quote.
+     * @param shareCount The amount of marker shares to purchase.  Ex: If the [markerDenom] is "example" and the
+     * [shareCount] is 50, the bidder will receive 50example after the match completes.
+     * @param quote The amount of funds sent by the bidder.  This amount will be transferred to the asker on a successful
+     * match.
+     */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy::class)
     @JsonTypeName("marker_share_sale")
     data class MarkerShareSaleBid(
@@ -46,6 +78,14 @@ sealed interface Bid {
         val quote: List<Coin>,
     ) : Bid
 
+    /**
+     * A bid that specifies coin as the collateral [quote] and requests to receive a scope in exchange.
+     *
+     * @param id The unique identifier for the bid.
+     * @param scopeAddress The bech32 address for the scope to be received by the bidder.
+     * @param quote The amount of funds sent by the bidder.  This amount will be transferred to the asker on a successful
+     * match.
+     */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy::class)
     @JsonTypeName("scope_trade")
     data class ScopeTradeBid(
@@ -56,6 +96,10 @@ sealed interface Bid {
         val quote: List<Coin>,
     ) : Bid
 
+    /**
+     * Allows the bid type to be consumed and mapped based on value.  This can be used to derive an output type for any
+     * of the request types.
+     */
     fun <T> map(
         coinTrade: (coinTrade: CoinTradeBid) -> T,
         markerTrade: (markerTrade: MarkerTradeBid) -> T,
@@ -68,6 +112,9 @@ sealed interface Bid {
         is ScopeTradeBid -> scopeTrade(this)
     }
 
+    /**
+     * Maps each type of bid to its respective id property.
+     */
     fun mapToId(): String = map(
         coinTrade = { coinTrade -> coinTrade.id },
         markerTrade = { markerTrade -> markerTrade.id },
@@ -75,14 +122,16 @@ sealed interface Bid {
         scopeTrade = { scopeTrade -> scopeTrade.id },
     )
 
-    fun mapToFunds(bidFee: List<Coin>? = null): List<Coin> = map(
+    /**
+     * Maps each type of bid to its funds that will be required during its creation.  This function is used to establish
+     * the correct amount of funds that must be sent by the bidder when creating a bid.
+     */
+    fun mapToFunds(): List<Coin> = map(
         coinTrade = { coinTrade -> coinTrade.quote },
         markerTrade = { markerTrade -> markerTrade.quote },
         markerShareSale = { markerShareSale -> markerShareSale.quote },
         scopeTrade = { scopeTrade -> scopeTrade.quote },
-    ).let { funds ->
-        bidFee?.let { CoinUtil.combineFunds(funds, bidFee) } ?: funds
-    }
+    )
 }
 
 /**

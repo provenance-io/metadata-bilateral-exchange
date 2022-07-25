@@ -210,7 +210,10 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
     if invalid_field_messages.is_empty() {
         ().to_ok()
     } else {
-        ContractError::validation_error(&invalid_field_messages).to_err()
+        ContractError::ValidationError {
+            messages: invalid_field_messages,
+        }
+        .to_err()
     }
 }
 
@@ -226,6 +229,7 @@ mod tests {
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
     use crate::types::request::share_sale_type::ShareSaleType;
+    use crate::util::constants::NHASH;
     use crate::validation::ask_order_validation::validate_ask_order;
     use cosmwasm_std::{coins, Addr};
     use provwasm_std::AccessGrant;
@@ -312,7 +316,7 @@ mod tests {
     fn test_coin_trade_empty_base() {
         assert_validation_failure(
             "ask order is missing coin trade base funds",
-            &mock_ask_order(AskCollateral::coin_trade(&[], &coins(100, "nhash"))),
+            &mock_ask_order(AskCollateral::coin_trade(&[], &coins(100, NHASH))),
             coin_trade_error("must include base funds"),
         );
     }
@@ -321,8 +325,8 @@ mod tests {
     fn test_coin_trade_base_funds_include_invalid_coins() {
         assert_validation_failure(
             "ask order includes base coin with zero amount",
-            &mock_ask_order(AskCollateral::coin_trade(&coins(0, "nhash"), &[])),
-            zero_coin_error("nhash", "AskCollateral Base Coin"),
+            &mock_ask_order(AskCollateral::coin_trade(&coins(0, NHASH), &[])),
+            zero_coin_error(NHASH, "AskCollateral Base Coin"),
         );
         assert_validation_failure(
             "ask order includes base coin with invalid denom",
@@ -335,7 +339,7 @@ mod tests {
     fn test_coin_trade_empty_quote() {
         assert_validation_failure(
             "ask order is missing coin trade quote funds",
-            &mock_ask_order(AskCollateral::coin_trade(&coins(100, "nhash"), &[])),
+            &mock_ask_order(AskCollateral::coin_trade(&coins(100, NHASH), &[])),
             coin_trade_error("must include quote funds"),
         );
     }
@@ -344,8 +348,8 @@ mod tests {
     fn test_coin_trade_quote_funds_include_invalid_coins() {
         assert_validation_failure(
             "ask order includes quote coin with zero amount",
-            &mock_ask_order(AskCollateral::coin_trade(&[], &coins(0, "nhash"))),
-            zero_coin_error("nhash", "AskCollateral Quote Coin"),
+            &mock_ask_order(AskCollateral::coin_trade(&[], &coins(0, NHASH))),
+            zero_coin_error(NHASH, "AskCollateral Quote Coin"),
         );
         assert_validation_failure(
             "ask order includes base coin with invalid denom",
@@ -358,12 +362,7 @@ mod tests {
     fn test_marker_trade_empty_marker_address() {
         assert_validation_failure(
             "ask order does not include a valid marker address",
-            &mock_ask_order(mock_ask_marker_trade(
-                "",
-                "denom",
-                100,
-                &coins(100, "nhash"),
-            )),
+            &mock_ask_order(mock_ask_marker_trade("", "denom", 100, &coins(100, NHASH))),
             marker_trade_error("must have a valid marker address"),
         );
     }
@@ -376,7 +375,7 @@ mod tests {
                 "marker_addr",
                 "",
                 100,
-                &coins(100, "nhash"),
+                &coins(100, NHASH),
             )),
             marker_trade_error("must have a specified denom"),
         );
@@ -390,7 +389,7 @@ mod tests {
                 "marker_addr",
                 "denom",
                 0,
-                &coins(100, "nhash"),
+                &coins(100, NHASH),
             )),
             marker_trade_error("must refer to a marker with at least one of its coins held"),
         );
@@ -413,9 +412,9 @@ mod tests {
                 "marker_addr",
                 "denom",
                 100,
-                &coins(0, "nhash"),
+                &coins(0, NHASH),
             )),
-            zero_coin_error("nhash", "AskCollateral Quote per Share Coin"),
+            zero_coin_error(NHASH, "AskCollateral Quote per Share Coin"),
         );
         assert_validation_failure(
             "ask order includes quote coin with invalid denom",
@@ -437,7 +436,7 @@ mod tests {
                 Addr::unchecked("marker_address"),
                 "denom",
                 100,
-                &coins(150, "nhash"),
+                &coins(150, NHASH),
                 &[AccessGrant {
                     permissions: vec![],
                     address: Addr::unchecked("some rando"),
@@ -504,10 +503,10 @@ mod tests {
                 "denom",
                 10,
                 10,
-                &coins(0, "nhash"),
+                &coins(0, NHASH),
                 ShareSaleType::SingleTransaction,
             )),
-            zero_coin_error("nhash", "AskCollateral Quote per Share Coin"),
+            zero_coin_error(NHASH, "AskCollateral Quote per Share Coin"),
         );
         assert_validation_failure(
             "ask order includes quote per share with invalid denom in coin",
@@ -532,7 +531,7 @@ mod tests {
                 "denom",
                 100,
                 100,
-                &coins(150, "nhash"),
+                &coins(150, NHASH),
                 &[AccessGrant {
                     permissions: vec![],
                     address: Addr::unchecked("some rando"),
@@ -574,7 +573,7 @@ mod tests {
     fn test_scope_trade_missing_scope_address() {
         assert_validation_failure(
             "ask order does not include a valid scope address",
-            &mock_ask_order(mock_ask_scope_trade("", &coins(100, "nhash"))),
+            &mock_ask_order(mock_ask_scope_trade("", &coins(100, NHASH))),
             scope_trade_error("must have a valid scope address"),
         );
     }
@@ -592,8 +591,8 @@ mod tests {
     fn test_scope_trade_quote_includes_invalid_coins() {
         assert_validation_failure(
             "ask order includes quote with zero amount in coin",
-            &mock_ask_order(mock_ask_scope_trade("scope", &coins(0, "nhash"))),
-            zero_coin_error("nhash", "AskCollateral Quote"),
+            &mock_ask_order(mock_ask_scope_trade("scope", &coins(0, NHASH))),
+            zero_coin_error(NHASH, "AskCollateral Quote"),
         );
         assert_validation_failure(
             "ask order includes quote with invalid denom in coin",

@@ -2,8 +2,8 @@ use crate::types::core::error::ContractError;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{coin, Addr, Coin, CosmosMsg};
 use provwasm_std::{
-    grant_marker_access, revoke_marker_access, AccessGrant, Marker, MarkerAccess, Party, PartyType,
-    ProvenanceMsg, Scope,
+    grant_marker_access, revoke_marker_access, AccessGrant, Marker, MarkerAccess, MsgFeesMsgParams,
+    Party, PartyType, ProvenanceMsg, ProvenanceMsgParams, Scope,
 };
 
 pub fn format_coin_display(coins: &[Coin]) -> String {
@@ -42,12 +42,14 @@ pub fn get_single_marker_coin_holding(marker: &Marker) -> Result<Coin, ContractE
         .filter(|coin| coin.denom == marker.denom)
         .collect::<Vec<Coin>>();
     if marker_denom_holdings.len() != 1 {
-        return ContractError::invalid_marker(format!(
-            "expected marker [{}] to have a single coin entry for denom [{}], but it did not. Holdings: [{}]",
-            marker.address.as_str(),
-            marker.denom,
-            format_coin_display(&marker.coins),
-        )).to_err();
+        return ContractError::InvalidMarker {
+            message: format!(
+                "expected marker [{}] to have a single coin entry for denom [{}], but it did not. Holdings: [{}]",
+                marker.address.as_str(),
+                marker.denom,
+                format_coin_display(&marker.coins),
+            )
+        }.to_err();
     }
     marker_denom_holdings.first().unwrap().to_owned().to_ok()
 }
@@ -101,9 +103,9 @@ pub fn check_scope_owners(
         .collect::<Vec<&Party>>();
     // if more than one owner is specified, removing all of them can potentially cause data loss
     if owners.len() != 1 {
-        return ContractError::invalid_scope_owner(
-            &scope.scope_id,
-            format!(
+        return ContractError::InvalidScopeOwner {
+            scope_address: scope.scope_id.to_owned(),
+            explanation: format!(
                 "the scope should only include a single owner, but found: [{}]",
                 owners
                     .iter()
@@ -111,33 +113,33 @@ pub fn check_scope_owners(
                     .collect::<Vec<&str>>()
                     .join(", "),
             ),
-        )
+        }
         .to_err();
     }
     if let Some(expected) = expected_owner {
         let owner = owners.first().unwrap();
         if &owner.address != expected {
-            return ContractError::invalid_scope_owner(
-                &scope.scope_id,
-                format!(
+            return ContractError::InvalidScopeOwner {
+                scope_address: scope.scope_id.to_owned(),
+                explanation: format!(
                     "the scope owner was expected to be [{}], not [{}]",
                     expected,
                     owner.address.as_str(),
                 ),
-            )
+            }
             .to_err();
         }
     }
     if let Some(expected) = expected_value_owner {
         if &scope.value_owner_address != expected {
-            return ContractError::invalid_scope_owner(
-                &scope.scope_id,
-                format!(
+            return ContractError::InvalidScopeOwner {
+                scope_address: scope.scope_id.to_owned(),
+                explanation: format!(
                     "the scope's value owner was expected to be [{}], not [{}]",
                     expected,
                     scope.value_owner_address.as_str(),
                 ),
-            )
+            }
             .to_err();
         }
     }
@@ -163,14 +165,34 @@ pub fn replace_scope_owner(mut scope: Scope, new_owner: Addr) -> Scope {
     scope
 }
 
+pub fn get_custom_fee_amount_display(
+    msg: &CosmosMsg<ProvenanceMsg>,
+) -> Result<String, ContractError> {
+    match msg {
+        CosmosMsg::Custom(ProvenanceMsg {
+            params: ProvenanceMsgParams::MsgFees(MsgFeesMsgParams::AssessCustomFee { amount, .. }),
+            ..
+        }) => format!("{}{}", amount.amount.u128(), &amount.denom).to_ok(),
+        msg => ContractError::GenericError {
+            message: format!(
+                "expected MsgFees AssessCustomFee provenance msg but got: {:?}",
+                msg
+            ),
+        }
+        .to_err(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test::mock_instantiate::DEFAULT_ADMIN_ADDRESS;
     use crate::test::mock_marker::MockMarker;
     use crate::test::mock_scope::MockScope;
-    use cosmwasm_std::coins;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
-    use provwasm_std::{MarkerMsgParams, ProvenanceMsgParams};
+    use cosmwasm_std::{coins, BankMsg};
+    use provwasm_std::{assess_custom_fee, MarkerMsgParams, ProvenanceMsgParams};
 
     #[test]
     fn test_format_coin_display() {
@@ -181,7 +203,7 @@ mod tests {
         );
         assert_eq!(
             "150nhash",
-            format_coin_display(&coins(150, "nhash")),
+            format_coin_display(&coins(150, NHASH)),
             "single coin display should produce a simple result",
         );
         assert_eq!(
@@ -367,7 +389,7 @@ mod tests {
             "good", marker_coin.denom,
             "expected the coin's denom to be unaltered",
         );
-        good_marker.coins = vec![marker_coin.clone(), coin(10, "bitcoin"), coin(15, "nhash")];
+        good_marker.coins = vec![marker_coin.clone(), coin(10, "bitcoin"), coin(15, NHASH)];
         let extra_holdings_coin = get_single_marker_coin_holding(&good_marker).expect("expected a marker containing a single entry of its own denom and some other holdings to produce a coin response");
         assert_eq!(
             marker_coin, extra_holdings_coin,
@@ -565,5 +587,33 @@ mod tests {
             }
             e => panic!("unexpected error type encountered: {:?}", e),
         }
+    }
+
+    #[test]
+    fn test_get_custom_fee_amount_display() {
+        let invalid_msg: CosmosMsg<ProvenanceMsg> = CosmosMsg::Bank(BankMsg::Send {
+            to_address: "some_person".to_string(),
+            amount: coins(100, NHASH),
+        });
+        let err = get_custom_fee_amount_display(&invalid_msg)
+            .expect_err("when a non custom fees msg is used, an error should be produced");
+        assert!(
+            matches!(err, ContractError::GenericError { .. }),
+            "a generic error should be returned when the wrong msg type is used, but got: {:?}",
+            err,
+        );
+        let valid_msg: CosmosMsg<ProvenanceMsg> = assess_custom_fee(
+            coin(250, NHASH),
+            Some("some_person"),
+            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Some(Addr::unchecked(DEFAULT_ADMIN_ADDRESS)),
+        )
+        .expect("expected custom fee msg to be created with issue");
+        let display_string = get_custom_fee_amount_display(&valid_msg)
+            .expect("a display string should be produced from a fee msg");
+        assert_eq!(
+            "250nhash", display_string,
+            "the display string should be properly formatted",
+        );
     }
 }

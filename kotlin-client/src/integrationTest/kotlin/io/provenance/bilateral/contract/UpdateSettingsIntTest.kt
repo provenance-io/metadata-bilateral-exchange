@@ -5,17 +5,17 @@ import org.junit.jupiter.api.Test
 import testconfiguration.ContractIntTest
 import testconfiguration.accounts.BilateralAccounts
 import testconfiguration.functions.assertSucceeds
-import testconfiguration.functions.newCoins
+import java.math.BigInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 
 class UpdateSettingsIntTest : ContractIntTest() {
     @Test
     fun testUpdateSettingAll() {
-        val firstUpdateSettings = UpdateSettings.new(
+        val firstUpdateSettings = UpdateSettings(
             newAdminAddress = BilateralAccounts.askerAccount.address(),
-            askFee = newCoins(100, "askcoin"),
-            bidFee = newCoins(100, "bidcoin"),
+            newCreateAskNhashFee = 100.toBigInteger(),
+            newCreateBidNhashFee = 150.toBigInteger(),
         )
         assertFails("An update not originating from the admin should be rejected") {
             bilateralClient.updateSettings(firstUpdateSettings, BilateralAccounts.askerAccount)
@@ -29,21 +29,21 @@ class UpdateSettingsIntTest : ContractIntTest() {
             message = "The new admin address should be in the response",
         )
         assertEquals(
-            expected = "100askcoin",
+            expected = "100nhash",
             actual = firstResponse.newAskFee,
             message = "The new ask fee should be in the response",
         )
         assertEquals(
-            expected = "100bidcoin",
+            expected = "150nhash",
             actual = firstResponse.newBidFee,
             message = "The new bid fee should be in the response",
         )
         assertContractInfoValuesWereChanged(firstUpdateSettings)
         // Put everything back to normal
-        val secondUpdateSettings = UpdateSettings.new(
+        val secondUpdateSettings = UpdateSettings(
             newAdminAddress = BilateralAccounts.adminAccount.address(),
-            askFee = null,
-            bidFee = null,
+            newCreateAskNhashFee = BigInteger.ZERO,
+            newCreateBidNhashFee = BigInteger.ZERO,
         )
         assertFails("An update not originating from the asker should be rejected") {
             bilateralClient.updateSettings(secondUpdateSettings, BilateralAccounts.adminAccount)
@@ -57,14 +57,14 @@ class UpdateSettingsIntTest : ContractIntTest() {
             message = "The new new admin address should be in the response",
         )
         assertEquals(
-            expected = "none",
+            expected = "disabled",
             actual = secondResponse.newAskFee,
-            message = "The new ask fee should be none, indicating that it was cleared",
+            message = "The new ask fee should be disabled, indicating that it was cleared",
         )
         assertEquals(
-            expected = "none",
+            expected = "disabled",
             actual = secondResponse.newBidFee,
-            message = "The new bid fee should be none, indicating that it was cleared",
+            message = "The new bid fee should be disabled, indicating that it was cleared",
         )
         assertContractInfoValuesWereChanged(secondUpdateSettings)
     }
@@ -77,13 +77,13 @@ class UpdateSettingsIntTest : ContractIntTest() {
             message = "The admin address should be properly altered to match the request",
         )
         assertEquals(
-            expected = updateSettings.update.askFee,
-            actual = contractInfo.askFee,
+            expected = updateSettings.update.newCreateAskNhashFee,
+            actual = contractInfo.createAskNhashFee,
             message = "The ask fee should be properly altered to match the request",
         )
         assertEquals(
-            expected = updateSettings.update.bidFee,
-            actual = contractInfo.bidFee,
+            expected = updateSettings.update.newCreateBidNhashFee,
+            actual = contractInfo.createBidNhashFee,
             message = "The bid fee should be properly altered to match the request",
         )
     }

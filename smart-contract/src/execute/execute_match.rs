@@ -41,13 +41,16 @@ pub fn execute_match(
     }
     // return error if either ids are badly formed
     if !invalid_fields.is_empty() {
-        return ContractError::validation_error(&invalid_fields).to_err();
+        return ContractError::ValidationError {
+            messages: invalid_fields,
+        }
+        .to_err();
     }
     // return error if funds sent
     if !info.funds.is_empty() {
-        return ContractError::invalid_funds_provided(
-            "funds should not be provided during match execution",
-        )
+        return ContractError::InvalidFundsProvided {
+            message: "funds should not be provided during match execution".to_string(),
+        }
         .to_err();
     }
     let ask_order = get_ask_order_by_id(deps.storage, &ask_id)?;
@@ -57,7 +60,7 @@ pub fn execute_match(
     let accept_mismatched_bids = accept_mismatched_bids.unwrap_or(false);
     // only the admin or the asker may execute matches
     if info.sender != ask_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
-        return ContractError::unauthorized().to_err();
+        return ContractError::Unauthorized.to_err();
     }
     validate_match(
         &deps.as_ref(),
@@ -179,10 +182,12 @@ fn execute_marker_trade(
             &[bidder_permissions],
         )?);
     } else {
-        return ContractError::validation_error(&[
-            "failed to find access permissions in the revoked permissions for the asker"
-                .to_string(),
-        ])
+        return ContractError::ValidationError {
+            messages: vec![
+                "failed to find access permissions in the revoked permissions for the asker"
+                    .to_string(),
+            ],
+        }
         .to_err();
     }
     // Send the entirety of the quote to the asker. They have just effectively sold their
@@ -318,6 +323,7 @@ mod tests {
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::bid_types::bid::Bid;
     use crate::types::request::share_sale_type::ShareSaleType;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{coins, BankMsg, Coin, CosmosMsg, Response, Storage, Uint128};
     use provwasm_mocks::mock_dependencies;
@@ -328,7 +334,7 @@ mod tests {
     #[test]
     fn test_execute_match_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         let err = execute_match(
             deps.as_mut(),
             mock_env(),
@@ -352,7 +358,7 @@ mod tests {
         let err = execute_match(
             deps.as_mut(),
             mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &coins(100, "nhash")),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &coins(100, NHASH)),
             "ask_id".to_string(),
             "bid_id".to_string(),
             None,
@@ -639,7 +645,7 @@ mod tests {
 
     fn do_coin_trade_test<S: Into<String>>(match_sender_address: S, mismatched_quotes: bool) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         create_ask(
             deps.as_mut(),
             mock_env(),
@@ -659,6 +665,7 @@ mod tests {
         );
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &bid_quote),
             Bid::new_coin_trade("bid_id", &coins(100, "base")),
             None,
@@ -718,7 +725,7 @@ mod tests {
         withdraw_shares: Option<bool>,
     ) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -737,6 +744,7 @@ mod tests {
         };
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &bid_quote),
             Bid::new_marker_trade("bid_id", DEFAULT_MARKER_DENOM, withdraw_shares),
             None,
@@ -843,7 +851,7 @@ mod tests {
         mismatched_quotes: bool,
     ) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -868,6 +876,7 @@ mod tests {
         };
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &bid_quote),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
             None,
@@ -966,7 +975,7 @@ mod tests {
         mismatched_quotes: bool,
     ) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_markers(vec![MockMarker::new_owned_marker("asker")]);
         create_ask(
@@ -992,6 +1001,7 @@ mod tests {
         // Create the first bid that only buys half the shares for sale
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &first_bid_quote),
             Bid::new_marker_share_sale("bid_id_1", DEFAULT_MARKER_DENOM, 50),
             None,
@@ -1119,6 +1129,7 @@ mod tests {
         };
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &second_bid_quote),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 50),
             None,
@@ -1213,7 +1224,7 @@ mod tests {
 
     fn do_scope_trade_test<S: Into<String>>(match_sender_address: S, mismatched_quotes: bool) {
         let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut().storage);
+        default_instantiate(deps.as_mut());
         deps.querier
             .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
         create_ask(
@@ -1232,6 +1243,7 @@ mod tests {
         };
         create_bid(
             deps.as_mut(),
+            mock_env(),
             mock_info("bidder", &bid_quote),
             Bid::new_scope_trade("bid_id", DEFAULT_SCOPE_ADDR),
             None,

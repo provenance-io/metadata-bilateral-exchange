@@ -1,7 +1,6 @@
 use crate::types::core::error::ContractError;
 use crate::types::request::settings_update::SettingsUpdate;
 use crate::util::extensions::ResultExtensions;
-use crate::validation::generic_validation::validate_coin_vector;
 
 pub fn validate_settings_update(update: &SettingsUpdate) -> Result<(), ContractError> {
     let mut validation_errors: Vec<String> = vec![];
@@ -10,14 +9,11 @@ pub fn validate_settings_update(update: &SettingsUpdate) -> Result<(), ContractE
             validation_errors.push("new_admin_address was empty".to_string());
         }
     }
-    if let Some(ref new_ask_fee) = update.ask_fee {
-        validation_errors.append(&mut validate_coin_vector("new_ask_fee", new_ask_fee));
-    }
-    if let Some(ref new_bid_fee) = update.bid_fee {
-        validation_errors.append(&mut validate_coin_vector("new_bid_fee", new_bid_fee));
-    }
     if !validation_errors.is_empty() {
-        ContractError::validation_error(&validation_errors).to_err()
+        ContractError::ValidationError {
+            messages: validation_errors,
+        }
+        .to_err()
     } else {
         ().to_ok()
     }
@@ -36,34 +32,8 @@ mod tests {
             "new_admin_address was empty",
             SettingsUpdate {
                 new_admin_address: Some("".to_string()),
-                ask_fee: None,
-                bid_fee: None,
-            },
-        );
-    }
-
-    #[test]
-    fn test_invalid_ask_fee() {
-        assert_single_error_message(
-            "ask fee was provided but empty",
-            "new_ask_fee was empty",
-            SettingsUpdate {
-                new_admin_address: None,
-                ask_fee: Some(vec![]),
-                bid_fee: None,
-            },
-        );
-    }
-
-    #[test]
-    fn test_invalid_bid_fee() {
-        assert_single_error_message(
-            "bid fee was provided but empty",
-            "new_bid_fee was empty",
-            SettingsUpdate {
-                new_admin_address: None,
-                ask_fee: None,
-                bid_fee: Some(vec![]),
+                new_create_ask_nhash_fee: None,
+                new_create_bid_nhash_fee: None,
             },
         );
     }
