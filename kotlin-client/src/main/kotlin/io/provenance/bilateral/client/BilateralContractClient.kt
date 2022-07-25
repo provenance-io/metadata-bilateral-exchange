@@ -290,6 +290,7 @@ class BilateralContractClient private constructor(
     ).let { (event, data) ->
         CreateAskResponse(
             askId = event.attribute("ask_id"),
+            askFeeCharged = event.attributeOrNull("ask_fee_charged"),
             askOrder = deserializeResponseData(data),
         )
     }
@@ -339,6 +340,7 @@ class BilateralContractClient private constructor(
     ).let { (event, data) ->
         CreateBidResponse(
             bidId = event.attribute("bid_id"),
+            bidFeeCharged = event.attributeOrNull("bid_fee_charged"),
             bidOrder = deserializeResponseData(data),
         )
     }

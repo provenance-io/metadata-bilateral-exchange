@@ -14,6 +14,7 @@ import testconfiguration.functions.giveTestDenom
 import testconfiguration.functions.newCoin
 import testconfiguration.functions.newCoins
 import java.util.UUID
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class FeesIntTest : ContractIntTest() {
@@ -36,7 +37,7 @@ class FeesIntTest : ContractIntTest() {
         val quote = newCoins(1000, "somequote")
         val base = newCoins(1000, askerDenom)
         val askUuid = UUID.randomUUID()
-        assertSucceeds("Ask should be created without error") {
+        val response = assertSucceeds("Ask should be created without error") {
             createAsk(
                 createAsk = CreateAsk(
                     ask = CoinTradeAsk(
@@ -47,6 +48,11 @@ class FeesIntTest : ContractIntTest() {
                 ),
             )
         }
+        assertEquals(
+            expected = "${askFee}nhash",
+            actual = response.askFeeCharged,
+            message = "The correct ask fee charged value should be omitted",
+        )
         val paidNhashForAskCreation = startingHashBalance - pbClient.getBalance(asker.address(), "nhash")
         assertTrue(
             actual = paidNhashForAskCreation >= askFee,
@@ -74,7 +80,7 @@ class FeesIntTest : ContractIntTest() {
         val quote = newCoins(1000, bidderDenom)
         val base = newCoins(1000, "somebasedenom")
         val bidUuid = UUID.randomUUID()
-        assertSucceeds("Bid should be created without error") {
+        val response = assertSucceeds("Bid should be created without error") {
             createBid(
                 createBid = CreateBid(
                     bid = CoinTradeBid(
@@ -85,6 +91,11 @@ class FeesIntTest : ContractIntTest() {
                 ),
             )
         }
+        assertEquals(
+            expected = "${bidFee}nhash",
+            actual = response.bidFeeCharged,
+            message = "The correct bid fee charged value should be omitted",
+        )
         val paidNhashForBidCreation = startingHashBalance - pbClient.getBalance(bidder.address(), "nhash")
         assertTrue(
             actual = paidNhashForBidCreation >= bidFee,
