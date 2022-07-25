@@ -2,12 +2,14 @@ package testconfiguration.util
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
+import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastMode
 import cosmwasm.wasm.v1.Tx.MsgInstantiateContract
 import cosmwasm.wasm.v1.Tx.MsgStoreCode
 import cosmwasm.wasm.v1.Types.AccessConfig
 import cosmwasm.wasm.v1.Types.AccessType
 import io.provenance.bilateral.interfaces.BilateralContractMsg
+import io.provenance.bilateral.serialization.CosmWasmBigIntegerToUintSerializer
 import io.provenance.client.grpc.BaseReqSigner
 import io.provenance.client.grpc.PbClient
 import io.provenance.client.grpc.Signer
@@ -18,6 +20,7 @@ import mu.KotlinLogging
 import testconfiguration.extensions.getCodeId
 import testconfiguration.extensions.getContractAddress
 import java.io.ByteArrayOutputStream
+import java.math.BigInteger
 import java.util.zip.GZIPOutputStream
 
 object BilateralSmartContractUtil {
@@ -91,8 +94,12 @@ object BilateralSmartContractUtil {
 data class MetadataBilateralExchangeInstantiateMsg(
     val bindName: String,
     val contractName: String,
+    @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
+    val createAskNhashFee: BigInteger? = null,
+    @JsonSerialize(using = CosmWasmBigIntegerToUintSerializer::class)
+    val createBidNhashFee: BigInteger? = null,
 ) : BilateralContractMsg {
-    override fun toLoggingString(): String = "metadataBilateralExchangeInstantiateMsg, bindName = [$bindName], contractName = [$contractName]"
+    override fun toLoggingString(): String = "metadataBilateralExchangeInstantiateMsg, bindName = [$bindName], contractName = [$contractName], creatAskNhashFee = [$createAskNhashFee], createBidNhashFee = [$createBidNhashFee]"
 }
 
 data class ContractInstantiationResult(

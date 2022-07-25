@@ -3,7 +3,7 @@ package io.provenance.bilateral.models.enums
 import com.fasterxml.jackson.annotation.JsonProperty
 
 /**
- * See CreateAsk for a JSON payload that includes this object's use.
+ * Specifies the type of marker share sale that is to be executed when a match occurs on the corresponding ask order.
  */
 enum class ShareSaleType {
     @JsonProperty("single_transaction") SINGLE_TRANSACTION,

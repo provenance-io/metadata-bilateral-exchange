@@ -60,15 +60,12 @@ data class SearchBids(val search: ContractSearchRequest) : BilateralContractQuer
 
 sealed interface ContractSearchType {
     @JsonNaming(SnakeCaseStrategy::class)
-    @JsonTypeName("all")
     object All : ContractSearchType {
         @JsonValue
         fun serializeAs(): String = "all"
     }
 
     @JsonNaming(SnakeCaseStrategy::class)
-    @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
-    @JsonTypeName("value_type")
     class Type private constructor(val valueType: Body) : ContractSearchType {
         constructor(valueType: BilateralRequestType) : this(Body(valueType))
 
@@ -76,8 +73,6 @@ sealed interface ContractSearchType {
     }
 
     @JsonNaming(SnakeCaseStrategy::class)
-    @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
-    @JsonTypeName("id")
     class Id private constructor(val id: Body) : ContractSearchType {
         constructor(id: String) : this(Body(id))
 
@@ -85,8 +80,6 @@ sealed interface ContractSearchType {
     }
 
     @JsonNaming(SnakeCaseStrategy::class)
-    @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
-    @JsonTypeName("owner")
     class Owner private constructor(val owner: Body) : ContractSearchType {
         constructor(owner: String) : this(Body(owner))
 

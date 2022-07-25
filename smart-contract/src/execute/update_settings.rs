@@ -7,6 +7,8 @@ use crate::validation::settings_update_validation::validate_settings_update;
 use cosmwasm_std::{DepsMut, MessageInfo, Response};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
 
+const DISABLED_FEE_DISPLAY: &str = "disabled";
+
 pub fn update_settings(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
@@ -32,14 +34,22 @@ pub fn update_settings(
         contract_info.create_ask_nhash_fee = new_ask_fee.to_owned();
         attributes.push((
             "new_ask_fee".to_string(),
-            format!("{}{}", new_ask_fee.u128(), NHASH),
+            if new_ask_fee.is_zero() {
+                DISABLED_FEE_DISPLAY.to_string()
+            } else {
+                format!("{}{}", new_ask_fee.u128(), NHASH)
+            },
         ));
     }
     if let Some(ref new_bid_fee) = &update.new_create_bid_nhash_fee {
         contract_info.create_bid_nhash_fee = new_bid_fee.to_owned();
         attributes.push((
             "new_bid_fee".to_string(),
-            format!("{}{}", new_bid_fee.u128(), NHASH),
+            if new_bid_fee.is_zero() {
+                DISABLED_FEE_DISPLAY.to_string()
+            } else {
+                format!("{}{}", new_bid_fee.u128(), NHASH)
+            },
         ));
     }
     // Save changes to the contract information
@@ -52,7 +62,7 @@ pub fn update_settings(
 
 #[cfg(test)]
 mod tests {
-    use crate::execute::update_settings::update_settings;
+    use crate::execute::update_settings::{update_settings, DISABLED_FEE_DISPLAY};
     use crate::storage::contract_info::get_contract_info;
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::mock_instantiate::{
@@ -181,6 +191,49 @@ mod tests {
             150,
             contract_info.create_bid_nhash_fee.u128(),
             "the correct bid fee should be set in contract info",
+        );
+        // Ensure that disabling the fees will set the proper text
+        let response = update_settings(
+            deps.as_mut(),
+            mock_info("new_admin", &[]),
+            SettingsUpdate {
+                new_admin_address: None,
+                new_create_ask_nhash_fee: Some(Uint128::zero()),
+                new_create_bid_nhash_fee: Some(Uint128::zero()),
+            },
+        )
+        .expect("disabling ask and bid fees with a zero amount should succeed");
+        assert_eq!(
+            3,
+            response.attributes.len(),
+            "three attributes should be returned in the response",
+        );
+        assert_eq!(
+            "update_settings",
+            single_attribute_for_key(&response, "action"),
+            "the correct action attribute value should be set",
+        );
+        assert_eq!(
+            DISABLED_FEE_DISPLAY,
+            single_attribute_for_key(&response, "new_ask_fee"),
+            "the ask fee attribute should display a disabled message",
+        );
+        assert_eq!(
+            DISABLED_FEE_DISPLAY,
+            single_attribute_for_key(&response, "new_bid_fee"),
+            "the bid fee attribute should display a disabled message",
+        );
+        let contract_info = get_contract_info(deps.as_ref().storage)
+            .expect("expected contract info to load correctly");
+        assert_eq!(
+            0,
+            contract_info.create_ask_nhash_fee.u128(),
+            "the new create ask fee should be set to zero",
+        );
+        assert_eq!(
+            0,
+            contract_info.create_bid_nhash_fee.u128(),
+            "the new create bid fee should be set to zero",
         );
     }
 

@@ -1,6 +1,5 @@
 package testconfiguration.extensions
 
-import cosmos.base.v1beta1.CoinOuterClass.Coin
 import io.provenance.bilateral.client.BilateralContractClient
 import io.provenance.bilateral.execute.UpdateSettings
 import io.provenance.bilateral.models.AskCollateral
@@ -8,20 +7,21 @@ import io.provenance.bilateral.models.AskOrder
 import io.provenance.bilateral.models.BidCollateral
 import io.provenance.bilateral.models.BidOrder
 import testconfiguration.accounts.BilateralAccounts
+import java.math.BigInteger
 import kotlin.test.assertEquals
 import kotlin.test.fail
 
-fun BilateralContractClient.setFees(askFee: List<Coin>? = null, bidFee: List<Coin>? = null) {
-    updateSettings(UpdateSettings.new(askFee = askFee, bidFee = bidFee), BilateralAccounts.adminAccount)
+fun BilateralContractClient.setFees(askFee: BigInteger = BigInteger.ZERO, bidFee: BigInteger = BigInteger.ZERO) {
+    updateSettings(UpdateSettings(newCreateAskNhashFee = askFee, newCreateBidNhashFee = bidFee), BilateralAccounts.adminAccount)
     val contractInfo = this.getContractInfo()
     assertEquals(
         expected = askFee,
-        actual = contractInfo.askFee,
+        actual = contractInfo.createAskNhashFee,
         message = "Expected ask fee to be properly set after updating it",
     )
     assertEquals(
         expected = bidFee,
-        actual = contractInfo.bidFee,
+        actual = contractInfo.createBidNhashFee,
         message = "Expected the bid fee to be properly set after updating it",
     )
 }
