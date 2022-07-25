@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.JsonDeserializer
 import java.math.BigInteger
 
+/**
+ * Deserializes a CosmWasm Uint value in a response JSON payload to a BigInteger, assuming it is a quoted integer.
+ */
 class CosmWasmUintToBigIntegerDeserializer : JsonDeserializer<BigInteger>() {
     /**
      * This is a deserializer for Cosmwasm's Uint types (they include wrappers for most unsigned rust integer types).
