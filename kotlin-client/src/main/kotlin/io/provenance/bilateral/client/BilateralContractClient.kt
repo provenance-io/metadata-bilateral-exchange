@@ -662,14 +662,13 @@ class BilateralContractClient private constructor(
     ): Pair<Event, TxResponse> {
         val transactionDescription = executeMsg.toLoggingString()
         logger.info("START: $transactionDescription")
-        val msg = generateProtoExecuteMsg(
-            executeMsg = executeMsg,
-            senderAddress = signer.address(),
-            funds = funds,
-            includeLogs = false,
-        )
         return pbClient.estimateAndBroadcastTx(
-            txBody = msg.toAny().toTxBody(),
+            txBody = generateProtoExecuteMsg(
+                executeMsg = executeMsg,
+                senderAddress = signer.address(),
+                funds = funds,
+                includeLogs = false,
+            ).toAny().toTxBody(),
             signers = listOf(
                 BaseReqSigner(
                     signer = signer,

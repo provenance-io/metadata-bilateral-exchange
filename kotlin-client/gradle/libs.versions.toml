@@ -11,7 +11,7 @@ mockk = "1.12.4"
 protobuf = "3.21.1"
 provenanceClient = "1.1.1"
 provenanceHdWallet = "0.1.15"
-provenanceProtoKotlin = "1.10.0"
+provenanceProtoKotlin = "1.11.0"
 provenanceScope = "0.6.0"
 testContainers = "1.17.2"
 
