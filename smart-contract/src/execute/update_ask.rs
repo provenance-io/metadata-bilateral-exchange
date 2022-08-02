@@ -890,10 +890,12 @@ mod tests {
                 assert_eq!(
                     message,
                     format!(
-                        "expected marker [{}] to have at least [{}] shares to sell, but it only had [{}]",
+                        "expected marker [{}] to have enough shares to sell. it had [{}], which is less than proposed sale amount [{}] + shares already listed for sale [{}] = [{}]",
                         DEFAULT_MARKER_DENOM,
-                        DEFAULT_MARKER_HOLDINGS + 1,
                         DEFAULT_MARKER_HOLDINGS,
+                        DEFAULT_MARKER_HOLDINGS + 1,
+                        0,
+                        DEFAULT_MARKER_HOLDINGS + 1,
                     ),
                     "unexpected message from invalid marker error when too many shares were attempted for sale",
                 );

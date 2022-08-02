@@ -1,3 +1,4 @@
+use crate::storage::ask_order_storage::get_ask_orders_by_collateral_id;
 use crate::types::core::error::ContractError;
 use crate::types::request::ask_types::ask::{
     Ask, CoinTradeAsk, MarkerShareSaleAsk, MarkerTradeAsk, ScopeTradeAsk,
@@ -10,7 +11,9 @@ use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::{check_scope_owners, get_single_marker_coin_holding};
 use crate::util::request_fee::generate_request_fee_msg;
 use crate::validation::ask_order_validation::validate_ask_order;
-use crate::validation::marker_exchange_validation::validate_marker_for_ask;
+use crate::validation::marker_exchange_validation::{
+    validate_marker_for_ask, ShareSaleValidationDetail,
+};
 use cosmwasm_std::{Addr, BankMsg, CosmosMsg, DepsMut, Env, MessageInfo};
 use provwasm_std::{
     revoke_marker_access, AccessGrant, Marker, MarkerAccess, ProvenanceMsg, ProvenanceQuerier,
@@ -166,6 +169,14 @@ fn create_marker_trade_ask_collateral(
     )?;
     let messages = match &creation_type {
         AskCreationType::New => {
+            // Marker trades must be uniquely created.  A marker trade cannot be established on top
+            // of another marker trade or a marker share sale, because their behaviors conflict in
+            // duplicate
+            if !get_ask_orders_by_collateral_id(deps.storage, marker.address.as_str()).is_empty() {
+                return ContractError::InvalidRequest {
+                    message: format!("marker trade asks cannot exist alongside alternate asks for the same marker. marker: [{}]", marker.address.as_str()),
+                }.to_err();
+            }
             get_marker_permission_revoke_messages(&marker, &env.contract.address)?
         }
         AskCreationType::Update {
@@ -176,6 +187,17 @@ fn create_marker_trade_ask_collateral(
                 &existing_ask_order.ask_type,
                 &RequestType::MarkerTrade,
             )?;
+            // If this update is converting a share sale ask to a marker trade, or even just updating
+            // a marker trade, it absolutely cannot cause the marker trade to exist alongside a different
+            // ask, because marker trades completely transfer ownership of the marker.  Allowing this
+            // scenario would potentially cause a situation where the marker is released from the
+            // contract, but another ask still exists that would try to sell shares of a marker that
+            // would no longer be controlled.
+            if get_ask_orders_by_collateral_id(deps.storage, marker.address.as_str()).len() > 1 {
+                return ContractError::InvalidRequest {
+                    message: format!("marker trade asks cannot exist alongside alternate asks for the same marker. marker: [{}]", marker.address.as_str()),
+                }.to_err();
+            }
             let existing_marker_denom = get_update_marker_denom(existing_ask_order)?;
             if existing_marker_denom != &marker_trade.marker_denom {
                 return ContractError::InvalidUpdate {
@@ -227,6 +249,8 @@ fn create_marker_share_sale_ask_collateral(
     }
     let marker = ProvenanceQuerier::new(&deps.querier)
         .get_marker_by_denom(&marker_share_sale.marker_denom)?;
+    let existing_related_orders =
+        get_ask_orders_by_collateral_id(deps.storage, marker.address.as_str());
     validate_marker_for_ask(
         &marker,
         match &creation_type {
@@ -237,10 +261,36 @@ fn create_marker_share_sale_ask_collateral(
         },
         &env.contract.address,
         &[MarkerAccess::Admin, MarkerAccess::Withdraw],
-        Some(marker_share_sale.shares_to_sell.u128()),
+        Some(ShareSaleValidationDetail {
+            shares_sold: marker_share_sale.shares_to_sell.u128(),
+            aggregate_shares_listed: existing_related_orders
+                .iter()
+                // Filter out existing orders with matching ids - if this is an update, this total should
+                // not include the old share sale amount in the aggregate.  Only use existing values
+                // from other shares sales listed alongside the updated or new value
+                .filter(|order| order.id != marker_share_sale.id)
+                .fold(0u128, |total, order| {
+                    match &order.collateral {
+                        // Assumes all related ask orders are marker share sales. Validation below will catch
+                        // marker trades before order is fully committed and created
+                        AskCollateral::MarkerShareSale(collateral) => {
+                            total + collateral.remaining_shares_in_sale.u128()
+                        }
+                        _ => total,
+                    }
+                }),
+        }),
     )?;
     let messages = match &creation_type {
         AskCreationType::New => {
+            if existing_related_orders
+                .iter()
+                .any(|order| order.ask_type == RequestType::MarkerTrade)
+            {
+                return ContractError::InvalidRequest {
+                    message: format!("marker share sales cannot be created alongside marker trades for marker with address [{}]", marker.address.as_str()),
+                }.to_err();
+            }
             get_marker_permission_revoke_messages(&marker, &env.contract.address)?
         }
         AskCreationType::Update {
@@ -273,11 +323,28 @@ fn create_marker_share_sale_ask_collateral(
             marker_share_sale.shares_to_sell.u128(),
             &marker_share_sale.quote_per_share,
             &match &creation_type {
-                AskCreationType::New => marker
-                    .permissions
-                    .into_iter()
-                    .filter(|perm| perm.address != env.contract.address)
-                    .collect::<Vec<AccessGrant>>(),
+                AskCreationType::New => {
+                    // If this is the first ask order for a given marker, then the permissions can
+                    // be established by examining the marker itself.
+                    // However, if this is not the first marker share sale established for a singular
+                    // marker, the permissions currently on the marker itself won't be the permissions
+                    // that need to be returned to the owner after all trades have been matched.
+                    // Due to this, they must be ported from an existing order.  Using this logic,
+                    // all ask orders will include the same permissions, ensuring that the final
+                    // order to be matched or cancelled will properly relinquish permissions to the
+                    // original owner.
+                    if existing_related_orders.is_empty() {
+                        marker
+                            .permissions
+                            .into_iter()
+                            .filter(|perm| perm.address != env.contract.address)
+                            .collect::<Vec<AccessGrant>>()
+                    } else {
+                        get_update_marker_removed_permissions(
+                            existing_related_orders.first().unwrap(),
+                        )?
+                    }
+                }
                 AskCreationType::Update { existing_ask_order } => {
                     get_update_marker_removed_permissions(existing_ask_order)?
                 }
@@ -308,7 +375,18 @@ fn create_scope_trade_ask_collateral(
         Some(&env.contract.address),
     )?;
     match creation_type {
-        AskCreationType::New => {}
+        AskCreationType::New => {
+            if !get_ask_orders_by_collateral_id(deps.storage, &scope_trade.scope_address).is_empty()
+            {
+                return ContractError::InvalidRequest {
+                    message: format!(
+                        "only one scope trade can exist at a time for scope [{}]",
+                        &scope_trade.scope_address
+                    ),
+                }
+                .to_err();
+            }
+        }
         AskCreationType::Update { existing_ask_order } => {
             check_ask_type(
                 &existing_ask_order.id,

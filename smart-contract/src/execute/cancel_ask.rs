@@ -1,4 +1,6 @@
-use crate::storage::ask_order_storage::{delete_ask_order_by_id, get_ask_order_by_id};
+use crate::storage::ask_order_storage::{
+    delete_ask_order_by_id, get_ask_order_by_id, get_ask_orders_by_collateral_id,
+};
 use crate::storage::contract_info::get_contract_info;
 use crate::types::core::error::ContractError;
 use crate::types::request::ask_types::ask_collateral::AskCollateral;
@@ -49,11 +51,20 @@ pub fn cancel_ask(
             )?);
         }
         AskCollateral::MarkerShareSale(collateral) => {
-            messages.append(&mut release_marker_from_contract(
-                &collateral.marker_denom,
-                &env.contract.address,
-                &collateral.removed_permissions,
-            )?);
+            // Only release the marker if this is the final remaining ask for the given marker.
+            // Multiple marker share sales can be created for a single marker while it is held by
+            // the contract, so this check ensures that the marker is only relinquished when the
+            // final sale is cancelled.
+            if get_ask_orders_by_collateral_id(deps.storage, collateral.marker_address.as_str())
+                .len()
+                <= 1
+            {
+                messages.append(&mut release_marker_from_contract(
+                    &collateral.marker_denom,
+                    &env.contract.address,
+                    &collateral.removed_permissions,
+                )?);
+            }
         }
         AskCollateral::ScopeTrade(collateral) => {
             let mut scope =

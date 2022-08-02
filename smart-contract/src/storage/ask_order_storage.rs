@@ -1,9 +1,10 @@
 use crate::storage::order_indices::OrderIndices;
+use crate::types::core::constants::DEFAULT_SEARCH_ORDER;
 use crate::types::core::error::ContractError;
 use crate::types::request::ask_types::ask_order::AskOrder;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::Storage;
-use cw_storage_plus::{Index, IndexList, IndexedMap, MultiIndex, UniqueIndex};
+use cw_storage_plus::{Index, IndexList, IndexedMap, MultiIndex};
 
 const NAMESPACE_ASK_PK: &str = "ask";
 const NAMESPACE_COLLATERAL_IDX: &str = "ask__collateral";
@@ -11,7 +12,7 @@ const NAMESPACE_OWNER_IDX: &str = "ask__owner";
 const NAMESPACE_TYPE_IDX: &str = "ask__type";
 
 pub struct AskOrderIndices<'a> {
-    pub collateral_index: UniqueIndex<'a, String, AskOrder>,
+    pub collateral_index: MultiIndex<'a, String, AskOrder, String>,
     pub owner_index: MultiIndex<'a, String, AskOrder, String>,
     pub type_index: MultiIndex<'a, String, AskOrder, String>,
 }
@@ -34,8 +35,9 @@ impl<'a> OrderIndices<'a, AskOrder> for AskOrderIndices<'a> {
 
 pub fn ask_orders<'a>() -> IndexedMap<'a, &'a [u8], AskOrder, AskOrderIndices<'a>> {
     let indices = AskOrderIndices {
-        collateral_index: UniqueIndex::new(
+        collateral_index: MultiIndex::new(
             |ask: &AskOrder| ask.get_collateral_index(),
+            NAMESPACE_ASK_PK,
             NAMESPACE_COLLATERAL_IDX,
         ),
         owner_index: MultiIndex::new(
@@ -113,16 +115,18 @@ pub fn get_ask_order_by_id<S: Into<String>>(
         })
 }
 
-pub fn may_get_ask_order_by_collateral_id<S: Into<String>>(
+pub fn get_ask_orders_by_collateral_id<S: Into<String>>(
     storage: &dyn Storage,
     collateral_id: S,
-) -> Option<AskOrder> {
+) -> Vec<AskOrder> {
     ask_orders()
         .idx
         .collateral_index
-        .item(storage, collateral_id.into())
-        .map(|record| record.map(|(_, option)| option))
-        .unwrap_or(None)
+        .prefix(collateral_id.into())
+        .range(storage, None, None, DEFAULT_SEARCH_ORDER)
+        .filter(|result| result.is_ok())
+        .map(|result| result.unwrap().1)
+        .collect()
 }
 
 pub fn delete_ask_order_by_id<S: Into<String>>(
@@ -141,13 +145,10 @@ pub fn delete_ask_order_by_id<S: Into<String>>(
 #[cfg(test)]
 mod tests {
     use crate::storage::ask_order_storage::{
-        delete_ask_order_by_id, get_ask_order_by_id, insert_ask_order,
-        may_get_ask_order_by_collateral_id, may_get_ask_order_by_id, update_ask_order,
+        delete_ask_order_by_id, get_ask_order_by_id, get_ask_orders_by_collateral_id,
+        insert_ask_order, may_get_ask_order_by_id, update_ask_order,
     };
-    use crate::test::mock_marker::DEFAULT_MARKER_DENOM;
-    use crate::test::request_helpers::{
-        mock_ask_marker_share_sale, mock_ask_marker_trade, mock_ask_order, mock_ask_scope_trade,
-    };
+    use crate::test::mock_marker::{DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM};
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::ask_types::ask_order::AskOrder;
     use crate::types::request::share_sale_type::ShareSaleType;
@@ -174,14 +175,8 @@ mod tests {
         insert_ask_order(deps.as_mut().storage, &order)
             .expect_err("expected a secondary insert to be rejected because the ask ids match");
         order.id = "ask2".to_string();
-        insert_ask_order(deps.as_mut().storage, &order).expect_err(
-            "expected a secondary insert to be rejected because the marker denoms match",
-        );
-        if let AskCollateral::MarkerTrade(ref mut collateral) = order.collateral {
-            collateral.marker_address = Addr::unchecked("marker-address-2");
-        }
         insert_ask_order(deps.as_mut().storage, &order)
-            .expect("expected the insert to succeed when the ask did not violate any indices");
+            .expect("expected a secondary insert to succeed because the ids do not match");
     }
 
     #[test]
@@ -249,67 +244,74 @@ mod tests {
     }
 
     #[test]
-    fn test_may_get_ask_order_by_collateral_id() {
+    fn test_get_ask_orders_by_collateral_id() {
         let mut deps = mock_dependencies(&[]);
-        let coin_trade_order = AskOrder {
-            id: "coin_trade_ask".to_string(),
-            ..mock_ask_order(AskCollateral::coin_trade(&[], &[]))
-        };
-        let mut test_collateral_id = |ask_order: AskOrder, expected_id: &str, ask_type: &str| {
-            assert_eq!(
-                None,
-                may_get_ask_order_by_collateral_id(deps.as_ref().storage, expected_id),
-                "expected the ask order to not be found by collateral id before it is inserted",
-            );
-            insert_ask_order(deps.as_mut().storage, &ask_order)
-                .unwrap_or_else(|_| panic!("expected the {}'s insert to succeed", ask_type));
-            assert_eq!(
-                ask_order,
-                may_get_ask_order_by_collateral_id(deps.as_ref().storage, expected_id)
-                    .unwrap_or_else(|| panic!(
-                        "expected the {}'s collateral id search to respond without error",
-                        ask_type
-                    )),
-                "expected {}'s collateral id to be available ask the collateral id",
-                ask_type,
-            );
-        };
-        test_collateral_id(coin_trade_order, "coin_trade_ask", "coin trade ask");
-        let marker_trade_order = AskOrder {
-            id: "marker_trade_ask".to_string(),
-            ..mock_ask_order(mock_ask_marker_trade(
-                "marker_trade_address",
-                DEFAULT_MARKER_DENOM,
-                100,
-                &[],
-            ))
-        };
-        test_collateral_id(
-            marker_trade_order,
-            "marker_trade_address",
-            "marker trade ask",
+        assert!(
+            get_ask_orders_by_collateral_id(deps.as_ref().storage, DEFAULT_MARKER_ADDRESS)
+                .is_empty(),
+            "no ask orders should be returned because none have been inserted",
         );
-        let marker_share_sale_order = AskOrder {
-            id: "marker_share_sale".to_string(),
-            ..mock_ask_order(mock_ask_marker_share_sale(
-                "marker_share_sale_address",
+        let first_order = AskOrder::new_unchecked(
+            "ask",
+            Addr::unchecked("asker"),
+            AskCollateral::marker_share_sale(
+                Addr::unchecked(DEFAULT_MARKER_ADDRESS),
                 DEFAULT_MARKER_DENOM,
-                100,
-                50,
+                10,
+                10,
+                &coins(100, NHASH),
+                &[],
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        );
+        insert_ask_order(deps.as_mut().storage, &first_order)
+            .expect("inserting the first ask order should succeed");
+        let fetched_ask_orders =
+            get_ask_orders_by_collateral_id(deps.as_ref().storage, DEFAULT_MARKER_ADDRESS);
+        assert_eq!(
+            1,
+            fetched_ask_orders.len(),
+            "the resulting search should produce a single ask order",
+        );
+        assert_eq!(
+            &first_order,
+            fetched_ask_orders.first().unwrap(),
+            "the returned value should contain the only ask order using the correct marker address",
+        );
+        let second_order = AskOrder::new_unchecked(
+            "ask2",
+            Addr::unchecked("asker"),
+            AskCollateral::marker_share_sale(
+                Addr::unchecked(DEFAULT_MARKER_ADDRESS),
+                DEFAULT_MARKER_DENOM,
+                10,
+                10,
+                &coins(400, NHASH),
                 &[],
                 ShareSaleType::MultipleTransactions,
-            ))
-        };
-        test_collateral_id(
-            marker_share_sale_order,
-            "marker_share_sale_address",
-            "marker share sale ask",
+            ),
+            None,
         );
-        let scope_trade_order = AskOrder {
-            id: "scope_trade".to_string(),
-            ..mock_ask_order(mock_ask_scope_trade("scope_trade_address", &[]))
-        };
-        test_collateral_id(scope_trade_order, "scope_trade_address", "scope trade ask");
+        insert_ask_order(deps.as_mut().storage, &second_order)
+            .expect("inserting the second ask order should succeed");
+        let fetched_ask_orders =
+            get_ask_orders_by_collateral_id(deps.as_ref().storage, DEFAULT_MARKER_ADDRESS);
+        assert_eq!(
+            2,
+            fetched_ask_orders.len(),
+            "the resulting search should produce two ask orders",
+        );
+        assert!(
+            fetched_ask_orders.iter().any(|order| order == &first_order),
+            "the first ask order should be produced in the query results",
+        );
+        assert!(
+            fetched_ask_orders
+                .iter()
+                .any(|order| order == &second_order),
+            "the second ask order should be produced in the query results",
+        );
     }
 
     #[test]

@@ -5,7 +5,7 @@ use crate::types::core::constants::{
 };
 use crate::types::request::search::{Search, SearchResult, SearchType};
 use cosmwasm_std::{Storage, Uint128};
-use cw_storage_plus::{IndexList, IndexedMap};
+use cw_storage_plus::{IndexList, IndexedMap, MultiIndex};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -28,15 +28,23 @@ where
     pub fn search(&self, storage: &dyn Storage, search: Search) -> SearchResult<O> {
         let page_size = self.get_page_size(&search);
         let page_number = self.get_page_number(&search);
-        let response = match search.search_type {
+        let response = match &search.search_type {
             SearchType::All => self.get_all_response(storage, page_size, page_number),
-            SearchType::ValueType { value_type } => {
-                self.get_value_type_response(storage, &value_type, page_size, page_number)
-            }
-            SearchType::Id { id } => self.get_id_response(storage, &id),
-            SearchType::Owner { owner } => {
-                self.get_owner_response(storage, &owner, page_size, page_number)
-            }
+            SearchType::Id { id } => self.get_id_response(storage, id),
+            SearchType::Owner { owner: id } | SearchType::ValueType { value_type: id } => self
+                .do_multi_index_search(
+                    storage,
+                    id,
+                    page_size,
+                    page_number,
+                    match &search.search_type {
+                        SearchType::Owner { .. } => self.index_map.idx.owner_index(),
+                        SearchType::ValueType { .. } => self.index_map.idx.type_index(),
+                        _ => {
+                            return SearchResult::empty();
+                        }
+                    },
+                ),
         };
         // Multiply total pages by 100 to determine if there is some lossy remainder during division,
         // effectively allowing a ceiling value to be established on the quotient.  This ensures that
@@ -94,31 +102,6 @@ where
         }
     }
 
-    fn get_value_type_response(
-        &self,
-        storage: &dyn Storage,
-        value_type: &str,
-        page_size: usize,
-        page_number: usize,
-    ) -> SearchResponse<O> {
-        let query = || {
-            self.index_map
-                .idx
-                .type_index()
-                .prefix(value_type.to_owned())
-                .range(storage, None, None, DEFAULT_SEARCH_ORDER)
-        };
-        SearchResponse {
-            total_results: query().count(),
-            query_results: query()
-                .skip(page_size * (page_number - 1))
-                .take(page_size)
-                .filter(|result| result.is_ok())
-                .map(|result| result.unwrap().1)
-                .collect(),
-        }
-    }
-
     fn get_id_response(&self, storage: &dyn Storage, id: &str) -> SearchResponse<O> {
         SearchResponse {
             total_results: 1,
@@ -129,19 +112,17 @@ where
                 .unwrap_or_default(),
         }
     }
-
-    fn get_owner_response(
+    fn do_multi_index_search(
         &self,
         storage: &dyn Storage,
-        owner: &str,
+        id: &str,
         page_size: usize,
         page_number: usize,
+        index: &MultiIndex<String, O, String>,
     ) -> SearchResponse<O> {
         let query = || {
-            self.index_map
-                .idx
-                .owner_index()
-                .prefix(owner.to_owned())
+            index
+                .prefix(id.to_owned())
                 .range(storage, None, None, DEFAULT_SEARCH_ORDER)
         };
         SearchResponse {

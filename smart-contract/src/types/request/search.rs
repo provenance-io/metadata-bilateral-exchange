@@ -63,6 +63,16 @@ pub struct SearchResult<T> {
     pub page_size: Uint128,
     pub total_pages: Uint128,
 }
+impl<T> SearchResult<T> {
+    pub fn empty() -> Self {
+        SearchResult {
+            results: vec![],
+            page_number: Uint128::zero(),
+            page_size: Uint128::zero(),
+            total_pages: Uint128::zero(),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]

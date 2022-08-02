@@ -6,12 +6,19 @@ use crate::util::provenance_utilities::{
 use cosmwasm_std::Addr;
 use provwasm_std::{Marker, MarkerAccess, MarkerStatus};
 
+pub struct ShareSaleValidationDetail {
+    /// The amount of shares to be sold in the proposed share sale
+    pub shares_sold: u128,
+    /// The aggregate of shares listed in all marker share sales pertaining to the given marker
+    pub aggregate_shares_listed: u128,
+}
+
 pub fn validate_marker_for_ask(
     marker: &Marker,
     original_owner_address: Option<&Addr>,
     contract_address: &Addr,
     expected_contract_permissions: &[MarkerAccess],
-    shares_sold: Option<u128>,
+    share_sale_validation_detail: Option<ShareSaleValidationDetail>,
 ) -> Result<(), ContractError> {
     if let Some(original_owner_address) = original_owner_address {
         if !marker_has_admin(marker, original_owner_address) {
@@ -56,17 +63,22 @@ pub fn validate_marker_for_ask(
         }
         .to_err();
     }
-    if let Some(shares_sold) = shares_sold {
-        if marker_coin.amount.u128() < shares_sold {
+    if let Some(ShareSaleValidationDetail {
+        shares_sold,
+        aggregate_shares_listed,
+    }) = share_sale_validation_detail
+    {
+        if marker_coin.amount.u128() < shares_sold + aggregate_shares_listed {
             return ContractError::InvalidMarker {
                 message: format!(
-                "expected marker [{}] to have at least [{}] shares to sell, but it only had [{}]",
-                marker.denom,
-                shares_sold,
-                marker_coin.amount.u128(),
-            ),
-            }
-            .to_err();
+                    "expected marker [{}] to have enough shares to sell. it had [{}], which is less than proposed sale amount [{}] + shares already listed for sale [{}] = [{}]",
+                    marker.denom,
+                    marker_coin.amount.u128(),
+                    shares_sold,
+                    aggregate_shares_listed,
+                    shares_sold + aggregate_shares_listed,
+                )
+            }.to_err();
         }
     }
     ().to_ok()
@@ -76,7 +88,9 @@ pub fn validate_marker_for_ask(
 mod tests {
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_DENOM};
     use crate::types::core::error::ContractError;
-    use crate::validation::marker_exchange_validation::validate_marker_for_ask;
+    use crate::validation::marker_exchange_validation::{
+        validate_marker_for_ask, ShareSaleValidationDetail,
+    };
     use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::{coin, Addr};
     use provwasm_std::{AccessGrant, MarkerAccess, MarkerStatus};
@@ -222,13 +236,43 @@ mod tests {
             Some(&Addr::unchecked("asker")),
             &Addr::unchecked(MOCK_CONTRACT_ADDR),
             &[MarkerAccess::Admin, MarkerAccess::Withdraw],
-            Some(11),
+            Some(ShareSaleValidationDetail {
+                shares_sold: 11,
+                aggregate_shares_listed: 0,
+            }),
         )
         .expect_err("an error should occur when more shares are requested than are available");
         assert_invalid_marker_error(
             err,
             format!(
-                "expected marker [{}] to have at least [11] shares to sell, but it only had [10]",
+                "expected marker [{}] to have enough shares to sell. it had [10], which is less than proposed sale amount [11] + shares already listed for sale [0] = [11]",
+                DEFAULT_MARKER_DENOM,
+            ),
+        );
+    }
+
+    #[test]
+    fn test_marker_with_too_few_coins_for_sale_due_to_other_sales() {
+        let marker = MockMarker {
+            coins: vec![coin(100, DEFAULT_MARKER_DENOM)],
+            ..MockMarker::new_owned_mock_marker("asker")
+        }
+        .to_marker();
+        let err = validate_marker_for_ask(
+            &marker,
+            Some(&Addr::unchecked("asker")),
+            &Addr::unchecked(MOCK_CONTRACT_ADDR),
+            &[MarkerAccess::Admin, MarkerAccess::Withdraw],
+            Some(ShareSaleValidationDetail {
+                shares_sold: 5,
+                aggregate_shares_listed: 96,
+            }),
+        )
+        .expect_err("an error should occur when more shares are requested than are available");
+        assert_invalid_marker_error(
+            err,
+            format!(
+                "expected marker [{}] to have enough shares to sell. it had [100], which is less than proposed sale amount [5] + shares already listed for sale [96] = [101]",
                 DEFAULT_MARKER_DENOM,
             ),
         );

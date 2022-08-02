@@ -1,5 +1,5 @@
 use crate::storage::ask_order_storage::{
-    delete_ask_order_by_id, get_ask_order_by_id, update_ask_order,
+    delete_ask_order_by_id, get_ask_order_by_id, get_ask_orders_by_collateral_id, update_ask_order,
 };
 use crate::storage::bid_order_storage::{delete_bid_order_by_id, get_bid_order_by_id};
 use crate::storage::contract_info::get_contract_info;
@@ -230,12 +230,21 @@ fn execute_marker_share_sale(
         )?,
     ];
     let mut terminate_sale = || -> Result<(), ContractError> {
-        // Marker gets released to the asker.  The sale is effectively over.
-        messages.append(&mut release_marker_from_contract(
-            &ask_collateral.marker_denom,
-            &env.contract.address,
-            &ask_collateral.removed_permissions,
-        )?);
+        // Only release the marker if this is the final remaining ask for the given marker.
+        // Multiple marker share sales can be created for a single marker while it is held by
+        // the contract, so this check ensures that the marker is only relinquished when the
+        // final sale is completed.
+        if get_ask_orders_by_collateral_id(deps.storage, ask_collateral.marker_address.as_str())
+            .len()
+            <= 1
+        {
+            // Marker gets released to the asker.  The sale is effectively over.
+            messages.append(&mut release_marker_from_contract(
+                &ask_collateral.marker_denom,
+                &env.contract.address,
+                &ask_collateral.removed_permissions,
+            )?);
+        }
         delete_ask_order_by_id(deps.storage, &ask_order.id)?;
         ().to_ok()
     };
