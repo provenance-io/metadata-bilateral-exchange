@@ -8,18 +8,16 @@ import org.junit.jupiter.api.Test
 import testconfiguration.ContractIntTest
 import testconfiguration.functions.assertNotNull
 import testconfiguration.functions.assertNull
-import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.newCoins
 import java.util.UUID
 import kotlin.test.assertFails
+import kotlin.test.assertTrue
 
 class QueryIntTest : ContractIntTest() {
     @Test
     fun testGetAskFunctions() {
         assertFails("A missing id should cause an exception for getAsk") { bilateralClient.getAsk("some fake ask") }
-        assertFails("A missing id should cause an exception for getAskByCollateralId") { bilateralClient.getAskByCollateralId("some id whatever") }
         bilateralClient.getAskOrNull("some id or something").assertNull("The OrNull variant of getAsk should return null for a missing id")
-        bilateralClient.getAskByCollateralIdOrNull("fakeid").assertNull("The OrNull variant of getAskByCollateralId should return null for a missing id")
         val coinTradeAskUuid = UUID.randomUUID()
         val createAsk = CreateAsk(
             ask = CoinTradeAsk(
@@ -30,8 +28,6 @@ class QueryIntTest : ContractIntTest() {
         )
         createAsk(createAsk)
         bilateralClient.getAskOrNull(createAsk.ask.mapToId()).assertNotNull("Ask should exist when fetched by nullable request")
-        assertSucceeds("Expected the ask to be available by collateral id") { bilateralClient.getAskByCollateralId(coinTradeAskUuid.toString()) }
-        bilateralClient.getAskByCollateralIdOrNull(coinTradeAskUuid.toString()).assertNotNull("ask should not be null when fetching by collateral id")
     }
 
     @Test
@@ -48,5 +44,17 @@ class QueryIntTest : ContractIntTest() {
         )
         createBid(createBid)
         bilateralClient.getBidOrNull(createBid.bid.mapToId()).assertNotNull("Bid should exist when fetched by nullable request")
+    }
+
+    @Test
+    fun testGetAsksByCollateralIdEmptyResults() {
+        assertTrue(
+            actual = bilateralClient.getAsksByCollateralId("some id").isEmpty(),
+            message = "When no value is present, the result should be empty for getAsksByCollateralId",
+        )
+        assertTrue(
+            actual = bilateralClient.getAsksByCollateralIdOrNull("some id")?.isEmpty() == true,
+            message = "When no value is present, the result should be empty for getAsksByCollateralIdOrNull",
+        )
     }
 }

@@ -106,6 +106,185 @@ mod tests {
     }
 
     #[test]
+    fn test_multiple_marker_share_sales() {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(deps.as_mut(), TestInstantiate::default());
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        let response = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                20,
+                &coins(200, NHASH),
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        )
+        .expect("the first marker share sale should be created without issue");
+        let first_ask_order =
+            assert_valid_response(deps.as_ref().storage, &response, "ask_id", None);
+        assert_eq!(
+            1,
+            response.messages.len(),
+            "a single message should be generated when creating the first marker trade",
+        );
+        match &response.messages.first().unwrap().msg {
+            CosmosMsg::Custom(ProvenanceMsg {
+                params:
+                    ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }),
+                ..
+            }) => {
+                assert_eq!(
+                    DEFAULT_MARKER_DENOM, denom,
+                    "the default marker denom should be referenced in the revocation",
+                );
+                assert_eq!(
+                    "asker",
+                    address.as_str(),
+                    "the asker address should be revoked its access from the marker on a successful ask",
+                );
+            }
+            msg => panic!(
+                "unexpected message emitted for the first marker share sale: {:?}",
+                msg
+            ),
+        };
+        // Simulate a proper transfer of the marker to the contract
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_2",
+                DEFAULT_MARKER_DENOM,
+                // Try to request one more marker share than should be allowed
+                DEFAULT_MARKER_HOLDINGS - 20 + 1,
+                &coins(200, NHASH),
+                ShareSaleType::MultipleTransactions,
+            ),
+            None,
+        )
+        .expect_err(
+            "existing marker share sale totals should influence total trade values allowed",
+        );
+        match err {
+            ContractError::InvalidMarker { message } => {
+                assert_eq!(
+                    format!(
+                        "expected marker [{}] to have enough shares to sell. it had [{}], which is less than proposed sale amount [{}] + shares already listed for sale [{}] = [{}]",
+                        DEFAULT_MARKER_DENOM,
+                        DEFAULT_MARKER_HOLDINGS,
+                        DEFAULT_MARKER_HOLDINGS - 20 + 1,
+                        20,
+                        DEFAULT_MARKER_HOLDINGS + 1,
+                    ),
+                    message,
+                    "unexpected invalid marker error text",
+                );
+            }
+            e => panic!(
+                "unexpected error when requesting too many marker shares: {:?}",
+                e
+            ),
+        };
+        let response = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_2",
+                DEFAULT_MARKER_DENOM,
+                // Request the rest of the holdings - 5 to allow space for a third
+                DEFAULT_MARKER_HOLDINGS - 25,
+                &coins(200, NHASH),
+                ShareSaleType::MultipleTransactions,
+            ),
+            None,
+        )
+        .expect("expected the second marker share sale to be created");
+        let second_ask_order =
+            assert_valid_response(deps.as_ref().storage, &response, "ask_id_2", None);
+        assert!(
+            response.messages.is_empty(),
+            "no messages should be emitted during the second transaction because the marker has already been held by the contract, but got: {:?}",
+            response.messages,
+        );
+        assert_eq!(
+            first_ask_order.collateral.unwrap_marker_share_sale().removed_permissions,
+            second_ask_order.collateral.unwrap_marker_share_sale().removed_permissions,
+            "the removed permissions from the first ask order should be ported to the second ask order",
+        );
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_3",
+                DEFAULT_MARKER_DENOM,
+                6,
+                &coins(200, NHASH),
+                ShareSaleType::MultipleTransactions,
+            ),
+            None,
+        )
+        .expect_err(
+            "existing marker share sale totals should influence total trade values allowed",
+        );
+        match err {
+            ContractError::InvalidMarker { message } => {
+                assert_eq!(
+                    format!(
+                        "expected marker [{}] to have enough shares to sell. it had [{}], which is less than proposed sale amount [{}] + shares already listed for sale [{}] = [{}]",
+                        DEFAULT_MARKER_DENOM,
+                        DEFAULT_MARKER_HOLDINGS,
+                        6,
+                        DEFAULT_MARKER_HOLDINGS - 5,
+                        DEFAULT_MARKER_HOLDINGS + 1,
+                    ),
+                    message,
+                    "unexpected invalid marker error text",
+                );
+            }
+            e => panic!(
+                "unexpected error when requesting too many marker shares: {:?}",
+                e
+            ),
+        };
+        let response = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_3",
+                DEFAULT_MARKER_DENOM,
+                // Request the total remaining holdings
+                5,
+                &coins(1000, NHASH),
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        )
+        .expect("expected the third marker share sale to be created");
+        let third_ask_order =
+            assert_valid_response(deps.as_ref().storage, &response, "ask_id_3", None);
+        assert!(
+            response.messages.is_empty(),
+            "the third marker share sale should not emit messages because the marker is already held by the contract, but got: {:?}",
+            response.messages,
+        );
+        assert_eq!(
+            second_ask_order.collateral.unwrap_marker_share_sale().removed_permissions,
+            third_ask_order.collateral.unwrap_marker_share_sale().removed_permissions,
+            "the removed permissions from one of the preceding ask orders should be ported to the third ask order",
+        );
+    }
+
+    #[test]
     fn test_scope_trade_with_valid_data() {
         do_valid_scope_trade(None);
     }
@@ -277,6 +456,84 @@ mod tests {
     }
 
     #[test]
+    fn test_marker_trade_ask_prevents_additional_marker_trade_asks() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut());
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &coins(100, NHASH)),
+            None,
+        )
+        .expect("marker trade ask should be created without issue");
+        // Simulate the marker's successful transfer to the contract
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_trade("ask_id_2", DEFAULT_MARKER_DENOM, &coins(100, NHASH)),
+            None,
+        )
+        .expect_err(
+            "an error should occur when multiple marker trades are tried for the same marker",
+        );
+        assert!(
+            matches!(err, ContractError::InvalidMarker { .. }),
+            "duplicate marker trades should not be allowed, but got error: {:?}",
+            err,
+        );
+    }
+
+    #[test]
+    fn test_marker_trade_ask_prevents_marker_share_sale_asks() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut());
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_trade("ask_id", DEFAULT_MARKER_DENOM, &coins(100, NHASH)),
+            None,
+        )
+        .expect("marker trade ask should be created without issue");
+        // Simulate the marker's successful transfer to the contract
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_2",
+                DEFAULT_MARKER_DENOM,
+                50,
+                &coins(100, NHASH),
+                ShareSaleType::MultipleTransactions,
+            ),
+            None,
+        )
+        .expect_err(
+            "an error should occur when a marker trade exists and a marker share sale is added",
+        );
+        match err {
+            ContractError::InvalidRequest { message } => {
+                assert!(
+                    message
+                        .contains("marker share sales cannot be created alongside marker trades"),
+                    "unexpected invalid request message: {}",
+                    message,
+                );
+            }
+            e => panic!("unexpected error: {:?}", e),
+        };
+    }
+
+    #[test]
     fn test_marker_share_sale_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut());
@@ -356,6 +613,45 @@ mod tests {
     }
 
     #[test]
+    fn test_marker_share_sale_ask_prevents_additional_marker_trade_asks() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut());
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                50,
+                &coins(100, NHASH),
+                ShareSaleType::MultipleTransactions,
+            ),
+            None,
+        )
+        .expect("marker share sale ask should be created without issue");
+        // Simulate the marker's successful transfer to the contract
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_trade("ask_id_2", DEFAULT_MARKER_DENOM, &coins(100, NHASH)),
+            None,
+        )
+        .expect_err(
+            "an error should occur when multiple marker-based trades are tried for the same marker",
+        );
+        assert!(
+            matches!(err, ContractError::InvalidMarker { .. }),
+            "a subsequent marker trade should not be allowed, but got error: {:?}",
+            err,
+        );
+    }
+
+    #[test]
     fn test_scope_trade_with_invalid_data() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut());
@@ -426,9 +722,44 @@ mod tests {
         );
     }
 
-    fn assert_valid_response(
+    #[test]
+    fn test_duplicate_scope_trades_are_not_allowed() {
+        let mut deps = mock_dependencies(&[]);
+        test_instantiate(deps.as_mut(), TestInstantiate::default());
+        deps.querier
+            .with_scope(MockScope::new_with_owner(MOCK_CONTRACT_ADDR));
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_scope_trade("ask_id", DEFAULT_SCOPE_ADDR, &coins(100, NHASH)),
+            None,
+        )
+        .expect("the first scope trade should be created without error");
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_scope_trade("ask_id_2", DEFAULT_SCOPE_ADDR, &coins(250, NHASH)),
+            None,
+        )
+        .expect_err("an error should occur for a duplicate scope trade");
+        match err {
+            ContractError::InvalidRequest { message } => {
+                assert!(
+                    message.contains("only one scope trade can exist at a time for scope"),
+                    "unexpected invalid request error message: {}",
+                    message,
+                );
+            }
+            e => panic!("unexpected error: {:?}", e),
+        };
+    }
+
+    fn assert_valid_response<S: Into<String>>(
         storage: &dyn Storage,
         response: &Response<ProvenanceMsg>,
+        expected_ask_id: S,
         // This function implicitly assumes an ask fee is expected if this is not None
         expected_ask_fee_charge: Option<u128>,
     ) -> AskOrder {
@@ -447,7 +778,7 @@ mod tests {
             "the response attribute should have the proper value",
         );
         assert_eq!(
-            "ask_id",
+            expected_ask_id.into(),
             single_attribute_for_key(response, "ask_id"),
             "expected the correct ask_id value"
         );
@@ -546,7 +877,8 @@ mod tests {
                 "no messages should be sent when no ask fee is set",
             );
         }
-        let ask_order = assert_valid_response(&deps.storage, &create_ask_response, ask_fee);
+        let ask_order =
+            assert_valid_response(&deps.storage, &create_ask_response, "ask_id", ask_fee);
         assert_eq!("ask_id", ask_order.id);
         assert_eq!("asker", ask_order.owner.as_str());
         assert_eq!(RequestType::CoinTrade, ask_order.ask_type);
@@ -639,7 +971,7 @@ mod tests {
             }
             msg => panic!("unexpected message in marker trade: {:?}", msg),
         });
-        let ask_order = assert_valid_response(&deps.storage, &response, ask_fee);
+        let ask_order = assert_valid_response(&deps.storage, &response, "ask_id", ask_fee);
         assert_eq!(
             "ask_id", ask_order.id,
             "the proper ask id should be set in the ask order",
@@ -775,7 +1107,7 @@ mod tests {
             }
             msg => panic!("unexpected message in marker trade: {:?}", msg),
         });
-        let ask_order = assert_valid_response(deps.as_ref().storage, &response, ask_fee);
+        let ask_order = assert_valid_response(deps.as_ref().storage, &response, "ask_id", ask_fee);
         assert_eq!(
             "ask_id", ask_order.id,
             "the proper ask id should be set in the ask order"
@@ -928,7 +1260,7 @@ mod tests {
                 "no messages need to be sent for a scope trade",
             );
         }
-        let ask_order = assert_valid_response(deps.as_ref().storage, &response, ask_fee);
+        let ask_order = assert_valid_response(deps.as_ref().storage, &response, "ask_id", ask_fee);
         assert_eq!(
             "ask_id", ask_order.id,
             "the proper ask id should be set in the ask order",

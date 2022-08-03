@@ -21,12 +21,9 @@ pub fn marker_has_permissions(
 ) -> bool {
     marker.permissions.iter().any(|permission| {
         &permission.address == address
-            && expected_permissions.iter().all(|expected_permission| {
-                permission
-                    .permissions
-                    .iter()
-                    .any(|held_permission| held_permission == expected_permission)
-            })
+            && expected_permissions
+                .iter()
+                .all(|expected_permission| permission.permissions.contains(expected_permission))
     })
 }
 

@@ -80,6 +80,10 @@ class ScopeTradeIntTest : ContractIntTest() {
             actual = executeMatchResponse.bidDeleted,
             message = "Expected the execute match response to indicate that the bid was deleted",
         )
+        assertTrue(
+            actual = executeMatchResponse.collateralReleased,
+            message = "Collateral should always be released for scope trades",
+        )
         assertEquals(
             expected = 500L,
             actual = pbClient.getBalance(asker.address(), bidderDenom),
@@ -128,6 +132,10 @@ class ScopeTradeIntTest : ContractIntTest() {
             expected = createResponse.askOrder,
             actual = cancelResponse.cancelledAskOrder,
             message = "Expected the cancelled ask order to be included in the cancel ask response",
+        )
+        assertTrue(
+            actual = cancelResponse.collateralReleased,
+            message = "The collateral should always be released for cancelled scope trades",
         )
         val scopeInfo = pbClient.metadataClient.scope(ScopeRequest.newBuilder().setScopeId(scopeUuid.toString()).build())
         assertEquals(
@@ -349,6 +357,31 @@ class ScopeTradeIntTest : ContractIntTest() {
             expected = 700,
             actual = pbClient.getBalance(bidder.address(), quoteDenom2),
             message = "The bid should have debited the new quote denom from the bidder",
+        )
+    }
+
+    @Test
+    fun testGetAsksByCollateralId() {
+        val scopeAddress = ScopeWriteUtil.writeMockScope(
+            pbClient = pbClient,
+            signer = asker,
+            ownerAddress = contractInfo.contractAddress,
+            valueOwnerAddress = contractInfo.contractAddress,
+        ).let { (scopeUuid, _) -> MetadataAddress.forScope(scopeUuid).toString() }
+        val createAskResponse = createAsk(
+            createAsk = CreateAsk(
+                ask = ScopeTradeAsk(
+                    id = UUID.randomUUID().toString(),
+                    scopeAddress = scopeAddress,
+                    quote = newCoins(5000, "nhash"),
+                )
+            )
+        )
+        val queryAsk = bilateralClient.getAsksByCollateralId(scopeAddress).assertSingle("A single ask should be returned by the query")
+        assertEquals(
+            expected = createAskResponse.askOrder,
+            actual = queryAsk,
+            message = "The correct ask should be returned by the query",
         )
     }
 }

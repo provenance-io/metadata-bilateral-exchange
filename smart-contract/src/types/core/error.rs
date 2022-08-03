@@ -9,6 +9,9 @@ pub enum ContractError {
     #[error("{message}")]
     GenericError { message: String },
 
+    #[error("Invalid request: {message}")]
+    InvalidRequest { message: String },
+
     #[error("Invalid funds provided: {message}")]
     InvalidFundsProvided { message: String },
 

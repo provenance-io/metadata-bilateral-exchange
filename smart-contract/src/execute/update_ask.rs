@@ -61,6 +61,7 @@ mod tests {
     use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
     use crate::types::request::request_type::RequestType;
     use crate::types::request::share_sale_type::ShareSaleType;
+    use crate::util::constants::NHASH;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{coins, from_binary, Addr, BankMsg, CosmosMsg, Response};
     use provwasm_mocks::mock_dependencies;
@@ -494,6 +495,71 @@ mod tests {
     }
 
     #[test]
+    fn test_multiple_marker_share_sales_cannot_update_to_become_a_marker_trade() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut());
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                10,
+                &coins(100, "quote"),
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        )
+        .expect("expected the first ask to be created");
+        // Update the marker to simulate a successful ask creation and marker control change to the
+        // contract
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_2",
+                DEFAULT_MARKER_DENOM,
+                30,
+                &coins(300, "quote"),
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        )
+        .expect("expected the second ask to be created");
+        let mut test_update_ask = |ask_id: &str| {
+            let err = update_ask(
+                deps.as_mut(),
+                mock_env(),
+                mock_info("asker", &[]),
+                Ask::new_marker_trade(
+                    ask_id,
+                    DEFAULT_MARKER_DENOM,
+                    &coins(450, NHASH),
+                ),
+                None,
+            ).expect_err("a marker share sale should not be able to update to a marker trade if multiple marker share sales exist");
+            match err {
+                ContractError::InvalidRequest { message } => {
+                    assert!(
+                        message.contains("marker trade asks cannot exist alongside alternate asks for the same marker"),
+                        "unexpected invalid request message content: {}",
+                        message,
+                    );
+                }
+                e => panic!("unexpected error: {:?}", e),
+            };
+        };
+        // Verify that updating either ask will produce the same issue
+        test_update_ask("ask_id");
+        test_update_ask("ask_id_2");
+    }
+
+    #[test]
     fn test_valid_marker_share_sale_single_tx_update() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut());
@@ -814,6 +880,165 @@ mod tests {
     }
 
     #[test]
+    fn test_marker_share_sale_update_with_multiple_share_sales_considers_correct_amount() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut());
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                10,
+                &coins(100, "quote"),
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        )
+        .expect("expected the first ask to be created");
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_2",
+                DEFAULT_MARKER_DENOM,
+                DEFAULT_MARKER_HOLDINGS - 10,
+                &coins(250, "quote"),
+                ShareSaleType::MultipleTransactions,
+            ),
+            None,
+        )
+        .expect("expected the second ask to be created");
+        let err = update_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                11,
+                &coins(2000, "quote"),
+                ShareSaleType::MultipleTransactions,
+            ),
+            None,
+        )
+        .expect_err("an error should occur when trying to sell more shares than are available");
+        match err {
+            ContractError::InvalidMarker { message } => {
+                assert_eq!(
+                    format!(
+                        "expected marker [{}] to have enough shares to sell. it had [{}], which is less than proposed sale amount [{}] + shares already listed for sale [{}] = [{}]",
+                        DEFAULT_MARKER_DENOM,
+                        DEFAULT_MARKER_HOLDINGS,
+                        11,
+                        DEFAULT_MARKER_HOLDINGS - 10,
+                        DEFAULT_MARKER_HOLDINGS + 1,
+                    ),
+                    message,
+                    "unexpected message content for invalid marker error",
+                );
+            }
+            e => panic!("unexpected error: {:?}", e),
+        };
+        let err = update_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_2",
+                DEFAULT_MARKER_DENOM,
+                DEFAULT_MARKER_HOLDINGS - 9,
+                &coins(12345, "quote"),
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        )
+        .expect_err("an error should occur when trying to sell more shares than are available");
+        match err {
+            ContractError::InvalidMarker { message } => {
+                assert_eq!(
+                    format!(
+                        "expected marker [{}] to have enough shares to sell. it had [{}], which is less than proposed sale amount [{}] + shares already listed for sale [{}] = [{}]",
+                        DEFAULT_MARKER_DENOM,
+                        DEFAULT_MARKER_HOLDINGS,
+                        DEFAULT_MARKER_HOLDINGS - 9,
+                        10,
+                        DEFAULT_MARKER_HOLDINGS + 1,
+                    ),
+                    message,
+                    "unexpected message content for invalid marker error",
+                );
+            }
+            e => panic!("unexpected error: {:?}", e),
+        };
+        update_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_2",
+                DEFAULT_MARKER_DENOM,
+                5,
+                &coins(12345, "quote"),
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        )
+        .expect("the second ask should be updated to be a much smaller amount of shares sold");
+        update_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                DEFAULT_MARKER_HOLDINGS - 5,
+                &coins(11, "quote"),
+                ShareSaleType::MultipleTransactions,
+            ),
+            None,
+        )
+        .expect("the first ask should be updated to have a much larger amount");
+        // Now, both asks have been updated and their totals encompass all the markers coin.  Any
+        // new ask should be rejected
+        let err = create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_3",
+                DEFAULT_MARKER_DENOM,
+                1,
+                &coins(100, "quote"),
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        )
+        .expect_err("an error should occur when trying to sell more shares than are available");
+        match err {
+            ContractError::InvalidMarker { message } => {
+                assert_eq!(
+                    format!(
+                        "expected marker [{}] to have enough shares to sell. it had [{}], which is less than proposed sale amount [{}] + shares already listed for sale [{}] = [{}]",
+                        DEFAULT_MARKER_DENOM,
+                        DEFAULT_MARKER_HOLDINGS,
+                        1,
+                        DEFAULT_MARKER_HOLDINGS,
+                        DEFAULT_MARKER_HOLDINGS + 1,
+                    ),
+                    message,
+                    "unexpected message content for invalid marker error",
+                );
+            }
+            e => panic!("unexpected error: {:?}", e),
+        };
+    }
+
+    #[test]
     fn test_invalid_marker_share_sale_update_scenarios() {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut());
@@ -890,10 +1115,12 @@ mod tests {
                 assert_eq!(
                     message,
                     format!(
-                        "expected marker [{}] to have at least [{}] shares to sell, but it only had [{}]",
+                        "expected marker [{}] to have enough shares to sell. it had [{}], which is less than proposed sale amount [{}] + shares already listed for sale [{}] = [{}]",
                         DEFAULT_MARKER_DENOM,
-                        DEFAULT_MARKER_HOLDINGS + 1,
                         DEFAULT_MARKER_HOLDINGS,
+                        DEFAULT_MARKER_HOLDINGS + 1,
+                        0,
+                        DEFAULT_MARKER_HOLDINGS + 1,
                     ),
                     "unexpected message from invalid marker error when too many shares were attempted for sale",
                 );

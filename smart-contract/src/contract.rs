@@ -9,7 +9,7 @@ use crate::execute::update_settings::update_settings;
 use crate::instantiate::instantiate_contract::instantiate_contract;
 use crate::migrate::migrate_contract::migrate_contract;
 use crate::query::get_ask::query_ask;
-use crate::query::get_ask_by_collateral_id::query_ask_by_collateral_id;
+use crate::query::get_asks_by_collateral_id::query_asks_by_collateral_id;
 use crate::query::get_bid::query_bid;
 use crate::query::get_contract_info::query_contract_info;
 use crate::query::get_match_report::get_match_report;
@@ -64,8 +64,8 @@ pub fn query(
 ) -> Result<Binary, ContractError> {
     match msg {
         QueryMsg::GetAsk { id } => query_ask(deps, id),
-        QueryMsg::GetAskByCollateralId { collateral_id } => {
-            query_ask_by_collateral_id(deps, collateral_id)
+        QueryMsg::GetAsksByCollateralId { collateral_id } => {
+            query_asks_by_collateral_id(deps, collateral_id)
         }
         QueryMsg::GetBid { id } => query_bid(deps, id),
         QueryMsg::GetMatchReport { ask_id, bid_id } => get_match_report(deps, ask_id, bid_id),
