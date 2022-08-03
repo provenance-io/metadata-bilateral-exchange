@@ -154,7 +154,7 @@ mod tests {
             "the third page's resulting id should not be included in the first page's results",
         );
         assert!(
-            !second_page_ids.iter().any(|bid_id| bid_id == &&final_id),
+            !second_page_ids.contains(&&final_id),
             "the third page's resulting id should not be included in the second page's results",
         );
         let fourth_page = search(deps.as_ref(), Search::all(Some(10), Some(4)));

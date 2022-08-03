@@ -25,6 +25,26 @@
     {
       "type": "object",
       "required": [
+        "get_asks_by_collateral_id"
+      ],
+      "properties": {
+        "get_asks_by_collateral_id": {
+          "type": "object",
+          "required": [
+            "collateral_id"
+          ],
+          "properties": {
+            "collateral_id": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "get_bid"
       ],
       "properties": {

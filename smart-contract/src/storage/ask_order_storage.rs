@@ -303,13 +303,11 @@ mod tests {
             "the resulting search should produce two ask orders",
         );
         assert!(
-            fetched_ask_orders.iter().any(|order| order == &first_order),
+            fetched_ask_orders.contains(&first_order),
             "the first ask order should be produced in the query results",
         );
         assert!(
-            fetched_ask_orders
-                .iter()
-                .any(|order| order == &second_order),
+            fetched_ask_orders.contains(&second_order),
             "the second ask order should be produced in the query results",
         );
     }

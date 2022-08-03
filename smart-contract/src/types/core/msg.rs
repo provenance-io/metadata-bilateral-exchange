@@ -54,6 +54,7 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetAsk { id: String },
+    GetAsksByCollateralId { collateral_id: String },
     GetBid { id: String },
     GetMatchReport { ask_id: String, bid_id: String },
     GetContractInfo {},
