@@ -169,14 +169,6 @@ fn create_marker_trade_ask_collateral(
     )?;
     let messages = match &creation_type {
         AskCreationType::New => {
-            // Marker trades must be uniquely created.  A marker trade cannot be established on top
-            // of another marker trade or a marker share sale, because their behaviors conflict in
-            // duplicate
-            if !get_ask_orders_by_collateral_id(deps.storage, marker.address.as_str()).is_empty() {
-                return ContractError::InvalidRequest {
-                    message: format!("marker trade asks cannot exist alongside alternate asks for the same marker. marker: [{}]", marker.address.as_str()),
-                }.to_err();
-            }
             get_marker_permission_revoke_messages(&marker, &env.contract.address)?
         }
         AskCreationType::Update {
