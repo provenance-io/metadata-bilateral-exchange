@@ -17,9 +17,7 @@ class QueryIntTest : ContractIntTest() {
     @Test
     fun testGetAskFunctions() {
         assertFails("A missing id should cause an exception for getAsk") { bilateralClient.getAsk("some fake ask") }
-        assertFails("A missing id should cause an exception for getAskByCollateralId") { bilateralClient.getAskByCollateralId("some id whatever") }
         bilateralClient.getAskOrNull("some id or something").assertNull("The OrNull variant of getAsk should return null for a missing id")
-        bilateralClient.getAskByCollateralIdOrNull("fakeid").assertNull("The OrNull variant of getAskByCollateralId should return null for a missing id")
         val coinTradeAskUuid = UUID.randomUUID()
         val createAsk = CreateAsk(
             ask = CoinTradeAsk(
@@ -30,8 +28,6 @@ class QueryIntTest : ContractIntTest() {
         )
         createAsk(createAsk)
         bilateralClient.getAskOrNull(createAsk.ask.mapToId()).assertNotNull("Ask should exist when fetched by nullable request")
-        assertSucceeds("Expected the ask to be available by collateral id") { bilateralClient.getAskByCollateralId(coinTradeAskUuid.toString()) }
-        bilateralClient.getAskByCollateralIdOrNull(coinTradeAskUuid.toString()).assertNotNull("ask should not be null when fetching by collateral id")
     }
 
     @Test
