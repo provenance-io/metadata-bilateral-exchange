@@ -68,12 +68,21 @@ fn check_valid_migration_target(contract_info: &ContractInfoV2) -> Result<(), Co
 #[cfg(test)]
 mod tests {
     use crate::migrate::migrate_contract::migrate_contract;
+    use crate::storage::ask_order_storage::ask_orders;
     use crate::storage::contract_info::{
         get_contract_info, set_contract_info, CONTRACT_TYPE, CONTRACT_VERSION,
     };
     use crate::test::cosmos_type_helpers::single_attribute_for_key;
+    use crate::test::legacy_ask_order_storage::insert_legacy_ask_order;
     use crate::test::mock_instantiate::default_instantiate;
+    use crate::types::core::constants::DEFAULT_SEARCH_ORDER;
     use crate::types::core::error::ContractError;
+    use crate::types::request::ask_types::ask_collateral::AskCollateral;
+    use crate::types::request::ask_types::ask_order::AskOrder;
+    use crate::types::request::request_descriptor::{AttributeRequirement, RequestDescriptor};
+    use crate::types::request::request_type::RequestType;
+    use crate::types::request::share_sale_type::ShareSaleType;
+    use cosmwasm_std::Addr;
     use provwasm_mocks::mock_dependencies;
 
     #[test]
@@ -164,5 +173,116 @@ mod tests {
                 e,
             ),
         };
+    }
+
+    // TODO: Delete this test in v1.1.1
+    #[test]
+    fn test_migrate_legacy_ask_order_storage() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut());
+        let mut contract_info =
+            get_contract_info(deps.as_ref().storage).expect("contract info should load");
+        contract_info.contract_version = "0.0.1".to_string();
+        set_contract_info(deps.as_mut().storage, &contract_info)
+            .expect("contract info should be stored");
+        assert_eq!(
+            "0.0.1",
+            get_contract_info(deps.as_ref().storage)
+                .expect("contract info should load")
+                .contract_version,
+            "sanity check: expected contract version change to be persisted",
+        );
+        let coin_ask_order = AskOrder {
+            id: "coin_ask".to_string(),
+            ask_type: RequestType::CoinTrade,
+            owner: Addr::unchecked("coin_trade_asker"),
+            collateral: AskCollateral::coin_trade(&[], &[]),
+            descriptor: None,
+        };
+        let marker_trade_ask_order = AskOrder {
+            id: "marker_trade_ask".to_string(),
+            ask_type: RequestType::MarkerTrade,
+            owner: Addr::unchecked("marker_trade_asker"),
+            collateral: AskCollateral::marker_trade(
+                Addr::unchecked("marker_trade_marker"),
+                "marker_trade_denom",
+                100,
+                &[],
+                &[],
+            ),
+            descriptor: None,
+        };
+        let marker_share_sale_ask_order = AskOrder {
+            id: "marker_share_sale_ask".to_string(),
+            ask_type: RequestType::MarkerShareSale,
+            owner: Addr::unchecked("marker_share_sale_asker"),
+            collateral: AskCollateral::marker_share_sale(
+                Addr::unchecked("marker_share_sale_marker"),
+                "marker_share_sale_denom",
+                100,
+                50,
+                &[],
+                &[],
+                ShareSaleType::MultipleTransactions,
+            ),
+            descriptor: Some(RequestDescriptor::new_populated_attributes(
+                "desc",
+                AttributeRequirement::all(&["some", "attributes"]),
+            )),
+        };
+        let scope_trade_ask_order = AskOrder {
+            id: "scope_trade_ask".to_string(),
+            ask_type: RequestType::ScopeTrade,
+            owner: Addr::unchecked("scope_trade_asker"),
+            collateral: AskCollateral::scope_trade("scope_address", &[]),
+            descriptor: None,
+        };
+        insert_legacy_ask_order(deps.as_mut().storage, &coin_ask_order)
+            .expect("expected the coin trade ask order to be inserted without error");
+        insert_legacy_ask_order(deps.as_mut().storage, &marker_trade_ask_order)
+            .expect("expected the marker trade ask order to be inserted without error");
+        insert_legacy_ask_order(deps.as_mut().storage, &marker_share_sale_ask_order)
+            .expect("expected the marker share sale ask order to be inserted without error");
+        insert_legacy_ask_order(deps.as_mut().storage, &scope_trade_ask_order)
+            .expect("expected the scope trade ask order to be inserted without error");
+        let response = migrate_contract(deps.as_mut())
+            .expect("expected the migration for legacy ask orders to succeed");
+        let ask_orders_from_search = ask_orders()
+            .range(deps.as_ref().storage, None, None, DEFAULT_SEARCH_ORDER)
+            .map(|result| {
+                result
+                    .expect("ask order should unwrap without error from range search")
+                    .1
+            })
+            .collect::<Vec<AskOrder>>();
+        assert_eq!(
+            4,
+            ask_orders_from_search.len(),
+            "all stored ask orders should be produced in the range search",
+        );
+        assert!(
+            ask_orders_from_search
+                .iter()
+                .any(|order| order.id == coin_ask_order.id),
+            "the coin trade ask order should still remain in ask order storage",
+        );
+        assert!(
+            ask_orders_from_search
+                .iter()
+                .any(|order| order.id == marker_trade_ask_order.id),
+            "the marker trade ask order should still remain in ask order storage",
+        );
+        assert!(
+            ask_orders_from_search
+                .iter()
+                .any(|order| order.id == marker_share_sale_ask_order.id),
+            "the marker share sale ask order should still remain in ask order storage",
+        );
+        assert!(
+            ask_orders_from_search
+                .iter()
+                .any(|order| order.id == scope_trade_ask_order.id),
+            "the scope trade ask order should still remain in ask order storage",
+        );
     }
 }
