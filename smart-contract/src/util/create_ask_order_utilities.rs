@@ -185,7 +185,10 @@ fn create_marker_trade_ask_collateral(
             // scenario would potentially cause a situation where the marker is released from the
             // contract, but another ask still exists that would try to sell shares of a marker that
             // would no longer be controlled.
-            if get_ask_orders_by_collateral_id(deps.storage, marker.address.as_str()).len() > 1 {
+            if get_ask_orders_by_collateral_id(deps.storage, marker.address.as_str())
+                .iter()
+                .any(|order| order.id != existing_ask_order.id)
+            {
                 return ContractError::InvalidRequest {
                     message: format!("marker trade asks cannot exist alongside alternate asks for the same marker. marker: [{}]", marker.address.as_str()),
                 }.to_err();
@@ -363,6 +366,10 @@ fn create_marker_share_sale_ask_collateral(
                             .collect::<Vec<AccessGrant>>()
                     } else {
                         get_update_marker_removed_permissions(
+                            // This code ensures that at least one value is available, and that all
+                            // related marker trades will have the same removed permissions values,
+                            // so using the first value is sufficient for retrieving the correct
+                            // permissions data
                             existing_related_orders.first().unwrap(),
                         )?
                     }
