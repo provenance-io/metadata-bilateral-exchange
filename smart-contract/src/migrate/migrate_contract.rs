@@ -245,7 +245,7 @@ mod tests {
             .expect("expected the marker share sale ask order to be inserted without error");
         insert_legacy_ask_order(deps.as_mut().storage, &scope_trade_ask_order)
             .expect("expected the scope trade ask order to be inserted without error");
-        let response = migrate_contract(deps.as_mut())
+        migrate_contract(deps.as_mut())
             .expect("expected the migration for legacy ask orders to succeed");
         let ask_orders_from_search = ask_orders()
             .range(deps.as_ref().storage, None, None, DEFAULT_SEARCH_ORDER)
