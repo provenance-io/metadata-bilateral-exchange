@@ -16,8 +16,9 @@ import io.provenance.bilateral.execute.ExecuteMatch
 import io.provenance.bilateral.execute.UpdateAsk
 import io.provenance.bilateral.execute.UpdateBid
 import io.provenance.bilateral.execute.UpdateSettings
-import io.provenance.bilateral.extensions.attribute
-import io.provenance.bilateral.extensions.attributeOrNull
+import io.provenance.bilateral.extensions.booleanAttribute
+import io.provenance.bilateral.extensions.stringAttribute
+import io.provenance.bilateral.extensions.stringAttributeOrNull
 import io.provenance.bilateral.extensions.executeContractDataToJsonBytes
 import io.provenance.bilateral.extensions.singleWasmEvent
 import io.provenance.bilateral.interfaces.BilateralContractExecuteMsg
@@ -266,8 +267,8 @@ class BilateralContractClient private constructor(
         funds = createAsk.ask.mapToFunds(),
     ).let { (event, data) ->
         CreateAskResponse(
-            askId = event.attribute("ask_id"),
-            askFeeCharged = event.attributeOrNull("ask_fee_charged"),
+            askId = event.stringAttribute("ask_id"),
+            askFeeCharged = event.stringAttributeOrNull("ask_fee_charged"),
             askOrder = deserializeResponseData(data),
         )
     }
@@ -292,7 +293,7 @@ class BilateralContractClient private constructor(
         funds = updateAsk.ask.mapToFunds(),
     ).let { (event, data) ->
         UpdateAskResponse(
-            askId = event.attribute("ask_id"),
+            askId = event.stringAttribute("ask_id"),
             updatedAskOrder = deserializeResponseData(data),
         )
     }
@@ -316,8 +317,8 @@ class BilateralContractClient private constructor(
         funds = createBid.bid.mapToFunds(),
     ).let { (event, data) ->
         CreateBidResponse(
-            bidId = event.attribute("bid_id"),
-            bidFeeCharged = event.attributeOrNull("bid_fee_charged"),
+            bidId = event.stringAttribute("bid_id"),
+            bidFeeCharged = event.stringAttributeOrNull("bid_fee_charged"),
             bidOrder = deserializeResponseData(data),
         )
     }
@@ -342,7 +343,7 @@ class BilateralContractClient private constructor(
         funds = updateBid.bid.mapToFunds(),
     ).let { (event, data) ->
         UpdateBidResponse(
-            bidId = event.attribute("bid_id"),
+            bidId = event.stringAttribute("bid_id"),
             updatedBidOrder = deserializeResponseData(data),
         )
     }
@@ -369,8 +370,9 @@ class BilateralContractClient private constructor(
         funds = emptyList(),
     ).let { (event, data) ->
         CancelAskResponse(
-            askId = event.attribute("ask_id"),
-            cancelledAskOrder = deserializeResponseData(data),
+            askId = event.stringAttribute("ask_id"),
+            collateralReleased = event.booleanAttribute("collateral_released"),
+            cancelledAskOrder = deserializeResponseData(data)
         )
     }
 
@@ -395,7 +397,7 @@ class BilateralContractClient private constructor(
         funds = emptyList(),
     ).let { (event, data) ->
         CancelBidResponse(
-            bidId = event.attribute("bid_id"),
+            bidId = event.stringAttribute("bid_id"),
             cancelledBidOrder = deserializeResponseData(data),
         )
     }
@@ -425,10 +427,11 @@ class BilateralContractClient private constructor(
         funds = emptyList(),
     ).let { (event) ->
         ExecuteMatchResponse(
-            askId = event.attribute("ask_id"),
-            bidId = event.attribute("bid_id"),
-            askDeleted = event.attribute("ask_deleted").toBoolean(),
-            bidDeleted = event.attribute("bid_deleted").toBoolean(),
+            askId = event.stringAttribute("ask_id"),
+            bidId = event.stringAttribute("bid_id"),
+            askDeleted = event.booleanAttribute("ask_deleted"),
+            bidDeleted = event.booleanAttribute("bid_deleted"),
+            collateralReleased = event.booleanAttribute("collateral_released"),
         )
     }
 
@@ -453,9 +456,9 @@ class BilateralContractClient private constructor(
         funds = emptyList(),
     ).let { (event) ->
         UpdateSettingsResponse(
-            newAdminAddress = event.attributeOrNull("new_admin_address"),
-            newAskFee = event.attributeOrNull("new_ask_fee"),
-            newBidFee = event.attributeOrNull("new_bid_fee"),
+            newAdminAddress = event.stringAttributeOrNull("new_admin_address"),
+            newAskFee = event.stringAttributeOrNull("new_ask_fee"),
+            newBidFee = event.stringAttributeOrNull("new_bid_fee"),
         )
     }
 

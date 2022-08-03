@@ -82,13 +82,13 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             actual = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Only a single account should have marker permissions once the ask is created").address,
             message = "The contract should control the marker account after creating a marker share sale",
         )
-        assertFails("An ask the for same marker should not be allowed once a marker share sale is created") {
+        assertFails("An ask the for same marker should not be allowed once a marker share sale is created if the ask amount exceeds the share count") {
             createAsk(
                 createAsk = CreateAsk(
                     ask = MarkerShareSaleAsk(
                         id = UUID.randomUUID().toString(),
                         markerDenom = markerDenom,
-                        sharesToSell = shareSaleAmount,
+                        sharesToSell = shareSaleAmount + BigInteger.ONE,
                         quotePerShare = newCoins(1, bidderDenom),
                         shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
                     ),
@@ -278,6 +278,208 @@ class MarkerShareSaleIntTest : ContractIntTest() {
     }
 
     @Test
+    fun testMultipleAsksShareSale() {
+        val markerDenom = "multipleaskssharesale"
+        val shareCount = 100L
+        val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_DEPOSIT)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val bidderDenom = "multipleaskssharesalebid"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(100, bidderDenom),
+            receiverAddress = bidder.address(),
+        )
+        val firstAskUuid = UUID.randomUUID()
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = firstAskUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = 30.toBigInteger(),
+                    quotePerShare = newCoins(1, bidderDenom),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                ),
+            )
+        )
+        assertMarkerIsOwnedByAddress(markerDenom, contractInfo.contractAddress, "smart contract")
+        assertFails("A marker trade ask for the same marker should not be allowed to be created") {
+            createAsk(
+                createAsk = CreateAsk(
+                    ask = MarkerTradeAsk(
+                        id = UUID.randomUUID().toString(),
+                        markerDenom = markerDenom,
+                        quotePerShare = newCoins(100, bidderDenom),
+                    )
+                )
+            )
+        }
+        val secondAskUuid = UUID.randomUUID()
+        assertFails("An ask that attempts to sell more shares than the aggregate of all shares already for sale + remaining shares should be rejected") {
+            createAsk(
+                createAsk = CreateAsk(
+                    ask = MarkerShareSaleAsk(
+                        id = secondAskUuid.toString(),
+                        markerDenom = markerDenom,
+                        // There are 100 total shares, and 30 are already for sale in the first ask, making 70 the new cap for available shares to sell
+                        sharesToSell = 71.toBigInteger(),
+                        quotePerShare = newCoins(1, bidderDenom),
+                        shareSaleType = ShareSaleType.MULTIPLE_TRANSACTIONS,
+                    ),
+                )
+            )
+        }
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = secondAskUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = 70.toBigInteger(),
+                    quotePerShare = newCoins(1, bidderDenom),
+                    shareSaleType = ShareSaleType.MULTIPLE_TRANSACTIONS,
+                ),
+            )
+        )
+        val firstBidUuid = UUID.randomUUID()
+        createBid(
+            createBid = CreateBid(
+                bid = MarkerShareSaleBid(
+                    id = firstBidUuid.toString(),
+                    markerDenom = markerDenom,
+                    shareCount = 30.toBigInteger(),
+                    quote = newCoins(30, bidderDenom),
+                )
+            )
+        )
+        val firstMatchResponse = executeMatch(
+            executeMatch = ExecuteMatch(
+                askId = firstAskUuid.toString(),
+                bidId = firstBidUuid.toString(),
+            ),
+        )
+        assertTrue(
+            actual = firstMatchResponse.askDeleted,
+            message = "Ask should be deleted because it was a single transaction type",
+        )
+        assertTrue(
+            actual = firstMatchResponse.bidDeleted,
+            message = "Bid should be deleted because they always are",
+        )
+        assertFalse(
+            actual = firstMatchResponse.collateralReleased,
+            message = "Collateral should not be released due to the other ask",
+        )
+        assertEquals(
+            expected = 30,
+            actual = pbClient.getBalance(asker.address(), bidderDenom),
+            message = "The asker should have received all 30 bidder denom from the trade",
+        )
+        assertEquals(
+            expected = 30,
+            actual = pbClient.getBalance(bidder.address(), markerDenom),
+            message = "The bidder should have received the requested 30 marker denom",
+        )
+        // Assert that the marker is still retained by the contract
+        assertMarkerIsOwnedByAddress(markerDenom, contractInfo.contractAddress, "smart contract")
+        val secondBidUuid = UUID.randomUUID()
+        // Buy 50 of the remaining marker denom - this should not close the ask
+        createBid(
+            createBid = CreateBid(
+                bid = MarkerShareSaleBid(
+                    id = secondBidUuid.toString(),
+                    markerDenom = markerDenom,
+                    shareCount = 50.toBigInteger(),
+                    quote = newCoins(50, bidderDenom),
+                )
+            )
+        )
+        val secondMatchResponse = executeMatch(
+            executeMatch = ExecuteMatch(
+                askId = secondAskUuid.toString(),
+                bidId = secondBidUuid.toString(),
+            )
+        )
+        assertFalse(
+            actual = secondMatchResponse.askDeleted,
+            message = "Ask should not be deleted because it was a multiple transaction type that has not yet been completed",
+        )
+        assertTrue(
+            actual = secondMatchResponse.bidDeleted,
+            message = "Bid should be deleted because they always are",
+        )
+        assertFalse(
+            actual = secondMatchResponse.collateralReleased,
+            message = "Collateral should not be released due to the ask being retained",
+        )
+        assertEquals(
+            expected = 80,
+            actual = pbClient.getBalance(asker.address(), bidderDenom),
+            message = "The asker should have received 50 additional bidder denom, making a total of 30 + 50 = 80",
+        )
+        assertEquals(
+            expected = 80,
+            actual = pbClient.getBalance(bidder.address(), markerDenom),
+            message = "The bidder should have received the requested 30 marker denom, making a total of 30 + 50 = 80",
+        )
+        // Assert that the marker is still retained by the contract
+        assertMarkerIsOwnedByAddress(markerDenom, contractInfo.contractAddress, "smart contract")
+        val thirdBidUuid = UUID.randomUUID()
+        // Buy the last 20 remaining shares - this should close the ask
+        createBid(
+            createBid = CreateBid(
+                bid = MarkerShareSaleBid(
+                    id = thirdBidUuid.toString(),
+                    markerDenom = markerDenom,
+                    shareCount = 20.toBigInteger(),
+                    quote = newCoins(20, bidderDenom),
+                )
+            )
+        )
+        val thirdMatchResponse = executeMatch(
+            executeMatch = ExecuteMatch(
+                askId = secondAskUuid.toString(),
+                bidId = thirdBidUuid.toString(),
+            )
+        )
+        assertTrue(
+            actual = thirdMatchResponse.askDeleted,
+            message = "Ask should be deleted because it was a multiple transaction type that has just been completed",
+        )
+        assertTrue(
+            actual = thirdMatchResponse.bidDeleted,
+            message = "Bid should be deleted because they always are",
+        )
+        assertTrue(
+            actual = thirdMatchResponse.collateralReleased,
+            message = "Collateral should be released because no asks remain for the given marker",
+        )
+        assertEquals(
+            expected = 100,
+            actual = pbClient.getBalance(asker.address(), bidderDenom),
+            message = "The asker should now have all 100 bidder denom",
+        )
+        assertEquals(
+            expected = 100,
+            actual = pbClient.getBalance(bidder.address(), markerDenom),
+            message = "The bidder should now have all 100 marker denom",
+        )
+        // Assert that the marker has been returned to the asker now that all asks have concluded
+        assertMarkerIsOwnedByAddress(markerDenom, asker.address(), "asker")
+    }
+
+    @Test
     fun testCancelAsk() {
         val markerDenom = "sharesalecancelask"
         val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_DEPOSIT, Access.ACCESS_BURN, Access.ACCESS_MINT)
@@ -366,6 +568,81 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             actual = afterCancelGrant.permissionsList.sorted(),
             message = "After cancelling the ask, the asker should regain its exact permissions",
         )
+    }
+
+    @Test
+    fun testCancelMultipleShareSaleAsks() {
+        val markerDenom = "sharesalecancelmultipleasks"
+        val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_DEPOSIT, Access.ACCESS_BURN, Access.ACCESS_MINT)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = 100L,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val firstAskUuid = UUID.randomUUID()
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = firstAskUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = 35.toBigInteger(),
+                    quotePerShare = newCoins(100, "nhash"),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                ),
+            )
+        )
+        assertMarkerIsOwnedByAddress(markerDenom, contractInfo.contractAddress, "smart contract")
+        val secondAskUuid = UUID.randomUUID()
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = secondAskUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = 25.toBigInteger(),
+                    quotePerShare = newCoins(420, "nhash"),
+                    shareSaleType = ShareSaleType.MULTIPLE_TRANSACTIONS,
+                )
+            )
+        )
+        val thirdAskUuid = UUID.randomUUID()
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = thirdAskUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = 40.toBigInteger(),
+                    quotePerShare = newCoins(115, "nhash"),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                )
+            )
+        )
+        val firstCancelResponse = cancelAsk(askId = firstAskUuid.toString())
+        assertFalse(
+            actual = firstCancelResponse.collateralReleased,
+            message = "The collateral should not be released due to the other asks still existing in the contract",
+        )
+        assertMarkerIsOwnedByAddress(markerDenom, contractInfo.contractAddress, "smart contract")
+        val secondCancelResponse = cancelAsk(askId = secondAskUuid.toString())
+        assertFalse(
+            actual = secondCancelResponse.collateralReleased,
+            message = "The collateral should not be released due to the third ask still existing in the contract",
+        )
+        assertMarkerIsOwnedByAddress(markerDenom, contractInfo.contractAddress, "smart contract")
+        val thirdCancelResponse = cancelAsk(askId = thirdAskUuid.toString())
+        assertTrue(
+            actual = thirdCancelResponse.collateralReleased,
+            message = "The collateral should be released because no asks remain in the contract",
+        )
+        assertMarkerIsOwnedByAddress(markerDenom, asker.address(), "asker")
     }
 
     @Test
@@ -752,6 +1029,18 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             expected = 1,
             actual = pbClient.getBalance(bidder.address(), quoteDenom2),
             message = "The bidder's quote2 should be debited down by the appropriate amount",
+        )
+    }
+
+    private fun assertMarkerIsOwnedByAddress(
+        markerDenom: String,
+        expectedAddress: String,
+        ownerName: String,
+    ) {
+        assertEquals(
+            expected = expectedAddress,
+            actual = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Only a single account should have marker permissions").address,
+            message = "Expected the correct address ($ownerName) control the marker account",
         )
     }
 }
