@@ -80,6 +80,10 @@ class ScopeTradeIntTest : ContractIntTest() {
             actual = executeMatchResponse.bidDeleted,
             message = "Expected the execute match response to indicate that the bid was deleted",
         )
+        assertTrue(
+            actual = executeMatchResponse.collateralReleased,
+            message = "Collateral should always be released for scope trades",
+        )
         assertEquals(
             expected = 500L,
             actual = pbClient.getBalance(asker.address(), bidderDenom),
@@ -128,6 +132,10 @@ class ScopeTradeIntTest : ContractIntTest() {
             expected = createResponse.askOrder,
             actual = cancelResponse.cancelledAskOrder,
             message = "Expected the cancelled ask order to be included in the cancel ask response",
+        )
+        assertTrue(
+            actual = cancelResponse.collateralReleased,
+            message = "The collateral should always be released for cancelled scope trades",
         )
         val scopeInfo = pbClient.metadataClient.scope(ScopeRequest.newBuilder().setScopeId(scopeUuid.toString()).build())
         assertEquals(

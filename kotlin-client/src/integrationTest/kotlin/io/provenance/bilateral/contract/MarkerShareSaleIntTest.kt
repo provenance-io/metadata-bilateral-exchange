@@ -121,6 +121,10 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             actual = executeMatchResponse.bidDeleted,
             message = "The response should indicate that the bid was deleted",
         )
+        assertTrue(
+            actual = executeMatchResponse.collateralReleased,
+            message = "The collateral should be released because there are no outstanding asks remaining",
+        )
         assertEquals(
             expected = 50L,
             actual = pbClient.getBalance(asker.address(), bidderDenom),
@@ -245,10 +249,18 @@ class MarkerShareSaleIntTest : ContractIntTest() {
                     actual = executeMatchResponse.askDeleted,
                     message = "The execute match response should indicate that the ask was not deleted because the sale is not over",
                 )
+                assertFalse(
+                    actual = executeMatchResponse.collateralReleased,
+                    message = "The collateral should not yet be released because the trade has not been concluded",
+                )
             } else {
                 assertTrue(
                     actual = executeMatchResponse.askDeleted,
                     message = "The execute match response should indicate that the ask was deleted because the sale is over",
+                )
+                assertTrue(
+                    actual = executeMatchResponse.collateralReleased,
+                    message = "The collateral should be released because there are no other outstanding asks and the sale is over",
                 )
             }
         }
@@ -338,6 +350,10 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             expected = createResponse.askOrder,
             actual = cancelResponse.cancelledAskOrder,
             message = "The cancelled ask order should be included in the response",
+        )
+        assertTrue(
+            actual = cancelResponse.collateralReleased,
+            message = "The collateral should be released because only a single ask was created",
         )
         val afterCancelGrant = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Only a single permission should exist on the marker after cancelling the ask")
         assertEquals(

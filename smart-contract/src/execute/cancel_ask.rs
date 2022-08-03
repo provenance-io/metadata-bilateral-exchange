@@ -36,12 +36,13 @@ pub fn cancel_ask(
         return ContractError::Unauthorized.to_err();
     }
     let mut messages: Vec<CosmosMsg<ProvenanceMsg>> = vec![];
-    match &ask_order.collateral {
+    let collateral_released = match &ask_order.collateral {
         AskCollateral::CoinTrade(collateral) => {
             messages.push(CosmosMsg::Bank(BankMsg::Send {
                 to_address: ask_order.owner.to_string(),
                 amount: collateral.base.to_owned(),
             }));
+            true
         }
         AskCollateral::MarkerTrade(collateral) => {
             messages.append(&mut release_marker_from_contract(
@@ -49,6 +50,7 @@ pub fn cancel_ask(
                 &env.contract.address,
                 &collateral.removed_permissions,
             )?);
+            true
         }
         AskCollateral::MarkerShareSale(collateral) => {
             // Only release the marker if this is the final remaining ask for the given marker.
@@ -64,6 +66,9 @@ pub fn cancel_ask(
                     &env.contract.address,
                     &collateral.removed_permissions,
                 )?);
+                true
+            } else {
+                false
             }
         }
         AskCollateral::ScopeTrade(collateral) => {
@@ -71,13 +76,15 @@ pub fn cancel_ask(
                 ProvenanceQuerier::new(&deps.querier).get_scope(&collateral.scope_address)?;
             scope = replace_scope_owner(scope, ask_order.owner.to_owned());
             messages.push(write_scope(scope, vec![env.contract.address])?);
+            true
         }
-    }
+    };
     delete_ask_order_by_id(deps.storage, &ask_order.id)?;
     Response::new()
         .add_messages(messages)
         .add_attribute("action", "cancel_ask")
         .add_attribute("ask_id", &ask_order.id)
+        .add_attribute("collateral_released", collateral_released.to_string())
         .set_data(to_binary(&ask_order)?)
         .to_ok()
 }
@@ -183,7 +190,7 @@ mod tests {
             response.messages.is_empty(),
             "no messages should be sent because the marker should not yet be returned to the asker",
         );
-        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, &first_ask_id);
+        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, &first_ask_id, false);
         let response = cancel_ask(
             deps.as_mut(),
             mock_env(),
@@ -191,7 +198,7 @@ mod tests {
             second_ask_id.to_owned(),
         )
         .expect("the second ask should be cancelled without issue");
-        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, &second_ask_id);
+        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, &second_ask_id, true);
         // Verify that the marker is returned to the asker after both asks have been cancelled
         assert_marker_response_sent_proper_messages(&response);
     }
@@ -280,14 +287,19 @@ mod tests {
         storage: &dyn Storage,
         response: &Response<ProvenanceMsg>,
         ask_id: S,
+        expect_collateral_released: bool,
     ) {
         assert_eq!(
-            2,
+            3,
             response.attributes.len(),
             "the response should have the correct number of attributes",
         );
-        assert_eq!("cancel_ask", single_attribute_for_key(response, "action"),);
-        assert_eq!(ask_id.into(), single_attribute_for_key(response, "ask_id"),);
+        assert_eq!("cancel_ask", single_attribute_for_key(response, "action"));
+        assert_eq!(ask_id.into(), single_attribute_for_key(response, "ask_id"));
+        assert_eq!(
+            expect_collateral_released.to_string(),
+            single_attribute_for_key(response, "collateral_released")
+        );
         let response_data_ask_order = if let Some(ref binary) = response.data {
             from_binary::<AskOrder>(binary).expect("response data deserialize correctly")
         } else {
@@ -330,7 +342,7 @@ mod tests {
             cancel_ask_msg,
         )
         .expect("expected the coin trade ask to be cancelled successfully");
-        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, "ask_id");
+        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, "ask_id", true);
         assert_eq!(
             1,
             response.messages.len(),
@@ -375,7 +387,7 @@ mod tests {
             ask_id,
         )
         .expect("cancel ask should succeed");
-        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, "ask_id");
+        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, "ask_id", true);
         assert_marker_response_sent_proper_messages(&response);
     }
 
@@ -408,7 +420,7 @@ mod tests {
             ask_id,
         )
         .expect("expected cancel ask to succeed");
-        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, "ask_id");
+        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, "ask_id", true);
         assert_marker_response_sent_proper_messages(&response);
     }
 
@@ -483,7 +495,7 @@ mod tests {
             ask_id,
         )
         .expect("expected cancel ask to succeed");
-        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, "ask_id");
+        assert_cancel_ask_succeeded(deps.as_ref().storage, &response, "ask_id", true);
         assert_eq!(
             1,
             response.messages.len(),

@@ -108,6 +108,10 @@ pub fn execute_match(
         .add_attribute("bid_id", &bid_order.id)
         .add_attribute("ask_deleted", execute_result.ask_deleted.to_string())
         .add_attribute("bid_deleted", execute_result.bid_deleted.to_string())
+        .add_attribute(
+            "collateral_released",
+            execute_result.collateral_released.to_string(),
+        )
         .to_ok()
 }
 
@@ -115,6 +119,7 @@ struct ExecuteResults {
     pub messages: Vec<CosmosMsg<ProvenanceMsg>>,
     pub ask_deleted: bool,
     pub bid_deleted: bool,
+    pub collateral_released: bool,
 }
 
 fn execute_coin_trade(
@@ -140,6 +145,7 @@ fn execute_coin_trade(
         ],
         ask_deleted: true,
         bid_deleted: true,
+        collateral_released: true,
     }
     .to_ok()
 }
@@ -203,6 +209,7 @@ fn execute_marker_trade(
         messages,
         ask_deleted: true,
         bid_deleted: true,
+        collateral_released: true,
     }
     .to_ok()
 }
@@ -229,6 +236,7 @@ fn execute_marker_share_sale(
             bid_order.owner.to_owned(),
         )?,
     ];
+    let mut collateral_released = false;
     let mut terminate_sale = || -> Result<(), ContractError> {
         // Only release the marker if this is the final remaining ask for the given marker.
         // Multiple marker share sales can be created for a single marker while it is held by
@@ -244,6 +252,7 @@ fn execute_marker_share_sale(
                 &env.contract.address,
                 &ask_collateral.removed_permissions,
             )?);
+            collateral_released = true;
         }
         delete_ask_order_by_id(deps.storage, &ask_order.id)?;
         ().to_ok()
@@ -280,6 +289,7 @@ fn execute_marker_share_sale(
         messages,
         ask_deleted,
         bid_deleted: true,
+        collateral_released,
     }
     .to_ok()
 }
@@ -310,6 +320,7 @@ fn execute_scope_trade(
         messages,
         ask_deleted: true,
         bid_deleted: true,
+        collateral_released: true,
     }
     .to_ok()
 }
@@ -334,7 +345,7 @@ mod tests {
     use crate::types::request::share_sale_type::ShareSaleType;
     use crate::util::constants::NHASH;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{coins, BankMsg, Coin, CosmosMsg, Response, Storage, Uint128};
+    use cosmwasm_std::{coin, coins, BankMsg, Coin, CosmosMsg, Response, Storage, Uint128};
     use provwasm_mocks::mock_dependencies;
     use provwasm_std::{
         MarkerMsgParams, MetadataMsgParams, PartyType, ProvenanceMsg, ProvenanceMsgParams,
@@ -564,6 +575,218 @@ mod tests {
     }
 
     #[test]
+    fn test_execute_multiple_marker_share_sales() {
+        let mut deps = mock_dependencies(&[]);
+        default_instantiate(deps.as_mut());
+        deps.querier
+            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id",
+                DEFAULT_MARKER_DENOM,
+                15,
+                &coins(20, "quote"),
+                ShareSaleType::SingleTransaction,
+            ),
+            None,
+        )
+        .expect("the first ask should be created");
+        // Simulate the marker being moved to be owned by the contract
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        create_ask(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("asker", &[]),
+            Ask::new_marker_share_sale(
+                "ask_id_2",
+                DEFAULT_MARKER_DENOM,
+                10,
+                &coins(40, "quote"),
+                ShareSaleType::MultipleTransactions,
+            ),
+            None,
+        )
+        .expect("the second ask should be created");
+        create_bid(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bidder", &coins(300, "quote")),
+            Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
+            None,
+        )
+        .expect("the first bid should be created");
+        create_bid(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bidder", &coins(200, "quote")),
+            Bid::new_marker_share_sale("bid_id_2", DEFAULT_MARKER_DENOM, 5),
+            None,
+        )
+        .expect("the second bid should be created");
+        create_bid(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bidder", &coins(120, "quote")),
+            Bid::new_marker_share_sale("bid_id_3", DEFAULT_MARKER_DENOM, 3),
+            None,
+        )
+        .expect("the third bid should be created");
+        create_bid(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bidder", &coins(80, "quote")),
+            Bid::new_marker_share_sale("bid_id_4", DEFAULT_MARKER_DENOM, 2),
+            None,
+        )
+        .expect("the fourth bid should be created");
+        let response = execute_match(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            "ask_id".to_string(),
+            "bid_id".to_string(),
+            None,
+        )
+        .expect("the first match should execute successfully");
+        assert_match_produced_correct_results(deps.as_ref().storage, &response, false);
+        assert_response_messages_for_incomplete_marker_share_sale(
+            &response,
+            &coins(300, "quote"),
+            &coin(15, DEFAULT_MARKER_DENOM),
+        );
+        let response = execute_match(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            "ask_id_2".to_string(),
+            "bid_id_2".to_string(),
+            None,
+        )
+        .expect("the second match should execute successfully");
+        assert_match_produced_correct_results_with_extras(
+            deps.as_ref().storage,
+            &response,
+            false,
+            true,
+            "ask_id_2",
+            "bid_id_2",
+        );
+        assert_response_messages_for_incomplete_marker_share_sale(
+            &response,
+            &coins(200, "quote"),
+            &coin(5, DEFAULT_MARKER_DENOM),
+        );
+        let response = execute_match(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            "ask_id_2".to_string(),
+            "bid_id_3".to_string(),
+            None,
+        )
+        .expect("the third match should execute successfully");
+        assert_match_produced_correct_results_with_extras(
+            deps.as_ref().storage,
+            &response,
+            false,
+            true,
+            "ask_id_2",
+            "bid_id_3",
+        );
+        assert_response_messages_for_incomplete_marker_share_sale(
+            &response,
+            &coins(120, "quote"),
+            &coin(3, DEFAULT_MARKER_DENOM),
+        );
+        let response = execute_match(
+            deps.as_mut(),
+            mock_env(),
+            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+            "ask_id_2".to_string(),
+            "bid_id_4".to_string(),
+            None,
+        )
+        .expect("the fourth match should execute successfully");
+        assert_match_produced_correct_results_with_extras(
+            deps.as_ref().storage,
+            &response,
+            true,
+            false,
+            "ask_id_2",
+            "bid_id_4",
+        );
+        assert_eq!(
+            4,
+            response.messages.len(),
+            "the correct number of messages should be produced when the final ask is removed for a marker",
+        );
+        response.messages.iter().for_each(|msg| match &msg.msg {
+            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                assert_eq!(
+                    "asker",
+                    to_address,
+                    "the asker should receive funds from the match",
+                );
+                assert_eq!(
+                    &coins(80, "quote"),
+                    amount,
+                    "the correct amount of funds should be sent to the bidder",
+                );
+            },
+            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
+                assert_eq!(
+                    DEFAULT_MARKER_DENOM,
+                    marker_denom,
+                    "the correct marker should be referenced in the withdraw message",
+                );
+                assert_eq!(
+                    &cosmwasm_std::coin(2, DEFAULT_MARKER_DENOM),
+                    coin,
+                    "the correct amount of marker funds should be withdrawn",
+                );
+                assert_eq!(
+                    "bidder",
+                    recipient.as_str(),
+                    "the bidder should receive the marker tokens",
+                );
+            },
+            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
+                assert_eq!(
+                    DEFAULT_MARKER_DENOM,
+                    denom,
+                    "the correct marker denom should be referenced in the grant message",
+                );
+                assert_eq!(
+                    "asker",
+                    address.as_str(),
+                    "the asker should be re-granted its permissions on the marker after the sale",
+                );
+                assert_eq!(
+                    &MockMarker::get_default_owner_permissions(),
+                    permissions,
+                    "the asker should be returned all of its permissions",
+                );
+            },
+            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
+                assert_eq!(
+                    DEFAULT_MARKER_DENOM,
+                    denom,
+                    "the correct marker denom should be referenced in the revoke message",
+                );
+                assert_eq!(
+                    MOCK_CONTRACT_ADDR,
+                    address.as_str(),
+                    "the contract should have its permissions to the marker revoked after the sale completes",
+                );
+            },
+            msg => panic!("unexpected message: {:?}", msg),
+        });
+    }
+
+    #[test]
     fn test_execute_scope_trade_from_admin_with_matching_quote() {
         do_scope_trade_test(DEFAULT_ADMIN_ADDRESS, false);
     }
@@ -586,9 +809,30 @@ mod tests {
     fn assert_match_produced_correct_results(
         storage: &dyn Storage,
         response: &Response<ProvenanceMsg>,
+        expect_collateral_released: bool,
     ) {
+        assert_match_produced_correct_results_with_extras(
+            storage,
+            response,
+            expect_collateral_released,
+            false,
+            "ask_id",
+            "bid_id",
+        );
+    }
+
+    fn assert_match_produced_correct_results_with_extras<S1: Into<String>, S2: Into<String>>(
+        storage: &dyn Storage,
+        response: &Response<ProvenanceMsg>,
+        expect_collateral_released: bool,
+        expect_ask_to_remain_in_storage: bool,
+        ask_id: S1,
+        bid_id: S2,
+    ) {
+        let ask_id = ask_id.into();
+        let bid_id = bid_id.into();
         assert_eq!(
-            5,
+            6,
             response.attributes.len(),
             "the correct number of attributes should be produced in the response",
         );
@@ -598,17 +842,17 @@ mod tests {
             "the correct action attribute value should be produced",
         );
         assert_eq!(
-            "ask_id",
+            ask_id,
             single_attribute_for_key(response, "ask_id"),
             "the correct ask_id attribute value should be produced",
         );
         assert_eq!(
-            "bid_id",
+            bid_id,
             single_attribute_for_key(response, "bid_id"),
             "the correct bid_id attribute value should be produced",
         );
         assert_eq!(
-            "true",
+            (!expect_ask_to_remain_in_storage).to_string(),
             single_attribute_for_key(response, "ask_deleted"),
             "the correct ask_deleted value should be produced",
         );
@@ -617,8 +861,18 @@ mod tests {
             single_attribute_for_key(response, "bid_deleted"),
             "the correct bid_deleted value should be produced",
         );
-        get_ask_order_by_id(storage, "ask_id").expect_err("ask should be missing from storage");
-        get_bid_order_by_id(storage, "bid_id").expect_err("bid should be missing from storage");
+        assert_eq!(
+            expect_collateral_released.to_string(),
+            single_attribute_for_key(response, "collateral_released"),
+            "the correct collateral_released value should be produced",
+        );
+        let ask_order_result = get_ask_order_by_id(storage, &ask_id);
+        if expect_ask_to_remain_in_storage {
+            ask_order_result.expect("ask should remain in storage");
+        } else {
+            ask_order_result.expect_err("ask should be missing from storage");
+        }
+        get_bid_order_by_id(storage, &bid_id).expect_err("bid should be missing from storage");
     }
 
     fn test_quote_mismatch_errors<S: Into<String>, A: Into<String>, B: Into<String>>(
@@ -650,6 +904,54 @@ mod tests {
             .expect_err(
                 "an error should be returned when the bid quote does not match the ask quote and no value is provided in the mismatch flag",
             );
+    }
+
+    fn assert_response_messages_for_incomplete_marker_share_sale(
+        response: &Response<ProvenanceMsg>,
+        asker_coin_received: &[Coin],
+        withdrawn_funds_for_bidder: &Coin,
+    ) {
+        assert_eq!(
+            2,
+            response.messages.len(),
+            "the correct number of messages should be sent after the match",
+        );
+        response.messages.iter().for_each(|msg| match &msg.msg {
+            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                assert_eq!(
+                    "asker", to_address,
+                    "the asker should receive funds from the match",
+                );
+                assert_eq!(
+                    asker_coin_received, amount,
+                    "the asker should receive all the bid coin",
+                );
+            }
+            CosmosMsg::Custom(ProvenanceMsg {
+                params:
+                    ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins {
+                        marker_denom,
+                        coin,
+                        recipient,
+                    }),
+                ..
+            }) => {
+                assert_eq!(
+                    DEFAULT_MARKER_DENOM, marker_denom,
+                    "the correct marker should be referenced in the withdraw message",
+                );
+                assert_eq!(
+                    withdrawn_funds_for_bidder, coin,
+                    "the correct amount of marker funds should be withdrawn",
+                );
+                assert_eq!(
+                    "bidder",
+                    recipient.as_str(),
+                    "the bidder should receive the marker tokens",
+                );
+            }
+            msg => panic!("unexpected message: {:?}", msg),
+        });
     }
 
     fn do_coin_trade_test<S: Into<String>>(match_sender_address: S, mismatched_quotes: bool) {
@@ -695,7 +997,7 @@ mod tests {
             Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
-        assert_match_produced_correct_results(deps.as_ref().storage, &response);
+        assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
         assert_eq!(
             2,
             response.messages.len(),
@@ -773,7 +1075,7 @@ mod tests {
             Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
-        assert_match_produced_correct_results(deps.as_ref().storage, &response);
+        assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
         assert_eq!(
             3 + if withdraw_shares.unwrap_or(false) {
                 1
@@ -905,7 +1207,7 @@ mod tests {
             Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
-        assert_match_produced_correct_results(deps.as_ref().storage, &response);
+        assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
         assert_eq!(
             4,
             response.messages.len(),
@@ -1030,35 +1332,13 @@ mod tests {
             Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
-        assert_eq!(
-            5,
-            response.attributes.len(),
-            "the correct number of attributes should be produced in the response",
-        );
-        assert_eq!(
-            "execute",
-            single_attribute_for_key(&response, "action"),
-            "the correct action attribute value should be produced",
-        );
-        assert_eq!(
+        assert_match_produced_correct_results_with_extras(
+            deps.as_ref().storage,
+            &response,
+            false,
+            true,
             "ask_id",
-            single_attribute_for_key(&response, "ask_id"),
-            "the correct ask_id attribute value should be produced",
-        );
-        assert_eq!(
             "bid_id_1",
-            single_attribute_for_key(&response, "bid_id"),
-            "the correct bid_id attribute value should be produced",
-        );
-        assert_eq!(
-            "false",
-            single_attribute_for_key(&response, "ask_deleted"),
-            "the ask should not be deleted when the multi share tx still has shares remaining",
-        );
-        assert_eq!(
-            "true",
-            single_attribute_for_key(&response, "bid_deleted"),
-            "the bid should always be deleted after a marker share sale match",
         );
         let ask_order = get_ask_order_by_id(deps.as_ref().storage, "ask_id")
             .expect("ask should remain in storage");
@@ -1157,7 +1437,7 @@ mod tests {
             Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
-        assert_match_produced_correct_results(deps.as_ref().storage, &response);
+        assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
         assert_eq!(
             4,
             response.messages.len(),
@@ -1272,7 +1552,7 @@ mod tests {
             Some(mismatched_quotes),
         )
         .expect("the match should execute successfully");
-        assert_match_produced_correct_results(deps.as_ref().storage, &response);
+        assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
         assert_eq!(
             2,
             response.messages.len(),

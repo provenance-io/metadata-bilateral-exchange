@@ -106,6 +106,10 @@ class MarkerTradeIntTest : ContractIntTest() {
             actual = cancelResponse.cancelledAskOrder,
             message = "Expected the cancelled ask order to be included in the response",
         )
+        assertTrue(
+            actual = cancelResponse.collateralReleased,
+            message = "The collateral should always be released for cancelled marker trades",
+        )
         val grant = pbClient.getMarkerAccount(markerDenom).accessControlList.assertSingle("Only a single access control should exist on the marker after cancelling the ask")
         assertEquals(
             expected = asker.address(),
@@ -527,6 +531,10 @@ class MarkerTradeIntTest : ContractIntTest() {
         assertTrue(
             actual = executeMatchResponse.bidDeleted,
             message = "Expected the match response to indicate that the bid was deleted",
+        )
+        assertTrue(
+            actual = executeMatchResponse.collateralReleased,
+            message = "Collateral should always be released for marker trades",
         )
         assertEquals(
             expected = 150L,

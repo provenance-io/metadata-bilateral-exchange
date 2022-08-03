@@ -100,6 +100,10 @@ class CoinTradeIntTest : ContractIntTest() {
             actual = executeMatchResponse.bidDeleted,
             message = "Expected the response to indicate that the bid was deleted",
         )
+        assertTrue(
+            actual = executeMatchResponse.collateralReleased,
+            message = "The collateral released flag should always be true for a coin trade",
+        )
         val askerBalances = pbClient.getBalanceMap(asker.address())
         assertNull(
             actual = askerBalances[askerDenom],
@@ -242,6 +246,10 @@ class CoinTradeIntTest : ContractIntTest() {
             expected = createResponse.askOrder,
             actual = cancelResponse.cancelledAskOrder,
             message = "The cancelled ask order should be included in the response",
+        )
+        assertTrue(
+            actual = cancelResponse.collateralReleased,
+            message = "The collateral should always be released in coin trades",
         )
         assertEquals(
             expected = 100L,
