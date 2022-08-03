@@ -11,6 +11,7 @@ import testconfiguration.functions.assertNull
 import testconfiguration.functions.newCoins
 import java.util.UUID
 import kotlin.test.assertFails
+import kotlin.test.assertTrue
 
 class QueryIntTest : ContractIntTest() {
     @Test
@@ -43,5 +44,17 @@ class QueryIntTest : ContractIntTest() {
         )
         createBid(createBid)
         bilateralClient.getBidOrNull(createBid.bid.mapToId()).assertNotNull("Bid should exist when fetched by nullable request")
+    }
+
+    @Test
+    fun testGetAsksByCollateralIdEmptyResults() {
+        assertTrue(
+            actual = bilateralClient.getAsksByCollateralId("some id").isEmpty(),
+            message = "When no value is present, the result should be empty for getAsksByCollateralId",
+        )
+        assertTrue(
+            actual = bilateralClient.getAsksByCollateralIdOrNull("some id")?.isEmpty() == true,
+            message = "When no value is present, the result should be empty for getAsksByCollateralIdOrNull",
+        )
     }
 }

@@ -38,6 +38,7 @@ import io.provenance.bilateral.models.executeresponse.UpdateBidResponse
 import io.provenance.bilateral.models.executeresponse.UpdateSettingsResponse
 import io.provenance.bilateral.query.ContractSearchRequest
 import io.provenance.bilateral.query.GetAsk
+import io.provenance.bilateral.query.GetAsksByCollateralId
 import io.provenance.bilateral.query.GetBid
 import io.provenance.bilateral.query.GetContractInfo
 import io.provenance.bilateral.query.GetMatchReport
@@ -150,6 +151,28 @@ class BilateralContractClient private constructor(
      */
     fun getAskOrNull(id: String): AskOrder? = queryContractOrNull(
         query = GetAsk(id = id),
+    )
+
+    /**
+     * Fetches AskOrders from the contract's storage by their collateral id.  See [io.provenance.bilateral.query.GetAsksByCollateralId]
+     * for each different collateral id type.  Throws an exception if Provenance Blockchain communications fail.
+     *
+     * @param collateralId The collateral id of the AskOrders to locate.
+     */
+    fun getAsksByCollateralId(collateralId: String): List<AskOrder> = queryContract(
+        query = GetAsksByCollateralId(collateralId = collateralId),
+        typeReference = object : TypeReference<List<AskOrder>>() {},
+    )
+
+    /**
+     * Fetches AskOrders from the contract's storage by their collateral id.  See [io.provenance.bilateral.query.GetAsksByCollateralId]
+     * for each different collateral id type.  Returns null if Provenance Blockchain communications fail.
+     *
+     * @param collateralId The collateral id of the AskOrders to locate.
+     */
+    fun getAsksByCollateralIdOrNull(collateralId: String): List<AskOrder>? = queryContractOrNull(
+        query = GetAsksByCollateralId(collateralId = collateralId),
+        typeReference = object : TypeReference<List<AskOrder>>() {},
     )
 
     /**

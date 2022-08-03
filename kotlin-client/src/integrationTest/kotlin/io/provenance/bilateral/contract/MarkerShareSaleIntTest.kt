@@ -1032,6 +1032,66 @@ class MarkerShareSaleIntTest : ContractIntTest() {
         )
     }
 
+    @Test
+    fun testGetAsksByCollateralId() {
+        val markerDenom = "getaskscollateralmarkersharesale"
+        val shareCount = 100L
+        val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_DEPOSIT)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val firstAskUuid = UUID.randomUUID()
+        val firstAskCreateResponse = createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = firstAskUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = 10.toBigInteger(),
+                    quotePerShare = newCoins(150, "nhash"),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                ),
+            )
+        )
+        val markerAddress = pbClient.getMarkerAccount(markerDenom).baseAccount.address
+        val firstQueryAsk = bilateralClient.getAsksByCollateralId(markerAddress).assertSingle("A single ask should be returned by the qurey when only one ask exists")
+        assertEquals(
+            expected = firstAskCreateResponse.askOrder,
+            actual = firstQueryAsk,
+            message = "Expected the returned ask to equate to the created ask",
+        )
+        val secondAskUuid = UUID.randomUUID()
+        val secondAskCreateResponse = createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = secondAskUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = 40.toBigInteger(),
+                    quotePerShare = newCoins(900, "nhash"),
+                    shareSaleType = ShareSaleType.MULTIPLE_TRANSACTIONS,
+                ),
+            )
+        )
+        val secondQueryResults = bilateralClient.getAsksByCollateralId(markerAddress)
+        assertEquals(
+            expected = 2,
+            actual = secondQueryResults.size,
+            message = "Two asks should be returned in the query",
+        )
+        secondQueryResults.assertSingle("The first ask should be returned in the query results") { it == firstAskCreateResponse.askOrder }
+        secondQueryResults.assertSingle("The second ask should be returned in the query results") { it == secondAskCreateResponse.askOrder }
+    }
+
     private fun assertMarkerIsOwnedByAddress(
         markerDenom: String,
         expectedAddress: String,

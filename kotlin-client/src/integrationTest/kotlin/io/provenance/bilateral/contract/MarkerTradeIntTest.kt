@@ -465,6 +465,43 @@ class MarkerTradeIntTest : ContractIntTest() {
         )
     }
 
+    @Test
+    fun testGetAsksByCollateralId() {
+        val markerDenom = "getaskcollateralmarkertrade"
+        val markerPermissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW, Access.ACCESS_BURN)
+        val markerShareCount = 10L
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = markerShareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val createAskResponse = createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerTradeAsk(
+                    id = UUID.randomUUID().toString(),
+                    markerDenom = markerDenom,
+                    quotePerShare = newCoins(4000, "nhash"),
+                )
+            )
+        )
+        val markerAddress = pbClient.getMarkerAccount(markerDenom).baseAccount.address
+        val queryAsk = bilateralClient.getAsksByCollateralId(markerAddress).assertSingle("A single ask should be returned")
+        assertEquals(
+            expected = createAskResponse.askOrder,
+            actual = queryAsk,
+            message = "The correct ask order should be returned",
+        )
+    }
+
     private fun testFullMarkerTradeMatch(
         markerDenom: String,
         quoteDenom: String,

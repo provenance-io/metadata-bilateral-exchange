@@ -17,6 +17,7 @@ import testconfiguration.extensions.getBalance
 import testconfiguration.extensions.getBalanceMap
 import testconfiguration.extensions.testGetCoinTrade
 import testconfiguration.extensions.testGetScopeTrade
+import testconfiguration.functions.assertSingle
 import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.giveTestDenom
 import testconfiguration.functions.newCoin
@@ -522,6 +523,36 @@ class CoinTradeIntTest : ContractIntTest() {
             expected = 1000,
             actual = pbClient.getBalance(bidder.address(), quote2Denom),
             message = "After cancelling the updated order, the bidder should have all of its quote2Denom amount from a refund",
+        )
+    }
+
+    @Test
+    fun testGetAsksByCollateralId() {
+        val askUuid = UUID.randomUUID()
+        val response = createAsk(
+            createAsk = CreateAsk(
+                ask = CoinTradeAsk(
+                    id = askUuid.toString(),
+                    quote = newCoins(150, "nhash"),
+                    base = newCoins(100, "nhash"),
+                )
+            )
+        )
+        // Create another ask to ensure multiple asks CAN be returned but aren't
+        createAsk(
+            createAsk = CreateAsk(
+                ask = CoinTradeAsk(
+                    id = UUID.randomUUID().toString(),
+                    quote = newCoins(150, "nhash"),
+                    base = newCoins(100, "nhash"),
+                )
+            )
+        )
+        val queryAskOrder = bilateralClient.getAsksByCollateralId(askUuid.toString()).assertSingle("One ask should be returned by the collateral id query")
+        assertEquals(
+            expected = response.askOrder,
+            actual = queryAskOrder,
+            message = "The correct ask should be returned in the collateral id query",
         )
     }
 }

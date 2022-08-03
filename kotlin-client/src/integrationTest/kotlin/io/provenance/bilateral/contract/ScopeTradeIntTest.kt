@@ -359,4 +359,29 @@ class ScopeTradeIntTest : ContractIntTest() {
             message = "The bid should have debited the new quote denom from the bidder",
         )
     }
+
+    @Test
+    fun testGetAsksByCollateralId() {
+        val scopeAddress = ScopeWriteUtil.writeMockScope(
+            pbClient = pbClient,
+            signer = asker,
+            ownerAddress = contractInfo.contractAddress,
+            valueOwnerAddress = contractInfo.contractAddress,
+        ).let { (scopeUuid, _) -> MetadataAddress.forScope(scopeUuid).toString() }
+        val createAskResponse = createAsk(
+            createAsk = CreateAsk(
+                ask = ScopeTradeAsk(
+                    id = UUID.randomUUID().toString(),
+                    scopeAddress = scopeAddress,
+                    quote = newCoins(5000, "nhash"),
+                )
+            )
+        )
+        val queryAsk = bilateralClient.getAsksByCollateralId(scopeAddress).assertSingle("A single ask should be returned by the query")
+        assertEquals(
+            expected = createAskResponse.askOrder,
+            actual = queryAsk,
+            message = "The correct ask should be returned by the query",
+        )
+    }
 }
