@@ -1,24 +1,42 @@
+use crate::storage::ask_order_storage::{ask_orders, update_ask_order};
 use crate::storage::contract_info::{
     get_contract_info, set_contract_info, ContractInfoV2, CONTRACT_TYPE, CONTRACT_VERSION,
 };
+use crate::types::core::constants::DEFAULT_SEARCH_ORDER;
 use crate::types::core::error::ContractError;
+use crate::types::request::ask_types::ask_order::AskOrder;
 use crate::util::extensions::ResultExtensions;
-use cosmwasm_std::{to_binary, DepsMut, Response};
+use cosmwasm_std::{to_binary, DepsMut, Response, StdError};
 use provwasm_std::{ProvenanceMsg, ProvenanceQuery};
 use semver::Version;
 
 pub fn migrate_contract(
-    deps: DepsMut<ProvenanceQuery>,
+    mut deps: DepsMut<ProvenanceQuery>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let mut contract_info = get_contract_info(deps.storage)?;
     check_valid_migration_target(&contract_info)?;
     contract_info.contract_version = CONTRACT_VERSION.to_string();
     set_contract_info(deps.storage, &contract_info)?;
+    migrate_ask_order_indices(&mut deps)?;
     Response::new()
         .add_attribute("action", "migrate_contract")
         .add_attribute("new_version", CONTRACT_VERSION)
         .set_data(to_binary(&contract_info)?)
         .to_ok()
+}
+
+// TODO: Remove this in v1.1.1.  This function rewrites all ask orders with the new collateral index.
+// The previous value was a UniqueIndex, but v1.1.0 includes the ability to have multiple ask orders
+// for the same marker, which prevents collateral from being unique.
+fn migrate_ask_order_indices(deps: &mut DepsMut<ProvenanceQuery>) -> Result<(), ContractError> {
+    let ask_order_results = ask_orders()
+        .range(deps.storage, None, None, DEFAULT_SEARCH_ORDER)
+        .map(|result| result.map(|(_, ask_order)| ask_order))
+        .collect::<Vec<Result<AskOrder, StdError>>>();
+    for ask_order_result in ask_order_results {
+        update_ask_order(deps.storage, &ask_order_result?)?;
+    }
+    ().to_ok()
 }
 
 fn check_valid_migration_target(contract_info: &ContractInfoV2) -> Result<(), ContractError> {

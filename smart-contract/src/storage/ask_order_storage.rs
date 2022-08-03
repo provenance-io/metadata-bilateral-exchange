@@ -7,7 +7,7 @@ use cosmwasm_std::Storage;
 use cw_storage_plus::{Index, IndexList, IndexedMap, MultiIndex};
 
 const NAMESPACE_ASK_PK: &str = "ask";
-const NAMESPACE_COLLATERAL_IDX: &str = "ask__collateral";
+const NAMESPACE_COLLATERAL_IDX: &str = "ask__collateral_v2";
 const NAMESPACE_OWNER_IDX: &str = "ask__owner";
 const NAMESPACE_TYPE_IDX: &str = "ask__type";
 

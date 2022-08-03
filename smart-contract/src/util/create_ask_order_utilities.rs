@@ -254,8 +254,31 @@ fn create_marker_share_sale_ask_collateral(
     validate_marker_for_ask(
         &marker,
         match &creation_type {
-            // New asks should verify that the sender owns the marker, and then revoke its permissions
-            AskCreationType::New => Some(&info.sender),
+            AskCreationType::New => {
+                if existing_related_orders.is_empty() {
+                    // New asks should verify that the sender owns the marker, and then revoke its permissions
+                    Some(&info.sender)
+                } else {
+                    // Verify that the sender owns all other ask orders for the given marker. Without
+                    // this check, any sender could piggyback an ask order for a marker they never
+                    // owned and receive funds
+                    if !existing_related_orders
+                        .iter()
+                        .all(|order| order.owner == info.sender)
+                    {
+                        return ContractError::InvalidRequest {
+                            message: format!(
+                                "the sender [{}] is not the owner of all existing marker share sales for the target marker [{}]",
+                                info.sender.as_str(),
+                                &marker.denom,
+                            ),
+                        }.to_err();
+                    }
+                    // If this is a new ask for an already held marker, the marker should no longer
+                    // have permissions for the sender
+                    None
+                }
+            }
             // Updates to asks should verify only that the contract still owns the marker
             AskCreationType::Update { .. } => None,
         },
@@ -291,7 +314,14 @@ fn create_marker_share_sale_ask_collateral(
                     message: format!("marker share sales cannot be created alongside marker trades for marker with address [{}]", marker.address.as_str()),
                 }.to_err();
             }
-            get_marker_permission_revoke_messages(&marker, &env.contract.address)?
+            // Only revoke permissions from the marker if this is the first ask for this marker.
+            // Additional asks do not need to revoke permissions because the permissions have already
+            // been revoked by the initial ask that sent the marker into the contract's control.
+            if existing_related_orders.is_empty() {
+                get_marker_permission_revoke_messages(&marker, &env.contract.address)?
+            } else {
+                vec![]
+            }
         }
         AskCreationType::Update {
             ref existing_ask_order,
