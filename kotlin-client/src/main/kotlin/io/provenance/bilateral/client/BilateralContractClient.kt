@@ -17,10 +17,10 @@ import io.provenance.bilateral.execute.UpdateAsk
 import io.provenance.bilateral.execute.UpdateBid
 import io.provenance.bilateral.execute.UpdateSettings
 import io.provenance.bilateral.extensions.booleanAttribute
-import io.provenance.bilateral.extensions.stringAttribute
-import io.provenance.bilateral.extensions.stringAttributeOrNull
 import io.provenance.bilateral.extensions.executeContractDataToJsonBytes
 import io.provenance.bilateral.extensions.singleWasmEvent
+import io.provenance.bilateral.extensions.stringAttribute
+import io.provenance.bilateral.extensions.stringAttributeOrNull
 import io.provenance.bilateral.interfaces.BilateralContractExecuteMsg
 import io.provenance.bilateral.interfaces.BilateralContractQueryMsg
 import io.provenance.bilateral.models.AskOrder

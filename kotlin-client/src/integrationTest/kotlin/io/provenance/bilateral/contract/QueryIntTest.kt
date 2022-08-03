@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test
 import testconfiguration.ContractIntTest
 import testconfiguration.functions.assertNotNull
 import testconfiguration.functions.assertNull
-import testconfiguration.functions.assertSucceeds
 import testconfiguration.functions.newCoins
 import java.util.UUID
 import kotlin.test.assertFails
