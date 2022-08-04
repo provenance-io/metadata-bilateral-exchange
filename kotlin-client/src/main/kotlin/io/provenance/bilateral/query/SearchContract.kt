@@ -94,6 +94,7 @@ sealed interface ContractSearchType {
     class Type private constructor(val valueType: Body) : ContractSearchType {
         constructor(valueType: BilateralRequestType) : this(Body(valueType))
 
+        @JsonNaming(SnakeCaseStrategy::class)
         class Body(val valueType: BilateralRequestType)
     }
 
@@ -105,6 +106,7 @@ sealed interface ContractSearchType {
     class Id private constructor(val id: Body) : ContractSearchType {
         constructor(id: String) : this(Body(id))
 
+        @JsonNaming(SnakeCaseStrategy::class)
         class Body(val id: String)
     }
 
@@ -115,6 +117,7 @@ sealed interface ContractSearchType {
     class Owner private constructor(val owner: Body) : ContractSearchType {
         constructor(owner: String) : this(Body(owner))
 
+        @JsonNaming(SnakeCaseStrategy::class)
         class Body(val owner: String)
     }
 }
