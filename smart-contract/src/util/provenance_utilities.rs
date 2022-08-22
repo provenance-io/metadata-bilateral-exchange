@@ -395,24 +395,6 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_marker_quote() {
-        assert!(
-            calculate_marker_quote(100, &[]).is_empty(),
-            "an empty result should be produced from empty input",
-        );
-        assert_eq!(
-            coins(15, "testcoin"),
-            calculate_marker_quote(5, &coins(3, "testcoin")),
-            "the result should be the share count multiplied by the amount of denom for single coin input",
-        );
-        assert_eq!(
-            vec![coin(100, "a"), coin(50, "b"), coin(20, "c")],
-            calculate_marker_quote(10, &[coin(10, "a"), coin(5, "b"), coin(2, "c")]),
-            "the result should be the share count multiplied by each coin's denom for multiple coin inputs",
-        )
-    }
-
-    #[test]
     fn test_release_marker_from_contract_produces_correct_output() {
         let messages = release_marker_from_contract(
             "testdenom",

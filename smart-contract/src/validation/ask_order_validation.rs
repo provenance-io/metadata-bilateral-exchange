@@ -2,16 +2,16 @@ use crate::types::core::error::ContractError;
 use crate::types::request::ask_types::ask_collateral::AskCollateral;
 use crate::types::request::ask_types::ask_order::AskOrder;
 use crate::types::request::request_type::RequestType;
-use crate::util::extensions::ResultExtensions;
+use crate::validation::validation_handler::ValidationHandler;
 use cosmwasm_std::Coin;
 
 pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
-    let mut invalid_field_messages: Vec<String> = vec![];
+    let handler = ValidationHandler::new();
     if ask_order.id.is_empty() {
-        invalid_field_messages.push("id for AskOrder must not be empty".to_string());
+        handler.push("id for AskOrder must not be empty");
     }
     if ask_order.owner.as_str().is_empty() {
-        invalid_field_messages.push("owner for AskOrder must not be empty".to_string());
+        handler.push("owner for AskOrder must not be empty");
     }
     if let Some(attribute_requirement) = ask_order
         .descriptor
@@ -19,7 +19,7 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
         .and_then(|d| d.attribute_requirement.as_ref())
     {
         if attribute_requirement.attributes.is_empty() {
-            invalid_field_messages.push(format!(
+            handler.push(format!(
                 "AskOrder [{}] specified RequiredAttributes, but the value included no attributes to check",
                 ask_order.id,
             ));
@@ -28,7 +28,7 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
     match ask_order.ask_type {
         RequestType::CoinTrade => {
             if !matches!(ask_order.collateral, AskCollateral::CoinTrade(_)) {
-                invalid_field_messages.push(format!(
+                handler.push(format!(
                     "ask type [{}] for AskOrder [{}] is invalid. type requires collateral type of AskCollateral::CoinTrade",
                     ask_order.ask_type.get_name(), ask_order.id,
                 ));
@@ -36,7 +36,7 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
         }
         RequestType::MarkerTrade => {
             if !matches!(ask_order.collateral, AskCollateral::MarkerTrade(_)) {
-                invalid_field_messages.push(format!(
+                handler.push(format!(
                     "ask type [{}] for AskOrder [{}] is invalid. type requires collateral type of AskCollateral::MarkerTrade",
                     ask_order.ask_type.get_name(), ask_order.id,
                 ));
@@ -44,7 +44,7 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
         }
         RequestType::MarkerShareSale => {
             if !matches!(ask_order.collateral, AskCollateral::MarkerShareSale(_)) {
-                invalid_field_messages.push(format!(
+                handler.push(format!(
                     "ask type [{}] for AskOrder [{}] is invalid. type requires collateral type of AskCollateral::MarkerShareSale",
                     ask_order.ask_type.get_name(), ask_order.id,
                 ))
@@ -52,7 +52,7 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
         }
         RequestType::ScopeTrade => {
             if !matches!(ask_order.collateral, AskCollateral::ScopeTrade(_)) {
-                invalid_field_messages.push(format!(
+                handler.push(format!(
                     "ask type [{}] for AskOrder [{}] is invalid. type requires collateral type of AskCollateral::ScopeTrade",
                     ask_order.ask_type.get_name(), ask_order.id,
                 ))
@@ -87,57 +87,56 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
         AskCollateral::CoinTrade(collateral) => {
             let prefix = format!("AskOrder [{}] of type coin trade", ask_order.id);
             if collateral.base.is_empty() {
-                invalid_field_messages.push(format!("{} must include base funds", prefix));
+                handler.push(format!("{} must include base funds", prefix));
             }
-            invalid_field_messages.append(
-                &mut collateral
+            handler.append(
+                &collateral
                     .base
                     .iter()
                     .flat_map(|coin| validate_coin(coin, "AskCollateral Base Coin"))
-                    .collect(),
+                    .collect::<Vec<String>>(),
             );
             if collateral.quote.is_empty() {
-                invalid_field_messages.push(format!("{} must include quote funds", prefix,));
+                handler.push(format!("{} must include quote funds", prefix,));
             }
-            invalid_field_messages.append(
-                &mut collateral
+            handler.append(
+                &collateral
                     .quote
                     .iter()
                     .flat_map(|coin| validate_coin(coin, "AskCollateral Quote Coin"))
-                    .collect(),
+                    .collect::<Vec<String>>(),
             );
         }
         AskCollateral::MarkerTrade(collateral) => {
             let prefix = format!("AskOrder [{}] of type marker trade", ask_order.id);
             if collateral.marker_address.as_str().is_empty() {
-                invalid_field_messages
-                    .push(format!("{} must have a valid marker address", prefix,));
+                handler.push(format!("{} must have a valid marker address", prefix,));
             }
             if collateral.marker_denom.is_empty() {
-                invalid_field_messages.push(format!("{} must have a specified denom", prefix,));
+                handler.push(format!("{} must have a specified denom", prefix,));
             }
             if collateral.share_count.is_zero() {
-                invalid_field_messages.push(format!(
+                handler.push(format!(
                     "{} must refer to a marker with at least one of its coins held",
                     prefix,
                 ))
             }
             if collateral.quote_per_share.is_empty() {
-                invalid_field_messages.push(format!("{} must have a quote per share", prefix,))
+                handler.push(format!("{} must have a quote per share", prefix,))
             }
-            invalid_field_messages.append(
-                &mut collateral
+            handler.append(
+                &collateral
                     .quote_per_share
                     .iter()
                     .flat_map(|coin| validate_coin(coin, "AskCollateral Quote per Share Coin"))
-                    .collect(),
+                    .collect::<Vec<String>>(),
             );
             if !collateral
                 .removed_permissions
                 .iter()
                 .any(|perm| perm.address == ask_order.owner)
             {
-                invalid_field_messages.push(format!(
+                handler.push(format!(
                     "{} does not have a permission for owner [{}]",
                     prefix,
                     ask_order.owner.as_str()
@@ -147,20 +146,20 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
         AskCollateral::MarkerShareSale(collateral) => {
             let prefix = format!("AskOrder [{}] of type marker share sale", ask_order.id);
             if collateral.marker_address.as_str().is_empty() {
-                invalid_field_messages.push(format!("{} must have a valid marker address", prefix));
+                handler.push(format!("{} must have a valid marker address", prefix));
             }
             if collateral.marker_denom.is_empty() {
-                invalid_field_messages.push(format!("{} must have a specified denom", prefix));
+                handler.push(format!("{} must have a specified denom", prefix));
             }
             if collateral.total_shares_in_sale.is_zero() {
-                invalid_field_messages.push(format!(
+                handler.push(format!(
                     "{} must specify at least one total share in sale, but specified zero for this value",
                     prefix,
                 ));
             }
             if collateral.remaining_shares_in_sale.u128() != collateral.total_shares_in_sale.u128()
             {
-                invalid_field_messages.push(format!(
+                handler.push(format!(
                     "{} did not specify the same remaining_shares_in_sale [{}] as its total_shares_in_sale [{}]",
                     prefix,
                     collateral.remaining_shares_in_sale.u128(),
@@ -168,21 +167,21 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
                 ));
             }
             if collateral.quote_per_share.is_empty() {
-                invalid_field_messages.push(format!("{} must have a quote per share", prefix))
+                handler.push(format!("{} must have a quote per share", prefix))
             }
-            invalid_field_messages.append(
-                &mut collateral
+            handler.append(
+                &collateral
                     .quote_per_share
                     .iter()
                     .flat_map(|coin| validate_coin(coin, "AskCollateral Quote per Share Coin"))
-                    .collect(),
+                    .collect::<Vec<String>>(),
             );
             if !collateral
                 .removed_permissions
                 .iter()
                 .any(|perm| perm.address == ask_order.owner)
             {
-                invalid_field_messages.push(format!(
+                handler.push(format!(
                     "{} does not have a permission for owner [{}]",
                     prefix,
                     ask_order.owner.as_str()
@@ -192,29 +191,21 @@ pub fn validate_ask_order(ask_order: &AskOrder) -> Result<(), ContractError> {
         AskCollateral::ScopeTrade(collateral) => {
             let prefix = format!("AskOrder [{}] of type scope trade", ask_order.id);
             if collateral.scope_address.is_empty() {
-                invalid_field_messages.push(format!("{} must have a valid scope address", prefix));
+                handler.push(format!("{} must have a valid scope address", prefix));
             }
             if collateral.quote.is_empty() {
-                invalid_field_messages
-                    .push(format!("{} must have a valid quote specified", prefix));
+                handler.push(format!("{} must have a valid quote specified", prefix));
             }
-            invalid_field_messages.append(
-                &mut collateral
+            handler.append(
+                &collateral
                     .quote
                     .iter()
                     .flat_map(|coin| validate_coin(coin, "AskCollateral Quote"))
-                    .collect(),
+                    .collect::<Vec<String>>(),
             );
         }
     }
-    if invalid_field_messages.is_empty() {
-        ().to_ok()
-    } else {
-        ContractError::ValidationError {
-            messages: invalid_field_messages,
-        }
-        .to_err()
-    }
+    handler.handle()
 }
 
 #[cfg(test)]

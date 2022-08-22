@@ -8,7 +8,6 @@ pub struct MatchReport {
     pub bid_id: String,
     pub ask_exists: bool,
     pub bid_exists: bool,
-    pub standard_match_possible: bool,
-    pub quote_mismatch_match_possible: bool,
-    pub error_messages: Vec<String>,
+    pub match_possible: bool,
+    pub error_message: Option<String>,
 }

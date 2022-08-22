@@ -1,23 +1,28 @@
 use crate::storage::ask_order_storage::{
     delete_ask_order_by_id, get_ask_order_by_id, get_ask_orders_by_collateral_id, update_ask_order,
 };
-use crate::storage::bid_order_storage::{delete_bid_order_by_id, get_bid_order_by_id};
+use crate::storage::bid_order_storage::{
+    delete_bid_order_by_id, get_bid_order_by_id, update_bid_order,
+};
 use crate::storage::contract_info::get_contract_info;
 use crate::types::core::error::ContractError;
+use crate::types::request::admin_match_options::{AdminMatchOptions, OverrideQuoteSource};
 use crate::types::request::ask_types::ask_collateral::{
     AskCollateral, CoinTradeAskCollateral, MarkerShareSaleAskCollateral, MarkerTradeAskCollateral,
     ScopeTradeAskCollateral,
 };
 use crate::types::request::ask_types::ask_order::AskOrder;
 use crate::types::request::bid_types::bid_collateral::{
-    CoinTradeBidCollateral, MarkerShareSaleBidCollateral, MarkerTradeBidCollateral,
+    BidCollateral, CoinTradeBidCollateral, MarkerShareSaleBidCollateral, MarkerTradeBidCollateral,
     ScopeTradeBidCollateral,
 };
 use crate::types::request::bid_types::bid_order::BidOrder;
 use crate::types::request::share_sale_type::ShareSaleType;
+use crate::util::coin_utilities::{multiply_coins_by_amount, subtract_coins};
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::{release_marker_from_contract, replace_scope_owner};
 use crate::validation::execute_match_validation::validate_match;
+use crate::validation::validation_handler::ValidationHandler;
 use cosmwasm_std::{BankMsg, CosmosMsg, DepsMut, Env, MessageInfo, Response, Uint128};
 use provwasm_std::{
     withdraw_coins, write_scope, ProvenanceMsg, ProvenanceQuerier, ProvenanceQuery,
@@ -30,22 +35,17 @@ pub fn execute_match(
     info: MessageInfo,
     ask_id: String,
     bid_id: String,
-    accept_mismatched_bids: Option<bool>,
+    admin_match_options: Option<AdminMatchOptions>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
-    let mut invalid_fields: Vec<String> = vec![];
+    let handler = ValidationHandler::new();
     if ask_id.is_empty() {
-        invalid_fields.push("ask id must not be empty".to_string());
+        handler.push("ask id must not be empty");
     }
     if bid_id.is_empty() {
-        invalid_fields.push("bid id must not be empty".to_string());
+        handler.push("bid id must not be empty");
     }
     // return error if either ids are badly formed
-    if !invalid_fields.is_empty() {
-        return ContractError::ValidationError {
-            messages: invalid_fields,
-        }
-        .to_err();
-    }
+    handler.handle()?;
     // return error if funds sent
     if !info.funds.is_empty() {
         return ContractError::InvalidFundsProvided {
@@ -55,19 +55,12 @@ pub fn execute_match(
     }
     let ask_order = get_ask_order_by_id(deps.storage, &ask_id)?;
     let bid_order = get_bid_order_by_id(deps.storage, &bid_id)?;
-    // Default to false for accepting mismatched bids if the user does not provide a value.  This
-    // prevents unwanted matches from occurring by accident.
-    let accept_mismatched_bids = accept_mismatched_bids.unwrap_or(false);
     // only the admin or the asker may execute matches
     if info.sender != ask_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
         return ContractError::Unauthorized.to_err();
     }
-    validate_match(
-        &deps.as_ref(),
-        &ask_order,
-        &bid_order,
-        accept_mismatched_bids,
-    )?;
+    // Ensure match is viable before trying to actually execute the match
+    validate_match(&deps.as_ref(), &ask_order, &bid_order, &admin_match_options)?;
     let execute_result = match &ask_order.collateral {
         AskCollateral::CoinTrade(collateral) => execute_coin_trade(
             deps,
@@ -91,6 +84,12 @@ pub fn execute_match(
             &bid_order,
             collateral,
             bid_order.collateral.get_marker_share_sale()?,
+            admin_match_options.and_then(|opt| match opt {
+                AdminMatchOptions::MarkerShareSale {
+                    override_quote_source,
+                } => override_quote_source,
+                _ => None,
+            }),
         )?,
         AskCollateral::ScopeTrade(collateral) => execute_scope_trade(
             deps,
@@ -221,17 +220,37 @@ fn execute_marker_share_sale(
     bid_order: &BidOrder,
     ask_collateral: &MarkerShareSaleAskCollateral,
     bid_collateral: &MarkerShareSaleBidCollateral,
+    override_quote_source: Option<OverrideQuoteSource>,
 ) -> Result<ExecuteResults, ContractError> {
+    let bid_overage_shares =
+        if bid_collateral.share_count.u128() > ask_collateral.remaining_shares_in_sale.u128() {
+            bid_collateral.share_count.u128() - ask_collateral.remaining_shares_in_sale.u128()
+        } else {
+            0
+        };
+    let shares_purchased = bid_collateral.share_count.u128() - bid_overage_shares;
+    let quote_paid = if let Some(source) = override_quote_source {
+        match source {
+            OverrideQuoteSource::Ask => {
+                multiply_coins_by_amount(&ask_collateral.quote_per_share, shares_purchased)
+            }
+            OverrideQuoteSource::Bid => {
+                multiply_coins_by_amount(&bid_collateral.get_quote_per_share(), shares_purchased)
+            }
+        }
+    } else {
+        multiply_coins_by_amount(&bid_collateral.get_quote_per_share(), shares_purchased)
+    };
     // Asker gets the quote that the bidder provided from escrow
     // Bidder gets their X marker coins withdrawn to them from the contract-controlled marker
     let mut messages = vec![
         CosmosMsg::Bank(BankMsg::Send {
             to_address: ask_order.owner.to_string(),
-            amount: bid_collateral.quote.to_owned(),
+            amount: quote_paid.to_owned(),
         }),
         withdraw_coins(
             &ask_collateral.marker_denom,
-            bid_collateral.share_count.u128(),
+            shares_purchased,
             &ask_collateral.marker_denom,
             bid_order.owner.to_owned(),
         )?,
@@ -267,7 +286,7 @@ fn execute_marker_share_sale(
             // Validation will prevent this value from ever becoming less than zero from the sale,
             // so this is a safe operation
             let shares_remaining_after_sale =
-                ask_collateral.remaining_shares_in_sale.u128() - bid_collateral.share_count.u128();
+                ask_collateral.remaining_shares_in_sale.u128() - shares_purchased;
             // If all listed shares are now sold, terminate the sale
             if shares_remaining_after_sale == 0 {
                 terminate_sale()?;
@@ -283,12 +302,30 @@ fn execute_marker_share_sale(
             }
         }
     };
-    // Regardless of sale type scenario, the bid is always deleted after successful execution
-    delete_bid_order_by_id(deps.storage, &bid_order.id)?;
+    // If a bid overage occurred, then the bid should remain open with a reduced number of shares
+    // and a reset quote.
+    let bid_deleted = if bid_overage_shares > 0 {
+        let mut updated_bidder_collateral = bid_collateral.to_owned();
+        updated_bidder_collateral.share_count = Uint128::new(bid_overage_shares);
+        updated_bidder_collateral.quote = subtract_coins(
+            "failed to subtract bid coin spent from total bid quote",
+            &bid_collateral.quote,
+            &quote_paid,
+        )?;
+        let mut updated_bid_order = bid_order.to_owned();
+        updated_bid_order.collateral = BidCollateral::MarkerShareSale(updated_bidder_collateral);
+        update_bid_order(deps.storage, &updated_bid_order)?;
+        false
+    } else {
+        // If no bid overage occurred, then all shares were purchased at the expected amount and the
+        // bid should be closed.
+        delete_bid_order_by_id(deps.storage, &bid_order.id)?;
+        true
+    };
     ExecuteResults {
         messages,
         ask_deleted,
-        bid_deleted: true,
+        bid_deleted,
         collateral_released,
     }
     .to_ok()
@@ -332,13 +369,14 @@ mod tests {
     use crate::execute::execute_match::execute_match;
     use crate::storage::ask_order_storage::{get_ask_order_by_id, insert_ask_order};
     use crate::storage::bid_order_storage::{get_bid_order_by_id, insert_bid_order};
-    use crate::test::cosmos_type_helpers::{single_attribute_for_key, MockOwnedDeps};
+    use crate::test::cosmos_type_helpers::single_attribute_for_key;
     use crate::test::error_helpers::assert_validation_error_message;
     use crate::test::mock_instantiate::{default_instantiate, DEFAULT_ADMIN_ADDRESS};
     use crate::test::mock_marker::{MockMarker, DEFAULT_MARKER_DENOM, DEFAULT_MARKER_HOLDINGS};
     use crate::test::mock_scope::{MockScope, DEFAULT_SCOPE_ADDR};
     use crate::test::request_helpers::{mock_ask_order, mock_bid_order, mock_bid_scope_trade};
     use crate::types::core::error::ContractError;
+    use crate::types::request::admin_match_options::AdminMatchOptions;
     use crate::types::request::ask_types::ask::Ask;
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::bid_types::bid::Bid;
@@ -535,43 +573,23 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_marker_share_sale_single_tx_from_admin_with_matching_quote() {
-        do_marker_share_sale_single_tx_test(DEFAULT_ADMIN_ADDRESS, false);
+    fn test_execute_marker_share_sale_single_tx_from_admin() {
+        do_marker_share_sale_single_tx_test(DEFAULT_ADMIN_ADDRESS);
     }
 
     #[test]
-    fn test_execute_marker_share_sale_single_tx_from_admin_with_mismatched_quote() {
-        do_marker_share_sale_single_tx_test(DEFAULT_ADMIN_ADDRESS, true);
+    fn test_execute_marker_share_sale_single_tx_from_asker() {
+        do_marker_share_sale_single_tx_test("asker");
     }
 
     #[test]
-    fn test_execute_marker_share_sale_single_tx_from_asker_with_matching_quote() {
-        do_marker_share_sale_single_tx_test("asker", false);
+    fn test_execute_marker_share_sale_multi_tx_from_admin() {
+        do_marker_share_sale_multi_tx_test(DEFAULT_ADMIN_ADDRESS);
     }
 
     #[test]
-    fn test_execute_marker_share_sale_single_tx_from_asker_with_mismatched_quote() {
-        do_marker_share_sale_single_tx_test("asker", true);
-    }
-
-    #[test]
-    fn test_execute_marker_share_sale_multi_tx_from_admin_with_matching_quote() {
-        do_marker_share_sale_multi_tx_test(DEFAULT_ADMIN_ADDRESS, false);
-    }
-
-    #[test]
-    fn test_execute_marker_share_sale_multi_tx_from_admin_with_mismatched_quote() {
-        do_marker_share_sale_multi_tx_test(DEFAULT_ADMIN_ADDRESS, true);
-    }
-
-    #[test]
-    fn test_execute_marker_share_sale_multi_tx_from_asker_with_matching_quote() {
-        do_marker_share_sale_multi_tx_test("asker", false);
-    }
-
-    #[test]
-    fn test_execute_marker_share_sale_multi_tx_from_asker_with_mismatched_quote() {
-        do_marker_share_sale_multi_tx_test("asker", true);
+    fn test_execute_marker_share_sale_multi_tx_from_asker() {
+        do_marker_share_sale_multi_tx_test("asker");
     }
 
     #[test]
@@ -875,37 +893,6 @@ mod tests {
         get_bid_order_by_id(storage, &bid_id).expect_err("bid should be missing from storage");
     }
 
-    fn test_quote_mismatch_errors<S: Into<String>, A: Into<String>, B: Into<String>>(
-        deps: &mut MockOwnedDeps,
-        sender: S,
-        ask_id: A,
-        bid_id: B,
-    ) {
-        let sender_address = sender.into();
-        let ask_id = ask_id.into();
-        let bid_id = bid_id.into();
-        execute_match(
-            deps.as_mut(),
-            mock_env(),
-            mock_info(&sender_address, &[]),
-            ask_id.to_owned(),
-            bid_id.to_owned(),
-            Some(false),
-        )
-        .expect_err("an error should be returned when the bid quote does not match the ask quote");
-        execute_match(
-            deps.as_mut(),
-            mock_env(),
-            mock_info(&sender_address, &[]),
-            ask_id,
-            bid_id,
-            None,
-        )
-            .expect_err(
-                "an error should be returned when the bid quote does not match the ask quote and no value is provided in the mismatch flag",
-            );
-    }
-
     fn assert_response_messages_for_incomplete_marker_share_sale(
         response: &Response<ProvenanceMsg>,
         asker_coin_received: &[Coin],
@@ -985,7 +972,27 @@ mod tests {
         get_bid_order_by_id(deps.as_ref().storage, "bid_id").expect("bid order should exist");
         let sender_address = match_sender_address.into();
         if mismatched_quotes {
-            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id");
+            execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(&sender_address, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                Some(AdminMatchOptions::coin_trade_options(false)),
+            )
+            .expect_err(
+                "an error should be returned when the bid quote does not match the ask quote",
+            );
+            execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(&sender_address, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                None,
+            ).expect_err(
+                    "an error should be returned when the bid quote does not match the ask quote and no value is provided in the mismatch flag",
+                );
         }
         let response = execute_match(
             deps.as_mut(),
@@ -994,7 +1001,7 @@ mod tests {
             "ask_id".to_string(),
             "bid_id".to_string(),
             // Only allow invalid matches when the quotes are supposed to have a mismatch
-            Some(mismatched_quotes),
+            Some(AdminMatchOptions::coin_trade_options(mismatched_quotes)),
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
@@ -1064,7 +1071,27 @@ mod tests {
         get_bid_order_by_id(deps.as_ref().storage, "bid_id").expect("bid order should exist");
         let sender_address = match_sender_address.into();
         if mismatched_quotes {
-            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id");
+            execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(&sender_address, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                Some(AdminMatchOptions::marker_trade_options(false)),
+            )
+            .expect_err(
+                "an error should be returned when the bid quote does not match the ask quote",
+            );
+            execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(&sender_address, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                None,
+            ).expect_err(
+                "an error should be returned when the bid quote does not match the ask quote and no value is provided in the mismatch flag",
+            );
         }
         let response = execute_match(
             deps.as_mut(),
@@ -1072,7 +1099,7 @@ mod tests {
             mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
-            Some(mismatched_quotes),
+            Some(AdminMatchOptions::marker_trade_options(mismatched_quotes)),
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
@@ -1157,10 +1184,7 @@ mod tests {
         });
     }
 
-    fn do_marker_share_sale_single_tx_test<S: Into<String>>(
-        match_sender_address: S,
-        mismatched_quotes: bool,
-    ) {
+    fn do_marker_share_sale_single_tx_test<S: Into<String>>(match_sender_address: S) {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut());
         deps.querier
@@ -1180,11 +1204,7 @@ mod tests {
         )
         .expect("the ask should be created successfully");
         get_ask_order_by_id(deps.as_ref().storage, "ask_id").expect("ask order should exist");
-        let bid_quote = if mismatched_quotes {
-            coins(1500, "widgets")
-        } else {
-            coins(15, "quote")
-        };
+        let bid_quote = coins(15, "quote");
         create_bid(
             deps.as_mut(),
             mock_env(),
@@ -1195,16 +1215,13 @@ mod tests {
         .expect("the bid should be created successfully");
         get_bid_order_by_id(deps.as_ref().storage, "bid_id").expect("bid order should exist");
         let sender_address = match_sender_address.into();
-        if mismatched_quotes {
-            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id");
-        }
         let response = execute_match(
             deps.as_mut(),
             mock_env(),
             mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
-            Some(mismatched_quotes),
+            None,
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
@@ -1223,12 +1240,7 @@ mod tests {
                 assert_eq!(
                     &bid_quote,
                     amount,
-                    "{}",
-                    if mismatched_quotes {
-                        "the asker should get the correct mismatched quote funds"
-                    } else {
-                        "the asker should get the correct quote funds"
-                    },
+                    "the asker should get the correct quote funds"
                 );
             },
             CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
@@ -1281,10 +1293,7 @@ mod tests {
         });
     }
 
-    fn do_marker_share_sale_multi_tx_test<S: Into<String>>(
-        match_sender_address: S,
-        mismatched_quotes: bool,
-    ) {
+    fn do_marker_share_sale_multi_tx_test<S: Into<String>>(match_sender_address: S) {
         let mut deps = mock_dependencies(&[]);
         default_instantiate(deps.as_mut());
         deps.querier
@@ -1304,11 +1313,7 @@ mod tests {
         )
         .expect("the ask should be created successfully");
         get_ask_order_by_id(deps.as_ref().storage, "ask_id").expect("ask order should exist");
-        let first_bid_quote = if mismatched_quotes {
-            coins(2232, "whatevercoin")
-        } else {
-            coins(50, "quote")
-        };
+        let first_bid_quote = coins(50, "quote");
         // Create the first bid that only buys half the shares for sale
         create_bid(
             deps.as_mut(),
@@ -1320,16 +1325,13 @@ mod tests {
         .expect("the bid should be created successfully");
         get_bid_order_by_id(deps.as_ref().storage, "bid_id_1").expect("bid order should exist");
         let sender_address = match_sender_address.into();
-        if mismatched_quotes {
-            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id_1")
-        }
         let response = execute_match(
             deps.as_mut(),
             mock_env(),
             mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id_1".to_string(),
-            Some(mismatched_quotes),
+            None,
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results_with_extras(
@@ -1367,14 +1369,8 @@ mod tests {
                     "the asker should receive funds from the match",
                 );
                 assert_eq!(
-                    &first_bid_quote,
-                    amount,
-                    "{}",
-                    if mismatched_quotes {
-                        "the asker should get the correct mismatched quote funds"
-                    } else {
-                        "the asker should get the correct quote funds"
-                    },
+                    &first_bid_quote, amount,
+                    "the asker should get the correct quote funds",
                 );
             }
             CosmosMsg::Custom(ProvenanceMsg {
@@ -1411,11 +1407,7 @@ mod tests {
         }
         .to_marker();
         deps.querier.with_markers(vec![updated_marker]);
-        let second_bid_quote = if mismatched_quotes {
-            coins(111, "bidcoinlol")
-        } else {
-            coins(50, "quote")
-        };
+        let second_bid_quote = coins(50, "quote");
         create_bid(
             deps.as_mut(),
             mock_env(),
@@ -1425,16 +1417,13 @@ mod tests {
         )
         .expect("the bid should be created successfully");
         get_bid_order_by_id(deps.as_ref().storage, "bid_id").expect("bid order should exist");
-        if mismatched_quotes {
-            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id");
-        }
         let response = execute_match(
             deps.as_mut(),
             mock_env(),
             mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
-            Some(mismatched_quotes),
+            None,
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
@@ -1453,12 +1442,7 @@ mod tests {
                 assert_eq!(
                     &second_bid_quote,
                     amount,
-                    "{}",
-                    if mismatched_quotes {
-                        "the asker should get the correct mismatched quote funds"
-                    } else {
-                        "the asker should get the correct quote funds"
-                    },
+                    "the asker should get the correct quote funds",
                 );
             },
             CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
@@ -1541,7 +1525,27 @@ mod tests {
         get_bid_order_by_id(deps.as_ref().storage, "bid_id").expect("bid order should exist");
         let sender_address = match_sender_address.into();
         if mismatched_quotes {
-            test_quote_mismatch_errors(&mut deps, &sender_address, "ask_id", "bid_id");
+            execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(&sender_address, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                Some(AdminMatchOptions::scope_trade_options(false)),
+            )
+            .expect_err(
+                "an error should be returned when the bid quote does not match the ask quote",
+            );
+            execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(&sender_address, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                None,
+            ).expect_err(
+                "an error should be returned when the bid quote does not match the ask quote and no value is provided in the mismatch flag",
+            );
         }
         let response = execute_match(
             deps.as_mut(),
@@ -1549,7 +1553,7 @@ mod tests {
             mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
-            Some(mismatched_quotes),
+            Some(AdminMatchOptions::scope_trade_options(mismatched_quotes)),
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response, true);

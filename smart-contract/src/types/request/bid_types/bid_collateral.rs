@@ -1,4 +1,5 @@
 use crate::types::core::error::ContractError;
+use crate::util::coin_utilities::divide_coins_by_amount;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{Addr, Coin, Uint128};
 use schemars::JsonSchema;
@@ -159,6 +160,10 @@ impl MarkerShareSaleBidCollateral {
             share_count: Uint128::new(share_count),
             quote: quote.to_owned(),
         }
+    }
+
+    pub fn get_quote_per_share(&self) -> Vec<Coin> {
+        divide_coins_by_amount(&self.quote, self.share_count.u128())
     }
 }
 

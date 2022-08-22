@@ -1,4 +1,5 @@
 use crate::types::core::error::ContractError;
+use crate::types::request::admin_match_options::{AdminMatchOptions, OverrideQuoteSource};
 use crate::types::request::ask_types::ask_collateral::{
     AskCollateral, CoinTradeAskCollateral, MarkerShareSaleAskCollateral, MarkerTradeAskCollateral,
     ScopeTradeAskCollateral,
@@ -11,11 +12,9 @@ use crate::types::request::bid_types::bid_collateral::{
 use crate::types::request::bid_types::bid_order::BidOrder;
 use crate::types::request::request_descriptor::{AttributeRequirementType, RequestDescriptor};
 use crate::types::request::share_sale_type::ShareSaleType;
-use crate::util::coin_utilities::coin_sort;
-use crate::util::extensions::ResultExtensions;
-use crate::util::provenance_utilities::{
-    calculate_marker_quote, format_coin_display, get_single_marker_coin_holding,
-};
+use crate::util::coin_utilities::{coin_sort, multiply_coins_by_amount};
+use crate::util::provenance_utilities::{format_coin_display, get_single_marker_coin_holding};
+use crate::validation::validation_handler::ValidationHandler;
 use cosmwasm_std::{Addr, Deps};
 use provwasm_std::{ProvenanceQuerier, ProvenanceQuery};
 use take_if::TakeIf;
@@ -24,93 +23,94 @@ pub fn validate_match(
     deps: &Deps<ProvenanceQuery>,
     ask: &AskOrder,
     bid: &BidOrder,
-    accept_mismatched_bids: bool,
+    admin_match_options: &Option<AdminMatchOptions>,
 ) -> Result<(), ContractError> {
-    let validation_messages = get_match_validation(deps, ask, bid, accept_mismatched_bids);
-    if validation_messages.is_empty() {
-        ().to_ok()
-    } else {
-        ContractError::ValidationError {
-            messages: validation_messages,
-        }
-        .to_err()
-    }
-}
-
-fn get_match_validation(
-    deps: &Deps<ProvenanceQuery>,
-    ask: &AskOrder,
-    bid: &BidOrder,
-    accept_mismatched_bids: bool,
-) -> Vec<String> {
-    let mut validation_messages: Vec<String> = vec![];
+    let handler = ValidationHandler::new();
     let identifiers = format!(
         "Match Validation for AskOrder [{}] and BidOrder [{}]:",
         &ask.id, &bid.id
     );
-
     if ask.ask_type != bid.bid_type {
-        validation_messages.push(format!(
+        handler.push(format!(
             "{} Ask type [{}] does not match bid type [{}]",
             &identifiers,
             &ask.ask_type.get_name(),
             &bid.bid_type.get_name(),
         ));
     }
-
     // Verify that the asker has appropriate attributes based on the request descriptor of the bid
     if let Some(validation_err) =
         get_required_attributes_error(deps, &bid.descriptor, &ask.owner, "asker")
     {
-        validation_messages.push(validation_err);
+        handler.push(validation_err);
     }
 
     // Verify that the bidder has appropriate attributes based on the request descriptor of the ask
     if let Some(validation_err) =
         get_required_attributes_error(deps, &ask.descriptor, &bid.owner, "bidder")
     {
-        validation_messages.push(validation_err);
+        handler.push(validation_err);
     }
 
     match &ask.collateral {
         AskCollateral::CoinTrade(ask_collat) => match &bid.collateral {
-            BidCollateral::CoinTrade(bid_collat) => validation_messages.append(
-                &mut get_coin_trade_collateral_validation(ask, bid, ask_collat, bid_collat, accept_mismatched_bids),
+            BidCollateral::CoinTrade(bid_collat) => handler.append(
+                &mut get_coin_trade_collateral_validation(ask, bid, ask_collat, bid_collat, if let Some(ref options) = admin_match_options {
+                    match options {
+                        AdminMatchOptions::CoinTrade { accept_mismatched_bids } => accept_mismatched_bids.unwrap_or(false),
+                        _ => false,
+                    }
+                } else { false }),
             ),
-            _ => validation_messages.push(format!(
+            _ => handler.push(format!(
                 "{} Ask collateral was of type coin trade, which did not match bid collateral",
                 identifiers
             )),
         },
         AskCollateral::MarkerTrade(ask_collat) => match &bid.collateral {
-            BidCollateral::MarkerTrade(bid_collat) => validation_messages.append(
-                &mut get_marker_trade_collateral_validation(deps, ask, bid, ask_collat, bid_collat, accept_mismatched_bids),
+            BidCollateral::MarkerTrade(bid_collat) => handler.append(
+                &mut get_marker_trade_collateral_validation(deps, ask, bid, ask_collat, bid_collat, if let Some(ref options) = admin_match_options {
+                    match options {
+                        AdminMatchOptions::MarkerTrade { accept_mismatched_bids } => accept_mismatched_bids.unwrap_or(false),
+                        _ => false,
+                    }
+                } else { false }),
             ),
-            _ => validation_messages.push(format!(
+            _ => handler.push(format!(
                 "{} Ask collateral was of type marker trade, which did not match bid collateral",
                 identifiers
             )),
         },
         AskCollateral::MarkerShareSale(ask_collat) => match &bid.collateral {
-            BidCollateral::MarkerShareSale(bid_collat) => validation_messages.append(
-                &mut get_marker_share_sale_collateral_validation(deps, ask, bid, ask_collat, bid_collat, accept_mismatched_bids),
+            BidCollateral::MarkerShareSale(bid_collat) => handler.append(
+                &mut get_marker_share_sale_collateral_validation(deps, ask, bid, ask_collat, bid_collat, if let Some(ref options) = admin_match_options {
+                    match options {
+                        AdminMatchOptions::MarkerShareSale { override_quote_source } => &override_quote_source,
+                        _ => &None,
+                    }
+                } else { &None }),
             ),
-            _ => validation_messages.push(format!(
+            _ => handler.push(format!(
                 "{} Ask Collateral was of type marker share sale, which did not match bid collateral",
                 identifiers,
             )),
         },
         AskCollateral::ScopeTrade(ask_collat) => match &bid.collateral {
-            BidCollateral::ScopeTrade(bid_collat) => validation_messages.append(
-                &mut get_scope_trade_collateral_validation(ask, bid, ask_collat, bid_collat, accept_mismatched_bids),
+            BidCollateral::ScopeTrade(bid_collat) => handler.append(
+                &mut get_scope_trade_collateral_validation(ask, bid, ask_collat, bid_collat, if let Some(ref options) = admin_match_options {
+                    match options {
+                        AdminMatchOptions::ScopeTrade { accept_mismatched_bids } => accept_mismatched_bids.unwrap_or(false),
+                        _ => false,
+                    }
+                } else { false }),
             ),
-            _ => validation_messages.push(format!(
+            _ => handler.push(format!(
                 "{} Ask Collateral was of type scope trade, which did not match bid collateral",
                 identifiers,
             )),
         }
     };
-    validation_messages
+    handler.handle()
 }
 
 fn get_required_attributes_error<S: Into<String>>(
@@ -298,7 +298,7 @@ fn get_marker_trade_collateral_validation(
     };
     if !accept_mismatched_bids {
         let mut ask_quote =
-            calculate_marker_quote(marker_share_count, &ask_collateral.quote_per_share);
+            multiply_coins_by_amount(&ask_collateral.quote_per_share, marker_share_count);
         let mut bid_quote = bid_collateral.quote.to_owned();
         ask_quote.sort_by(coin_sort);
         bid_quote.sort_by(coin_sort);
@@ -320,7 +320,7 @@ fn get_marker_share_sale_collateral_validation(
     bid: &BidOrder,
     ask_collateral: &MarkerShareSaleAskCollateral,
     bid_collateral: &MarkerShareSaleBidCollateral,
-    accept_mismatched_bids: bool,
+    override_quote_source: &Option<OverrideQuoteSource>,
 ) -> Vec<String> {
     let mut validation_messages: Vec<String> = vec![];
     let identifiers = format!(
@@ -348,25 +348,16 @@ fn get_marker_share_sale_collateral_validation(
     }
     match ask_collateral.sale_type {
         ShareSaleType::SingleTransaction => {
-            if bid_collateral.share_count.u128() != ask_collateral.total_shares_in_sale.u128() {
+            if bid_collateral.share_count.u128() < ask_collateral.total_shares_in_sale.u128() {
                 validation_messages.push(format!(
-                    "{} Ask requested that [{}] shares be purchased, but bid wanted [{}]",
+                    "{} Ask requested that [{}] shares be purchased, but bid wanted too few [{}]",
                     &identifiers,
                     ask_collateral.total_shares_in_sale.u128(),
                     bid_collateral.share_count.u128(),
                 ));
             }
         }
-        ShareSaleType::MultipleTransactions => {
-            if ask_collateral.remaining_shares_in_sale.u128() < bid_collateral.share_count.u128() {
-                validation_messages.push(format!(
-                    "{} Bid requested [{}] shares but the remaining share count is [{}]",
-                    &identifiers,
-                    bid_collateral.share_count.u128(),
-                    ask_collateral.remaining_shares_in_sale.u128()
-                ));
-            }
-        }
+        ShareSaleType::MultipleTransactions => {}
     }
     let marker = match ProvenanceQuerier::new(&deps.querier)
         .get_marker_by_denom(&ask_collateral.marker_denom)
@@ -400,21 +391,67 @@ fn get_marker_share_sale_collateral_validation(
         ));
         return validation_messages;
     }
-    if !accept_mismatched_bids {
-        let mut ask_quote = calculate_marker_quote(
-            bid_collateral.share_count.u128(),
-            &ask_collateral.quote_per_share,
-        );
-        let mut bid_quote = bid_collateral.quote.to_owned();
-        ask_quote.sort_by(coin_sort);
-        bid_quote.sort_by(coin_sort);
-        if ask_quote != bid_quote {
-            validation_messages.push(format!(
-                "{} Ask share price did not result in the same quote [{}] as the bid quote [{}]",
-                &identifiers,
-                format_coin_display(&ask_quote),
-                format_coin_display(&bid_quote),
-            ));
+    let mut ask_quote_per_share = ask_collateral.quote_per_share.to_owned();
+    ask_quote_per_share.sort_by(coin_sort);
+    let mut bid_quote_per_share = bid_collateral.get_quote_per_share();
+    bid_quote_per_share.sort_by(coin_sort);
+    match override_quote_source {
+        Some(source) => {
+            // If the override source is the ask, verification to ensure the bid has provided
+            if let OverrideQuoteSource::Ask = source {
+                if ask_quote_per_share.len() != bid_quote_per_share.len() {
+                    validation_messages.push(format!(
+                        "{} Ask quote per share [{}] had a different amount of specified coin types than bid quote per share [{}]",
+                        &identifiers,
+                        format_coin_display(&ask_quote_per_share),
+                        format_coin_display(&bid_quote_per_share),
+                    ));
+                } else {
+                    let calculated_spend_amount = multiply_coins_by_amount(
+                        &ask_quote_per_share,
+                        bid_collateral.share_count.u128(),
+                    );
+                    for ask_coin in &calculated_spend_amount {
+                        if let Some(bid_coin) = bid_collateral
+                            .quote
+                            .iter()
+                            .find(|bc| bc.denom == ask_coin.denom)
+                        {
+                            if bid_coin.amount.u128() < ask_coin.amount.u128() {
+                                validation_messages.push(format!(
+                                    "{} Ask quote [{}] required [{}{}] but bid quote [{}] only specified [{}{}]",
+                                    &identifiers,
+                                    format_coin_display(&calculated_spend_amount),
+                                    ask_coin.amount.u128(),
+                                    &ask_coin.denom,
+                                    format_coin_display(&bid_collateral.quote),
+                                    bid_coin.amount.u128(),
+                                    &bid_coin.denom,
+                                ));
+                            }
+                        } else {
+                            validation_messages.push(format!(
+                                "{} Ask quote [{}] contained coin denom [{}] but bid quote [{}] did not",
+                                &identifiers,
+                                format_coin_display(&calculated_spend_amount),
+                                ask_coin.denom,
+                                format_coin_display(&bid_collateral.quote),
+                            ));
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+        None => {
+            if ask_quote_per_share != bid_quote_per_share {
+                validation_messages.push(format!(
+                    "{} Ask quote per share [{}] did not equal bid quote per share [{}]",
+                    &identifiers,
+                    format_coin_display(&ask_collateral.quote_per_share),
+                    format_coin_display(&bid_collateral.get_quote_per_share()),
+                ));
+            }
         }
     }
     validation_messages
@@ -465,6 +502,7 @@ mod tests {
         replace_ask_quote, replace_bid_quote,
     };
     use crate::types::core::error::ContractError;
+    use crate::types::request::admin_match_options::AdminMatchOptions;
     use crate::types::request::ask_types::ask_collateral::AskCollateral;
     use crate::types::request::ask_types::ask_order::AskOrder;
     use crate::types::request::bid_types::bid_collateral::BidCollateral;
@@ -510,7 +548,7 @@ mod tests {
         .expect("expected validation to pass for the new bid order");
         deps.querier
             .with_attributes("bidder", &[("attribute.pb", "value", "string")]);
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, false)
+        validate_match(&deps.as_ref(), &ask_order, &bid_order, &None)
             .expect("expected validation to pass for a simple coin to coin trade");
         ask_order.collateral = AskCollateral::coin_trade(
             &[coin(10, "a"), coin(20, "b"), coin(30, "c")],
@@ -522,7 +560,7 @@ mod tests {
             &[coin(50, "d"), coin(70, "f"), coin(60, "e")],
         );
         validate_bid_order(&bid_order).expect("expected modified bid order to remain valid");
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, false)
+        validate_match(&deps.as_ref(), &ask_order, &bid_order, &None)
             .expect("expected validation to pass for a complex coin trade with mismatched orders");
     }
 
@@ -572,7 +610,7 @@ mod tests {
             )),
         )
         .expect("expected the bid order to be valid");
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, false)
+        validate_match(&deps.as_ref(), &ask_order, &bid_order, &None)
             .expect("expected validation to pass for a single coin quote");
         replace_ask_quote(
             &mut ask_order,
@@ -594,7 +632,7 @@ mod tests {
         );
         validate_bid_order(&bid_order)
             .expect("expected the bid order to remain valid after changes");
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, false)
+        validate_match(&deps.as_ref(), &ask_order, &bid_order, &None)
             .expect("expected the validation to pass for a multi-coin quote");
     }
 
@@ -651,7 +689,7 @@ mod tests {
                 ("required2.pb", "value2", "string"),
             ],
         );
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, false)
+        validate_match(&deps.as_ref(), &ask_order, &bid_order, &None)
             .expect("expected match validation to pass with correct parameters");
         replace_ask_quote(&mut ask_order, &[coin(100, NHASH), coin(250, "yolocoin")]);
         validate_ask_order(&ask_order)
@@ -659,7 +697,7 @@ mod tests {
         replace_bid_quote(&mut bid_order, &[coin(500, NHASH), coin(1250, "yolocoin")]);
         validate_bid_order(&bid_order)
             .expect("expected bid order to pass validation with multi coin quote");
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, false).expect(
+        validate_match(&deps.as_ref(), &ask_order, &bid_order, &None).expect(
             "expected match validation to pass when ask and bid order used a multi-coin quote",
         );
     }
@@ -712,7 +750,7 @@ mod tests {
             )),
         )
         .expect("expected bid order to pass validation");
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, false)
+        validate_match(&deps.as_ref(), &ask_order, &bid_order, &None)
             .expect("expected match validation to pass with correct parameters");
         replace_ask_quote(&mut ask_order, &[coin(100, NHASH), coin(250, "yolocoin")]);
         validate_ask_order(&ask_order)
@@ -720,7 +758,7 @@ mod tests {
         replace_bid_quote(&mut bid_order, &[coin(500, NHASH), coin(1250, "yolocoin")]);
         validate_bid_order(&bid_order)
             .expect("expected bid order to pass validation with multi coin quote");
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, false).expect(
+        validate_match(&deps.as_ref(), &ask_order, &bid_order, &None).expect(
             "expected match validation to pass when ask and bid order used a multi-coin quote",
         );
     }
@@ -756,13 +794,13 @@ mod tests {
                 ("c.pb", "value", "string"),
             ],
         );
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, false)
+        validate_match(&deps.as_ref(), &ask_order, &bid_order, &None)
             .expect("expected match validation to pass for correct scope trade parameters");
         replace_ask_quote(&mut ask_order, &[coin(100, "acoin"), coin(100, "bcoin")]);
         validate_ask_order(&ask_order).expect("multi coin ask order should pass validation");
         replace_bid_quote(&mut bid_order, &[coin(100, "acoin"), coin(100, "bcoin")]);
         validate_bid_order(&bid_order).expect("multi coin bid order should pass validation");
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, false).expect(
+        validate_match(&deps.as_ref(), &ask_order, &bid_order, &None).expect(
             "expected match validation to pass when ask and bid order used a multi-coin quote",
         );
     }
@@ -1140,8 +1178,13 @@ mod tests {
             coin_trade_error("Ask quote [200acoin] does not match bid quote [200acoin, 200bcoin]"),
             false,
         );
-        validate_match(&deps.as_ref(), &ask_order, &bid_order, true)
-            .expect("validation should pass when mismatched bids are accepted");
+        validate_match(
+            &deps.as_ref(),
+            &ask_order,
+            &bid_order,
+            &Some(AdminMatchOptions::coin_trade_options(true)),
+        )
+        .expect("validation should pass when mismatched bids are accepted");
     }
 
     #[test]
@@ -1337,29 +1380,7 @@ mod tests {
             )),
             &mock_bid_order(mock_bid_marker_share("marker", "denom", 5, &[])),
             marker_share_sale_error(
-                "Ask requested that [10] shares be purchased, but bid wanted [5]",
-            ),
-            true,
-        );
-    }
-
-    #[test]
-    fn test_marker_share_sale_multi_tx_bidder_wants_more_shares_than_are_available() {
-        let deps = mock_dependencies(&[]);
-        assert_validation_failure(
-            "Marker bid attempts to purchase more shares than the marker has",
-            &deps.as_ref(),
-            &mock_ask_order(mock_ask_marker_share_sale(
-                "marker",
-                "denom",
-                10,
-                10,
-                &[],
-                ShareSaleType::MultipleTransactions,
-            )),
-            &mock_bid_order(mock_bid_marker_share("marker", "denom", 11, &[])),
-            marker_share_sale_error(
-                "Bid requested [11] shares but the remaining share count is [10]",
+                "Ask requested that [10] shares be purchased, but bid wanted too few [5]",
             ),
             true,
         );
@@ -1524,10 +1545,29 @@ mod tests {
     ) {
         let test_name = test_name.into();
         let message = expected_error_message.into();
+        let get_admin_options = |accept_mismatched_bids: bool| {
+            match &ask_order.ask_type {
+                RequestType::CoinTrade => Some(AdminMatchOptions::coin_trade_options(
+                    accept_mismatched_bids,
+                )),
+                RequestType::MarkerTrade => Some(AdminMatchOptions::marker_trade_options(
+                    accept_mismatched_bids,
+                )),
+                RequestType::MarkerShareSale => None, // Mismatched bids is not an option for marker share sale
+                RequestType::ScopeTrade => Some(AdminMatchOptions::scope_trade_options(
+                    accept_mismatched_bids,
+                )),
+            }
+        };
         let test = |accept_mismatched_bids: bool| {
-            let result = validate_match(deps, ask_order, bid_order, accept_mismatched_bids);
+            let result = validate_match(
+                deps,
+                ask_order,
+                bid_order,
+                &get_admin_options(accept_mismatched_bids),
+            );
             if !accept_mismatched_bids || validation_should_fail_with_mismatched_bids {
-                let messages = match validate_match(deps, ask_order, bid_order, accept_mismatched_bids) {
+                let messages = match result {
                     Err(e) => match e {
                         ContractError::ValidationError { messages } => messages,
                         e => panic!(
