@@ -574,7 +574,7 @@ mod tests {
     use crate::test::mock_scope::DEFAULT_SCOPE_ADDR;
     use crate::test::request_helpers::{
         mock_ask_marker_share_sale, mock_ask_marker_trade, mock_ask_order,
-        mock_ask_order_with_descriptor, mock_ask_scope_trade, mock_bid_marker_share,
+        mock_ask_order_with_descriptor, mock_ask_scope_trade, mock_bid_marker_share_sale,
         mock_bid_marker_trade, mock_bid_order, mock_bid_scope_trade, mock_bid_with_descriptor,
         replace_ask_quote, replace_bid_quote,
     };
@@ -1257,7 +1257,7 @@ mod tests {
                     &[],
                     ShareSaleType::SingleTransaction,
                 )),
-                &mock_bid_order(mock_bid_marker_share(
+                &mock_bid_order(mock_bid_marker_share_sale(
                     DEFAULT_MARKER_ADDRESS,
                     DEFAULT_MARKER_DENOM,
                     10,
@@ -1545,7 +1545,7 @@ mod tests {
                 &[],
                 ShareSaleType::SingleTransaction,
             )),
-            &mock_bid_order(mock_bid_marker_share("marker", "denom2", 10, &[])),
+            &mock_bid_order(mock_bid_marker_share_sale("marker", "denom2", 10, &[])),
             marker_share_sale_error(
                 "Ask marker denom [denom1] does not match bid marker denom [denom2]",
             ),
@@ -1567,7 +1567,7 @@ mod tests {
                 &[],
                 ShareSaleType::SingleTransaction,
             )),
-            &mock_bid_order(mock_bid_marker_share("marker2", "denom", 10, &[])),
+            &mock_bid_order(mock_bid_marker_share_sale("marker2", "denom", 10, &[])),
             marker_share_sale_error(
                 "Ask marker address [marker1] does not match bid marker address [marker2]",
             ),
@@ -1589,7 +1589,7 @@ mod tests {
                 &[],
                 ShareSaleType::SingleTransaction,
             )),
-            &mock_bid_order(mock_bid_marker_share("marker", "denom", 5, &[])),
+            &mock_bid_order(mock_bid_marker_share_sale("marker", "denom", 5, &[])),
             marker_share_sale_error(
                 "Ask requested that [10] shares be purchased, but bid wanted too few [5]",
             ),
@@ -1611,7 +1611,7 @@ mod tests {
                 &[],
                 ShareSaleType::SingleTransaction,
             )),
-            &mock_bid_order(mock_bid_marker_share("marker", "denom", 10, &[])),
+            &mock_bid_order(mock_bid_marker_share_sale("marker", "denom", 10, &[])),
             marker_share_sale_error("Failed to find marker for denom [denom]"),
             true,
         );
@@ -1632,7 +1632,7 @@ mod tests {
             "Marker on chain does not match share count in ask - this would be a security bug if we ever see it",
             &deps.as_ref(),
             &mock_ask_order(mock_ask_marker_share_sale("marker", "fakecoin", 15, 15, &[], ShareSaleType::SingleTransaction)),
-            &mock_bid_order(mock_bid_marker_share("marker", "fakecoin", 15, &[])),
+            &mock_bid_order(mock_bid_marker_share_sale("marker", "fakecoin", 15, &[])),
             marker_share_sale_error("Marker is not synced with the contract! Marker had [10] shares remaining, which is less than the listed available share count of [15]"),
             true,
         );
@@ -1653,9 +1653,112 @@ mod tests {
             "Marker on chain does not hold any of its own denom anymore somehow - this would be a security bug if we ever see it",
             &deps.as_ref(),
             &mock_ask_order(mock_ask_marker_share_sale("marker", "fakecoin", 10, 10, &[], ShareSaleType::MultipleTransactions)),
-            &mock_bid_order(mock_bid_marker_share("marker", "fakecoin", 10, &[])),
+            &mock_bid_order(mock_bid_marker_share_sale("marker", "fakecoin", 10, &[])),
             marker_share_sale_error("Marker had invalid coin holdings for match: [10lessfakecoin]. Expected a single instance of coin [fakecoin]"),
             true,
+        );
+    }
+
+    #[test]
+    fn test_marker_share_sale_different_quotes_with_override_quote_source() {
+        let mut deps = mock_dependencies(&[]);
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        assert_validation_failure_options(
+            "Quote per share does not match for ask and bid in length",
+            &deps.as_ref(),
+            &mock_ask_order(mock_ask_marker_share_sale(
+                DEFAULT_MARKER_ADDRESS,
+                DEFAULT_MARKER_DENOM,
+                100,
+                100,
+                &[coin(10, "quote1"), coin(20, "quote2")],
+                ShareSaleType::MultipleTransactions,
+            )),
+            &mock_bid_order(mock_bid_marker_share_sale(
+                DEFAULT_MARKER_ADDRESS,
+                DEFAULT_MARKER_DENOM,
+                150,
+                &coins(1500, "quote1"),
+            )),
+            marker_share_sale_error("Ask quote per share [10quote1, 20quote2] had a different amount of specified coin types than bid quote per share [10quote1]"),
+            AdminMatchOptions::marker_share_sale_options(OverrideQuoteSource::Ask),
+        );
+    }
+
+    #[test]
+    fn test_marker_share_sale_too_high_ask_amount_with_override_quote_source() {
+        let mut deps = mock_dependencies(&[]);
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        assert_validation_failure_options(
+            "Ask quote requests more coin than bid quote can offer",
+            &deps.as_ref(),
+            &mock_ask_order(mock_ask_marker_share_sale(
+                DEFAULT_MARKER_ADDRESS,
+                DEFAULT_MARKER_DENOM,
+                100,
+                100,
+                &[coin(10, "quote1"), coin(10, "quote2")],
+                ShareSaleType::MultipleTransactions,
+            )),
+            &mock_bid_order(mock_bid_marker_share_sale(
+                DEFAULT_MARKER_ADDRESS,
+                DEFAULT_MARKER_DENOM,
+                100,
+                &[coin(1000, "quote1"), coin(900, "quote2")],
+            )),
+            marker_share_sale_error("Ask quote per share [10quote1, 10quote2] required at least [10quote2] but bid quote per share [10quote1, 9quote2] only specified [9quote2]"),
+            AdminMatchOptions::marker_share_sale_options(OverrideQuoteSource::Ask),
+        );
+    }
+
+    #[test]
+    fn test_marker_share_sale_different_ask_and_bid_coin_types_with_override_quote_source() {
+        let mut deps = mock_dependencies(&[]);
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        assert_validation_failure_options(
+            "Ask quote includes different coin than bid quote",
+            &deps.as_ref(),
+            &mock_ask_order(mock_ask_marker_share_sale(
+                DEFAULT_MARKER_ADDRESS,
+                DEFAULT_MARKER_DENOM,
+                100,
+                100,
+                &[coin(10, "quote1"), coin(10, "quote2"), coin(10, "quote3")],
+                ShareSaleType::MultipleTransactions,
+            )),
+            &mock_bid_order(mock_bid_marker_share_sale(
+                DEFAULT_MARKER_ADDRESS,
+                DEFAULT_MARKER_DENOM,
+                100,
+                &[coin(1000, "quote1"), coin(1000, "quote2"), coin(1000, "quote4")],
+            )),
+            marker_share_sale_error("Ask quote per share [10quote1, 10quote2, 10quote3] contained coin denom [quote3] but bid quote per share [10quote1, 10quote2, 10quote4] did not"),
+            AdminMatchOptions::marker_share_sale_options(OverrideQuoteSource::Bid),
+        );
+    }
+
+    #[test]
+    fn test_marker_share_sale_mismatched_quote_per_share_no_override_quote_source() {
+        let mut deps = mock_dependencies(&[]);
+        deps.querier.with_markers(vec![MockMarker::new_marker()]);
+        assert_validation_failure(
+            "Ask quote does not match bid quote",
+            &deps.as_ref(),
+            &mock_ask_order(mock_ask_marker_share_sale(
+                DEFAULT_MARKER_ADDRESS,
+                DEFAULT_MARKER_DENOM,
+                100,
+                100,
+                &[coin(10, "quote1"), coin(10, "quote2")],
+                ShareSaleType::SingleTransaction,
+            )),
+            &mock_bid_order(mock_bid_marker_share_sale(
+                DEFAULT_MARKER_ADDRESS,
+                DEFAULT_MARKER_DENOM,
+                100,
+                &[coin(1000, "quote1"), coin(1000, "quote3")],
+            )),
+            marker_share_sale_error("Ask quote per share [10quote1, 10quote2] did not equal bid quote per share [10quote1, 10quote3]"),
         );
     }
 

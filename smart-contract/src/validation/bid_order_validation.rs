@@ -191,7 +191,7 @@ pub fn validate_bid_order(bid_order: &BidOrder) -> Result<(), ContractError> {
 #[cfg(test)]
 mod tests {
     use crate::test::request_helpers::{
-        mock_bid_marker_share, mock_bid_marker_trade, mock_bid_order, mock_bid_scope_trade,
+        mock_bid_marker_share_sale, mock_bid_marker_trade, mock_bid_order, mock_bid_scope_trade,
         mock_bid_with_descriptor,
     };
     use crate::types::core::error::ContractError;
@@ -387,7 +387,12 @@ mod tests {
     fn test_marker_share_sale_empty_marker_address() {
         assert_validation_failure(
             "bid order does not include a valid marker address",
-            &mock_bid_order(mock_bid_marker_share("", "denom", 100, &coins(100, NHASH))),
+            &mock_bid_order(mock_bid_marker_share_sale(
+                "",
+                "denom",
+                100,
+                &coins(100, NHASH),
+            )),
             marker_share_sale_error("must include a valid marker address"),
         );
     }
@@ -396,7 +401,12 @@ mod tests {
     fn test_marker_share_sale_empty_marker_denom() {
         assert_validation_failure(
             "bid order does not include a valid marker denom",
-            &mock_bid_order(mock_bid_marker_share("marker", "", 100, &coins(100, NHASH))),
+            &mock_bid_order(mock_bid_marker_share_sale(
+                "marker",
+                "",
+                100,
+                &coins(100, NHASH),
+            )),
             marker_share_sale_error("must include a valid marker denom"),
         );
     }
@@ -405,7 +415,7 @@ mod tests {
     fn test_marker_share_sale_incorrect_quote_setup() {
         assert_validation_failure(
             "bid order specifies a quote that is not properly divisible by its share count",
-            &mock_bid_order(mock_bid_marker_share("marker", "", 3, &coins(100, NHASH))),
+            &mock_bid_order(mock_bid_marker_share_sale("marker", "", 3, &coins(100, NHASH))),
             marker_share_sale_error("quote per share [33nhash] could not be calculated accurately. all coins in the quote [100nhash] must be evenly divisible by the share count [3]"),
         );
     }
@@ -414,7 +424,7 @@ mod tests {
     fn test_marker_share_sale_zero_share_count() {
         assert_validation_failure(
             "bid order has a share count of zero",
-            &mock_bid_order(mock_bid_marker_share(
+            &mock_bid_order(mock_bid_marker_share_sale(
                 "marker",
                 "denom",
                 0,
@@ -428,7 +438,7 @@ mod tests {
     fn test_marker_share_sale_empty_quote() {
         assert_validation_failure(
             "bid order does not include quote funds",
-            &mock_bid_order(mock_bid_marker_share("marker", "denom", 100, &[])),
+            &mock_bid_order(mock_bid_marker_share_sale("marker", "denom", 100, &[])),
             marker_share_sale_error("must include at least one quote coin"),
         );
     }
@@ -437,7 +447,7 @@ mod tests {
     fn test_marker_share_sale_quote_funds_include_invalid_coins() {
         assert_validation_failure(
             "bid order includes quote coin with zero amount",
-            &mock_bid_order(mock_bid_marker_share(
+            &mock_bid_order(mock_bid_marker_share_sale(
                 "marker",
                 "denom",
                 100,
@@ -447,7 +457,7 @@ mod tests {
         );
         assert_validation_failure(
             "bid order includes quote coin with blank denom",
-            &mock_bid_order(mock_bid_marker_share(
+            &mock_bid_order(mock_bid_marker_share_sale(
                 "marker",
                 "denom",
                 50,
