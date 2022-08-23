@@ -149,9 +149,10 @@ pub fn validate_bid_order(bid_order: &BidOrder) -> Result<(), ContractError> {
                     multiply_coins_by_amount(&quote_per_share, collateral.share_count.u128());
                 if calculated_quote != collateral.quote {
                     handler.push(format!(
-                        "{} quote per share [{}] could not be calculated accurately. all coins in the quote must be evenly divisible by the share count [{}]",
+                        "{} quote per share [{}] could not be calculated accurately. all coins in the quote [{}] must be evenly divisible by the share count [{}]",
                         prefix,
                         format_coin_display(&quote_per_share),
+                        format_coin_display(&collateral.quote),
                         collateral.share_count.u128(),
                     ));
                 }
@@ -397,6 +398,15 @@ mod tests {
             "bid order does not include a valid marker denom",
             &mock_bid_order(mock_bid_marker_share("marker", "", 100, &coins(100, NHASH))),
             marker_share_sale_error("must include a valid marker denom"),
+        );
+    }
+
+    #[test]
+    fn test_marker_share_sale_incorrect_quote_setup() {
+        assert_validation_failure(
+            "bid order specifies a quote that is not properly divisible by its share count",
+            &mock_bid_order(mock_bid_marker_share("marker", "", 3, &coins(100, NHASH))),
+            marker_share_sale_error("quote per share [33nhash] could not be calculated accurately. all coins in the quote [100nhash] must be evenly divisible by the share count [3]"),
         );
     }
 
