@@ -19,7 +19,9 @@ pub enum AdminMatchOptions {
     MarkerShareSale {
         /// Allows trades to use either the ask quote or the bid quote to determine the funds allocated
         /// when an ask or bid is executed.  Will never try to use more than the bid quote amount
-        /// due to the bid quote being the source of the available funds.
+        /// due to the bid quote being the source of the available funds.  Requests to match asks
+        /// with a higher quote than a bid will also be rejected to prevent askers from getting
+        /// underpaid.
         override_quote_source: Option<OverrideQuoteSource>,
     },
     ScopeTrade {
