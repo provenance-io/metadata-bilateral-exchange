@@ -471,49 +471,50 @@ fn get_marker_share_sale_collateral_validation(
     let mut bid_quote_per_share = bid_collateral.get_quote_per_share();
     bid_quote_per_share.sort_by(coin_sort);
     match override_quote_source {
-        Some(source) => {
-            // If the override source is the ask, verification to ensure the bid has provided
-            if let OverrideQuoteSource::Ask = source {
-                if ask_quote_per_share.len() != bid_quote_per_share.len() {
-                    validation_messages.push(format!(
-                        "{} Ask quote per share [{}] had a different amount of specified coin types than bid quote per share [{}]",
-                        &identifiers,
-                        format_coin_display(&ask_quote_per_share),
-                        format_coin_display(&bid_quote_per_share),
-                    ));
-                } else {
-                    let calculated_spend_amount = multiply_coins_by_amount(
-                        &ask_quote_per_share,
-                        bid_collateral.share_count.u128(),
-                    );
-                    for ask_coin in &calculated_spend_amount {
-                        if let Some(bid_coin) = bid_collateral
-                            .quote
-                            .iter()
-                            .find(|bc| bc.denom == ask_coin.denom)
-                        {
-                            if bid_coin.amount.u128() < ask_coin.amount.u128() {
-                                validation_messages.push(format!(
-                                    "{} Ask quote [{}] required [{}{}] but bid quote [{}] only specified [{}{}]",
-                                    &identifiers,
-                                    format_coin_display(&calculated_spend_amount),
-                                    ask_coin.amount.u128(),
-                                    &ask_coin.denom,
-                                    format_coin_display(&bid_collateral.quote),
-                                    bid_coin.amount.u128(),
-                                    &bid_coin.denom,
-                                ));
-                            }
-                        } else {
+        Some(_) => {
+            // Regardless of if the ask or bid is used as the quote source, we must verify that they
+            // both contain the same coin types.  Having a bad alignment on quote coin types is prone
+            // to produce odd values after match execution
+            if ask_quote_per_share.len() != bid_quote_per_share.len() {
+                validation_messages.push(format!(
+                    "{} Ask quote per share [{}] had a different amount of specified coin types than bid quote per share [{}]",
+                    &identifiers,
+                    format_coin_display(&ask_quote_per_share),
+                    format_coin_display(&bid_quote_per_share),
+                ));
+            } else {
+                // Verify that each ask coin's denom matches a bid coin denom.  This, in tandem with
+                // the length verification above, ensures that each quote contains the same coin
+                // types.
+                for ask_coin in &ask_quote_per_share {
+                    if let Some(bid_coin) = bid_quote_per_share
+                        .iter()
+                        .find(|bc| bc.denom == ask_coin.denom)
+                    {
+                        // The bid coin must be at least equal to each ask coin for a match to execute.
+                        // This ensures that the funds stored for the bid will never be exceeded when
+                        // executing the match.
+                        if bid_coin.amount.u128() < ask_coin.amount.u128() {
                             validation_messages.push(format!(
-                                "{} Ask quote [{}] contained coin denom [{}] but bid quote [{}] did not",
+                                "{} Ask quote per share [{}] required at least [{}{}] but bid quote per share [{}] only specified [{}{}]",
                                 &identifiers,
-                                format_coin_display(&calculated_spend_amount),
-                                ask_coin.denom,
-                                format_coin_display(&bid_collateral.quote),
+                                format_coin_display(&ask_quote_per_share),
+                                ask_coin.amount.u128(),
+                                &ask_coin.denom,
+                                format_coin_display(&bid_quote_per_share),
+                                bid_coin.amount.u128(),
+                                &bid_coin.denom,
                             ));
-                            continue;
                         }
+                    } else {
+                        validation_messages.push(format!(
+                            "{} Ask quote per share [{}] contained coin denom [{}] but bid quote per share [{}] did not",
+                            &identifiers,
+                            format_coin_display(&ask_quote_per_share),
+                            ask_coin.denom,
+                            format_coin_display(&bid_quote_per_share),
+                        ));
+                        continue;
                     }
                 }
             }

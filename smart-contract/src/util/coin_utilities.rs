@@ -341,6 +341,29 @@ mod tests {
             calc_partial_quote_paid.bidder_refund,
             "the refund should be correct and equivalent to the actual remaining coin",
         );
+        let calc_partial_and_full_paid = calculate_marker_share_sale_bid_totals(
+            &collateral,
+            &[coin(45, "quote"), coin(20, "quote2")],
+            0,
+        )
+        .expect(
+            "no error should occur when calculating some coin fully paid and some partially paid",
+        );
+        assert!(
+            calc_partial_and_full_paid.expected_remaining_bidder_coin.is_empty(),
+            "the expected remaining bidder coin should be empty because all shares were purchased, but got: {:?}",
+            calc_partial_and_full_paid.expected_remaining_bidder_coin,
+        );
+        assert_eq!(
+            coins(5, "quote"),
+            calc_partial_and_full_paid.actual_remaining_bidder_coin,
+            "the actual remaining bidder coin should be the leftover 5quote",
+        );
+        assert_eq!(
+            coins(5, "quote"),
+            calc_partial_and_full_paid.bidder_refund,
+            "the refund should be correct and equivalent to the actual remaining coin",
+        );
     }
 
     #[test]
@@ -399,6 +422,30 @@ mod tests {
             calc_at_lower_price.bidder_refund,
             "the refund should reflect the remaining totals in the actual values minus the expected values, but got: {:?}",
             calc_at_lower_price.bidder_refund,
+        );
+        let calc_at_matching_and_lower_price = calculate_marker_share_sale_bid_totals(
+            &collateral,
+            // Simulated: Asker wanted 5quote and 1quote2 per share, versus the bidder's request for
+            // 5quote and 2quote2 per share.
+            &[coin(25, "quote"), coin(5, "quote2")],
+            5,
+        )
+        .expect("buying 5 shares at matching and lower prices should succeed");
+        assert_eq!(
+            vec![coin(25, "quote"), coin(10, "quote2")],
+            calc_at_matching_and_lower_price.expected_remaining_bidder_coin,
+            "the expected bidder coin remaining should be half of the original values, but got: {:?}",
+            calc_at_matching_and_lower_price.expected_remaining_bidder_coin,
+        );
+        assert_eq!(
+            vec![coin(25, "quote"), coin(15, "quote2")],
+            calc_at_matching_and_lower_price.actual_remaining_bidder_coin,
+            "the actual bidder coin should reflect the actual totals after subtracting the coin spent",
+        );
+        assert_eq!(
+            coins(5, "quote2"),
+            calc_at_matching_and_lower_price.bidder_refund,
+            "the refund should reflect the underpay for quote2",
         );
     }
 
