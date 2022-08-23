@@ -8,6 +8,7 @@ import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
 import io.provenance.bilateral.execute.UpdateAsk
 import io.provenance.bilateral.execute.UpdateBid
+import io.provenance.bilateral.models.AdminMatchOptions
 import io.provenance.bilateral.models.AttributeRequirement
 import io.provenance.bilateral.models.RequestDescriptor
 import io.provenance.bilateral.models.enums.AttributeRequirementType
@@ -193,7 +194,7 @@ class CoinTradeIntTest : ContractIntTest() {
             executeMatch(executeMatch = executeMatch)
         }
         val matchResponse = assertSucceeds("Match should succeed because it was manually allowed") {
-            executeMatch(executeMatch = executeMatch.copy(adminMatchOptions = true))
+            executeMatch(executeMatch = executeMatch.copy(adminMatchOptions = AdminMatchOptions.CoinTradeAdminOptions(acceptMismatchedBids = true)))
         }
         assertTrue(actual = matchResponse.askDeleted, message = "The ask should be deleted")
         assertTrue(actual = matchResponse.bidDeleted, message = "The bid should be deleted")

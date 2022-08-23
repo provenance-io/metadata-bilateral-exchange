@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 /// These options are to be used in matching by the contract admin.  Requests not made by the admin
 /// that include admin match options will be rejected.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum AdminMatchOptions {
     CoinTrade {
         /// Allows trades with an ask quote that does not match the bid quote to still be executed.
@@ -82,6 +83,7 @@ impl AdminMatchOptions {
 /// the ask and bid should have matching quotes, but this allows them to not match and for a
 /// mismatched ask or bid to drive the amount that is sent, instead.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum OverrideQuoteSource {
     Ask,
     Bid,

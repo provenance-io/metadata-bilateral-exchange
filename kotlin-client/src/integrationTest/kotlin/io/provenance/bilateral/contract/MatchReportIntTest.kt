@@ -9,6 +9,7 @@ import testconfiguration.ContractIntTest
 import testconfiguration.functions.newCoins
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MatchReportIntTest : ContractIntTest() {
@@ -54,16 +55,12 @@ class MatchReportIntTest : ContractIntTest() {
             message = "The bid should be marked as existing",
         )
         assertTrue(
-            actual = matchReport.standardMatchPossible,
-            message = "The report should indicate that a standard match is possible",
+            actual = matchReport.matchPossible,
+            message = "The report should indicate that a match is possible",
         )
-        assertTrue(
-            actual = matchReport.quoteMismatchMatchPossible,
-            message = "The report should indicate that a quote mismatch-enabled match is possible",
-        )
-        assertTrue(
-            actual = matchReport.errorMessages.isEmpty(),
-            message = "The report should not include any error messages, but found: ${matchReport.errorMessages}",
+        assertNull(
+            actual = matchReport.errorMessage,
+            message = "The report should not include an error message, but was: ${matchReport.errorMessage}",
         )
     }
 }

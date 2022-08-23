@@ -1,11 +1,13 @@
 package io.provenance.bilateral.models
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 
 @JsonNaming(SnakeCaseStrategy::class)
+@JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
 sealed interface AdminMatchOptions {
     /**
      * Admin options available when executing a match for two coin trades.  Requests including coin trade admin options
