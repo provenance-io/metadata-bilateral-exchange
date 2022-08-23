@@ -11,7 +11,7 @@ pub const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const CONTRACT_INFO_V2: Item<ContractInfoV2> = Item::new(NAMESPACE_CONTRACT_INFO_V2);
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct ContractInfoV2 {
     pub admin: Addr,
     pub bind_name: String,

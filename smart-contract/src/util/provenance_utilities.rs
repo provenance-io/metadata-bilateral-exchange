@@ -146,11 +146,7 @@ pub fn check_scope_owners(
 /// Switches the scope's current owner value to the given owner value.
 pub fn replace_scope_owner(mut scope: Scope, new_owner: Addr) -> Scope {
     // Empty out all owners from the scope now that it's verified safe to do
-    scope.owners = scope
-        .owners
-        .into_iter()
-        .filter(|owner| owner.role != PartyType::Owner)
-        .collect();
+    scope.owners.retain(|owner| owner.role != PartyType::Owner);
     // Append the target value as the new sole owner
     scope.owners.push(Party {
         address: new_owner.clone(),
@@ -566,6 +562,51 @@ mod tests {
             }
             e => panic!("unexpected error type encountered: {:?}", e),
         }
+    }
+
+    #[test]
+    fn test_replace_scope_owner() {
+        let mut scope = MockScope {
+            owners: vec![
+                Party {
+                    address: Addr::unchecked("some_owner"),
+                    role: PartyType::Owner,
+                },
+                Party {
+                    address: Addr::unchecked("other_entity"),
+                    role: PartyType::Affiliate,
+                },
+            ],
+            value_owner_address: Addr::unchecked("some_owner"),
+            ..MockScope::default()
+        }
+        .to_scope();
+        scope = replace_scope_owner(scope, Addr::unchecked("new_owner"));
+        assert_eq!(
+            2,
+            scope.owners.len(),
+            "scope should include two owner values",
+        );
+        let scope_owner_role_owners = scope
+            .owners
+            .iter()
+            .filter(|owner| owner.role == PartyType::Owner)
+            .cloned()
+            .collect::<Vec<Party>>();
+        assert_eq!(
+            1,
+            scope_owner_role_owners.len(),
+            "only one owner should have a role of Owner",
+        );
+        assert_eq!(
+            "new_owner",
+            scope_owner_role_owners.first().unwrap().address.as_str(),
+            "the owner address should be changed to the new owner value",
+        );
+        assert_eq!(
+            "new_owner", scope.value_owner_address,
+            "the value owner address should also be changed to the new, correct value",
+        );
     }
 
     #[test]

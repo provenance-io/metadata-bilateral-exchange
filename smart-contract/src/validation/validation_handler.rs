@@ -37,6 +37,11 @@ impl ValidationHandler {
         }
     }
 }
+impl Default for ValidationHandler {
+    fn default() -> Self {
+        ValidationHandler::new()
+    }
+}
 
 #[cfg(test)]
 mod tests {

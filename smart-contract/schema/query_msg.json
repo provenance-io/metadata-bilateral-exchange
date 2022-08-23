@@ -75,6 +75,16 @@
             "bid_id"
           ],
           "properties": {
+            "admin_match_options": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/AdminMatchOptions"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "ask_id": {
               "type": "string"
             },
@@ -140,6 +150,107 @@
     }
   ],
   "definitions": {
+    "AdminMatchOptions": {
+      "description": "These options are to be used in matching by the contract admin.  Requests not made by the admin that include admin match options will be rejected.",
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "coin_trade"
+          ],
+          "properties": {
+            "coin_trade": {
+              "type": "object",
+              "properties": {
+                "accept_mismatched_bids": {
+                  "description": "Allows trades with an ask quote that does not match the bid quote to still be executed. Defaults to false if not specified.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "marker_trade"
+          ],
+          "properties": {
+            "marker_trade": {
+              "type": "object",
+              "properties": {
+                "accept_mismatched_bids": {
+                  "description": "Allows trades with an ask quote that does not match the bid quote to still be executed. Defaults to false if not specified.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "marker_share_sale"
+          ],
+          "properties": {
+            "marker_share_sale": {
+              "type": "object",
+              "properties": {
+                "override_quote_source": {
+                  "description": "Allows trades to use either the ask quote or the bid quote to determine the funds allocated when an ask or bid is executed.  Will never try to use more than the bid quote amount due to the bid quote being the source of the available funds.  Requests to match asks with a higher quote than a bid will also be rejected to prevent askers from getting underpaid.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/definitions/OverrideQuoteSource"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "scope_trade"
+          ],
+          "properties": {
+            "scope_trade": {
+              "type": "object",
+              "properties": {
+                "accept_mismatched_bids": {
+                  "description": "Allows trades with an ask quote that does not match the bid quote to still be executed. Defaults to false if not specified.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "OverrideQuoteSource": {
+      "description": "Determines the source of the quote to be sent to the asker after a match executes.  By standard, the ask and bid should have matching quotes, but this allows them to not match and for a mismatched ask or bid to drive the amount that is sent, instead.",
+      "type": "string",
+      "enum": [
+        "ask",
+        "bid"
+      ]
+    },
     "Search": {
       "type": "object",
       "required": [

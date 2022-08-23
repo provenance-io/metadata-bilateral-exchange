@@ -7,9 +7,7 @@
     "ask_id",
     "bid_exists",
     "bid_id",
-    "error_messages",
-    "quote_mismatch_match_possible",
-    "standard_match_possible"
+    "match_possible"
   ],
   "properties": {
     "ask_exists": {
@@ -24,16 +22,13 @@
     "bid_id": {
       "type": "string"
     },
-    "error_messages": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+    "error_message": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
-    "quote_mismatch_match_possible": {
-      "type": "boolean"
-    },
-    "standard_match_possible": {
+    "match_possible": {
       "type": "boolean"
     }
   }

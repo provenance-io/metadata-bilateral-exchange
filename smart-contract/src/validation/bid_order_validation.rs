@@ -121,7 +121,7 @@ pub fn validate_bid_order(bid_order: &BidOrder) -> Result<(), ContractError> {
                 handler.push(format!("{} must include at least one quote coin", prefix));
             }
             handler.append(
-                &mut collateral
+                &collateral
                     .quote
                     .iter()
                     .flat_map(|coin| validate_coin(coin, "BidCollateral Quote Coin"))
