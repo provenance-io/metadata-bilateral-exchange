@@ -12,6 +12,10 @@ import io.provenance.bilateral.models.AdminMatchOptions
  *
  * @param askId The unique identifier of the ask to match with.
  * @param bidId The unique identifier of the bid to match with.
+ * @param adminMatchOptions Various options that alter the behavior of the matching mechanism.  An error will be returned
+ * by the contract is this value is non-null when the signer of this message is not the contract admin.  Additionally,
+ * using an incorrect variant for the target match (ex: using marker trade admin options for matching two coin trades)
+ * will cause a contract error.
  */
 @JsonNaming(SnakeCaseStrategy::class)
 @JsonTypeInfo(include = JsonTypeInfo.As.WRAPPER_OBJECT, use = JsonTypeInfo.Id.NAME)
