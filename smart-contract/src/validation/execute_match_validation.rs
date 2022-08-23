@@ -54,56 +54,123 @@ pub fn validate_match(
 
     match &ask.collateral {
         AskCollateral::CoinTrade(ask_collat) => match &bid.collateral {
-            BidCollateral::CoinTrade(bid_collat) => handler.append(
-                &mut get_coin_trade_collateral_validation(ask, bid, ask_collat, bid_collat, if let Some(ref options) = admin_match_options {
-                    match options {
-                        AdminMatchOptions::CoinTrade { accept_mismatched_bids } => accept_mismatched_bids.unwrap_or(false),
-                        _ => false,
-                    }
-                } else { false }),
-            ),
+            BidCollateral::CoinTrade(bid_collat) => {
+                handler.append(
+                    &get_coin_trade_collateral_validation(
+                        ask,
+                        bid,
+                        ask_collat,
+                        bid_collat,
+                        if let Some(
+                            AdminMatchOptions::CoinTrade {
+                                accept_mismatched_bids: Some(mismatched_bids)
+                            }
+                        ) = admin_match_options {
+                            *mismatched_bids
+                        } else {
+                            false
+                        }
+                    ),
+                );
+                if admin_match_options.is_some() && !matches!(admin_match_options, Some(AdminMatchOptions::CoinTrade {.. })) {
+                    handler.push(format!(
+                        "{} Admin match options were provided, but were not of the coin_trade variant",
+                        identifiers,
+                    ));
+                }
+            },
             _ => handler.push(format!(
                 "{} Ask collateral was of type coin trade, which did not match bid collateral",
                 identifiers
             )),
         },
         AskCollateral::MarkerTrade(ask_collat) => match &bid.collateral {
-            BidCollateral::MarkerTrade(bid_collat) => handler.append(
-                &mut get_marker_trade_collateral_validation(deps, ask, bid, ask_collat, bid_collat, if let Some(ref options) = admin_match_options {
-                    match options {
-                        AdminMatchOptions::MarkerTrade { accept_mismatched_bids } => accept_mismatched_bids.unwrap_or(false),
-                        _ => false,
-                    }
-                } else { false }),
-            ),
+            BidCollateral::MarkerTrade(bid_collat) => {
+                handler.append(
+                    &get_marker_trade_collateral_validation(
+                        deps,
+                        ask,
+                        bid,
+                        ask_collat,
+                        bid_collat,
+                        if let Some(
+                            AdminMatchOptions::MarkerTrade {
+                                accept_mismatched_bids: Some(mismatched_bids)
+                            }
+                        ) = admin_match_options {
+                            *mismatched_bids
+                        } else {
+                            false
+                        }
+                    ),
+                );
+                if admin_match_options.is_some() && !matches!(admin_match_options, Some(AdminMatchOptions::MarkerTrade {.. })) {
+                    handler.push(format!(
+                        "{} Admin match options were provided, but were not of the marker_trade variant",
+                        identifiers,
+                    ));
+                }
+            },
             _ => handler.push(format!(
                 "{} Ask collateral was of type marker trade, which did not match bid collateral",
                 identifiers
             )),
         },
         AskCollateral::MarkerShareSale(ask_collat) => match &bid.collateral {
-            BidCollateral::MarkerShareSale(bid_collat) => handler.append(
-                &mut get_marker_share_sale_collateral_validation(deps, ask, bid, ask_collat, bid_collat, if let Some(ref options) = admin_match_options {
-                    match options {
-                        AdminMatchOptions::MarkerShareSale { override_quote_source } => &override_quote_source,
-                        _ => &None,
-                    }
-                } else { &None }),
-            ),
+            BidCollateral::MarkerShareSale(bid_collat) => {
+                handler.append(
+                    &get_marker_share_sale_collateral_validation(
+                        deps,
+                        ask,
+                        bid,
+                        ask_collat,
+                        bid_collat,
+                        if let Some(
+                            AdminMatchOptions::MarkerShareSale { override_quote_source }
+                        ) = admin_match_options {
+                            override_quote_source
+                        } else {
+                            &None
+                        }
+                    ),
+                );
+                if admin_match_options.is_some() && !matches!(admin_match_options, Some(AdminMatchOptions::MarkerShareSale { .. })) {
+                    handler.push(format!(
+                        "{} Admin match options were provided, but were not of the marker_share_sale variant",
+                        identifiers,
+                    ));
+                }
+            },
             _ => handler.push(format!(
                 "{} Ask Collateral was of type marker share sale, which did not match bid collateral",
                 identifiers,
             )),
         },
         AskCollateral::ScopeTrade(ask_collat) => match &bid.collateral {
-            BidCollateral::ScopeTrade(bid_collat) => handler.append(
-                &mut get_scope_trade_collateral_validation(ask, bid, ask_collat, bid_collat, if let Some(ref options) = admin_match_options {
-                    match options {
-                        AdminMatchOptions::ScopeTrade { accept_mismatched_bids } => accept_mismatched_bids.unwrap_or(false),
-                        _ => false,
-                    }
-                } else { false }),
-            ),
+            BidCollateral::ScopeTrade(bid_collat) => {
+                handler.append(
+                    &get_scope_trade_collateral_validation(
+                        ask,
+                        bid,
+                        ask_collat,
+                        bid_collat,
+                        if let Some(
+                            AdminMatchOptions::ScopeTrade {
+                                accept_mismatched_bids: Some(mismatched_bids)
+                            }) = admin_match_options {
+                                *mismatched_bids
+                        } else {
+                            false
+                        }
+                    ),
+                );
+                if admin_match_options.is_some() && !matches!(admin_match_options, Some(AdminMatchOptions::ScopeTrade {.. })) {
+                    handler.push(format!(
+                        "{} Admin match options were provided, but were not of the scope_trade variant",
+                        identifiers,
+                    ));
+                }
+            },
             _ => handler.push(format!(
                 "{} Ask Collateral was of type scope trade, which did not match bid collateral",
                 identifiers,
@@ -1445,51 +1512,6 @@ mod tests {
             &mock_bid_order(mock_bid_marker_share("marker", "fakecoin", 10, &[])),
             marker_share_sale_error("Marker had invalid coin holdings for match: [10lessfakecoin]. Expected a single instance of coin [fakecoin]"),
             true,
-        );
-    }
-
-    #[test]
-    fn test_marker_share_sale_quote_mismatches() {
-        let mut deps = mock_dependencies(&[]);
-        let marker = MockMarker {
-            denom: "fakecoin".to_string(),
-            coins: coins(10, "fakecoin"),
-            address: Addr::unchecked("marker"),
-            ..MockMarker::default()
-        }
-        .to_marker();
-        deps.querier.with_markers(vec![marker]);
-        let mut ask_order = mock_ask_order(mock_ask_marker_share_sale(
-            "marker",
-            "fakecoin",
-            10,
-            10,
-            &coins(100, NHASH),
-            ShareSaleType::SingleTransaction,
-        ));
-        let mut bid_order = mock_bid_order(mock_bid_marker_share(
-            "marker",
-            "fakecoin",
-            10,
-            &coins(999, NHASH),
-        ));
-        assert_validation_failure(
-            "Ask wants 100nhash for 10 fakecoin, but the bidder only offers 999nhash instead of 1000",
-            &deps.as_ref(),
-            &ask_order,
-            &bid_order,
-            marker_share_sale_error("Ask share price did not result in the same quote [1000nhash] as the bid quote [999nhash]"),
-            false,
-        );
-        replace_ask_quote(&mut ask_order, &[coin(10, NHASH), coin(20, "bitcoin")]);
-        replace_bid_quote(&mut bid_order, &[coin(100, NHASH), coin(201, "bitcoin")]);
-        assert_validation_failure(
-            "Ask wants 100nhash and 200bitcoin total but receives a little more bitcoin (boo hoo)",
-            &deps.as_ref(),
-            &ask_order,
-            &bid_order,
-            marker_share_sale_error("Ask share price did not result in the same quote [200bitcoin, 100nhash] as the bid quote [201bitcoin, 100nhash]"),
-            false,
         );
     }
 

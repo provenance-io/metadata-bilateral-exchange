@@ -193,7 +193,7 @@ class CoinTradeIntTest : ContractIntTest() {
             executeMatch(executeMatch = executeMatch)
         }
         val matchResponse = assertSucceeds("Match should succeed because it was manually allowed") {
-            executeMatch(executeMatch = executeMatch.copy(acceptMismatchedBids = true))
+            executeMatch(executeMatch = executeMatch.copy(adminMatchOptions = true))
         }
         assertTrue(actual = matchResponse.askDeleted, message = "The ask should be deleted")
         assertTrue(actual = matchResponse.bidDeleted, message = "The bid should be deleted")

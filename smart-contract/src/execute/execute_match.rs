@@ -44,6 +44,10 @@ pub fn execute_match(
     if bid_id.is_empty() {
         handler.push("bid id must not be empty");
     }
+    let contract_info = get_contract_info(deps.storage)?;
+    if admin_match_options.is_some() && info.sender != contract_info.admin {
+        handler.push("admin options cannot be provided when the sender is not the admin");
+    }
     // return error if either ids are badly formed
     handler.handle()?;
     // return error if funds sent
@@ -56,7 +60,7 @@ pub fn execute_match(
     let ask_order = get_ask_order_by_id(deps.storage, &ask_id)?;
     let bid_order = get_bid_order_by_id(deps.storage, &bid_id)?;
     // only the admin or the asker may execute matches
-    if info.sender != ask_order.owner && info.sender != get_contract_info(deps.storage)?.admin {
+    if info.sender != ask_order.owner && info.sender != contract_info.admin {
         return ContractError::Unauthorized.to_err();
     }
     // Ensure match is viable before trying to actually execute the match
@@ -528,11 +532,6 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_coin_trade_from_asker_mismatched_quote() {
-        do_coin_trade_test("asker", true);
-    }
-
-    #[test]
     fn test_execute_marker_trade_from_admin_matching_quote() {
         do_marker_trade_test(DEFAULT_ADMIN_ADDRESS, false, None);
     }
@@ -555,11 +554,6 @@ mod tests {
     #[test]
     fn test_execute_marker_trade_from_asker_matching_quote() {
         do_marker_trade_test("asker", false, None);
-    }
-
-    #[test]
-    fn test_execute_marker_trade_from_asker_mismatched_quote() {
-        do_marker_trade_test("asker", true, None);
     }
 
     #[test]
@@ -819,11 +813,6 @@ mod tests {
         do_scope_trade_test(DEFAULT_ADMIN_ADDRESS, false);
     }
 
-    #[test]
-    fn test_execute_scope_trade_from_asker_with_mismatched_quote() {
-        do_scope_trade_test(DEFAULT_ADMIN_ADDRESS, true);
-    }
-
     fn assert_match_produced_correct_results(
         storage: &dyn Storage,
         response: &Response<ProvenanceMsg>,
@@ -1000,8 +989,13 @@ mod tests {
             mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
-            // Only allow invalid matches when the quotes are supposed to have a mismatch
-            Some(AdminMatchOptions::coin_trade_options(mismatched_quotes)),
+            // Only the admin may provide admin match options.  Otherwise, the request will be rejected
+            if sender_address == DEFAULT_ADMIN_ADDRESS {
+                // Only allow invalid matches when the quotes are supposed to have a mismatch
+                Some(AdminMatchOptions::coin_trade_options(mismatched_quotes))
+            } else {
+                None
+            },
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
@@ -1099,7 +1093,12 @@ mod tests {
             mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
-            Some(AdminMatchOptions::marker_trade_options(mismatched_quotes)),
+            // Only the admin may provide admin match options.  Otherwise, the request will be rejected
+            if sender_address == DEFAULT_ADMIN_ADDRESS {
+                Some(AdminMatchOptions::marker_trade_options(mismatched_quotes))
+            } else {
+                None
+            },
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
@@ -1553,7 +1552,12 @@ mod tests {
             mock_info(&sender_address, &[]),
             "ask_id".to_string(),
             "bid_id".to_string(),
-            Some(AdminMatchOptions::scope_trade_options(mismatched_quotes)),
+            // Only the admin may provide admin match options.  Otherwise, the request will be rejected
+            if sender_address == DEFAULT_ADMIN_ADDRESS {
+                Some(AdminMatchOptions::scope_trade_options(mismatched_quotes))
+            } else {
+                None
+            },
         )
         .expect("the match should execute successfully");
         assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
