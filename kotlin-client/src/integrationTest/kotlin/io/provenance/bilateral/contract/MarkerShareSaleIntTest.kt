@@ -908,14 +908,14 @@ class MarkerShareSaleIntTest : ContractIntTest() {
                         id = bidUuid.toString(),
                         markerDenom = markerDenom,
                         shareCount = shareSaleAmount,
-                        quote = newCoins(999, quoteDenom2),
+                        quote = newCoins(1000, quoteDenom2),
                     ),
                     descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
                 ),
             )
         }
         assertEquals(
-            expected = newCoins(999, quoteDenom2),
+            expected = newCoins(1000, quoteDenom2),
             actual = response.updatedBidOrder.testGetMarkerShareSale().quote,
             message = "Expected the bid's quote to be properly updated",
         )
@@ -925,7 +925,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             message = "The bidder's quote should be fully refunded from the original bid",
         )
         assertEquals(
-            expected = 1,
+            expected = 0,
             actual = pbClient.getBalance(bidder.address(), quoteDenom2),
             message = "The bidder's quote2 should be debited down by the appropriate amount",
         )
