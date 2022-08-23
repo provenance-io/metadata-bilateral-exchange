@@ -1,4 +1,5 @@
 use crate::types::core::error::ContractError;
+use crate::types::request::bid_types::bid_collateral::MarkerShareSaleBidCollateral;
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::format_coin_display;
 use cosmwasm_std::{coin, Coin};
@@ -76,14 +77,66 @@ pub fn subtract_coins<S: Into<String>>(
         .to_ok()
 }
 
+pub struct MSSBidTotalsCalc {
+    pub expected_remaining_bidder_coin: Vec<Coin>,
+    pub actual_remaining_bidder_coin: Vec<Coin>,
+    pub bidder_refund: Vec<Coin>,
+}
+
+pub fn calculate_marker_share_sale_bid_totals(
+    bid_collateral: &MarkerShareSaleBidCollateral,
+    quote_paid: &[Coin],
+    bid_overage_shares: u128,
+) -> Result<MSSBidTotalsCalc, ContractError> {
+    // Calculate the amount of coin the bidder would have sent if they had spent their quote.
+    // This is the expected amount that the bidder should have paid if admin overrides did not
+    // cause the bidder to underpay.
+    let expected_remaining_bidder_coin =
+        multiply_coins_by_amount(&bid_collateral.get_quote_per_share(), bid_overage_shares)
+            .into_iter()
+            // Filter out all empty coin values to avoid subtraction errors - this can occur when
+            // bid_overage_shares is zero
+            .filter(|coin| !coin.amount.is_zero())
+            .collect::<Vec<Coin>>();
+    // Subtract the actual quote paid to the asker from the bidder's existing quote.  This
+    // is the remaining coin held by the contract after sending the quote to the asker.
+    let actual_remaining_bidder_coin = subtract_coins(
+        "failed to calculate remaining bidder coin balance",
+        &bid_collateral.quote,
+        quote_paid,
+    )?;
+    // If the bidder underpaid due to admin overrides causing the ask's lower price to be used,
+    // then any excess funds beyond those required to purchase remaining shares in the bidder's
+    // bid need to be returned to the bidder.  This causes the bidder to still retain its original
+    // quote per share price and remaining target shares, while not holding any excess funds in
+    // contract storage
+    let bidder_refund = subtract_coins(
+        "failed to calculate bidder refund",
+        // Expected should be used as the minuend because it will always be lower than the actual
+        // amount remaining.  Match validation ensures that the bid quote totals are always at least
+        // equal to the ask quote requested
+        &actual_remaining_bidder_coin,
+        &expected_remaining_bidder_coin,
+    )?;
+    MSSBidTotalsCalc {
+        bidder_refund,
+        expected_remaining_bidder_coin,
+        actual_remaining_bidder_coin,
+    }
+    .to_ok()
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::test::mock_marker::{DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM};
     use crate::types::core::error::ContractError;
+    use crate::types::request::bid_types::bid_collateral::MarkerShareSaleBidCollateral;
     use crate::util::coin_utilities::{
-        coin_sort, divide_coins_by_amount, multiply_coins_by_amount, subtract_coins,
+        calculate_marker_share_sale_bid_totals, coin_sort, divide_coins_by_amount,
+        multiply_coins_by_amount, subtract_coins,
     };
     use crate::util::constants::NHASH;
-    use cosmwasm_std::{coin, coins, Coin};
+    use cosmwasm_std::{coin, coins, Addr, Coin};
 
     #[test]
     fn test_multiply_no_coins() {
@@ -233,6 +286,119 @@ mod tests {
             &[coin(100, "a"), coin(100, "b")],
             &coins(5, "b"),
             vec![coin(100, "a"), coin(95, "b")],
+        );
+    }
+
+    #[test]
+    fn test_calculate_marker_share_sale_bid_totals_no_overage_shares() {
+        let collateral = MarkerShareSaleBidCollateral::new(
+            Addr::unchecked(DEFAULT_MARKER_ADDRESS),
+            DEFAULT_MARKER_DENOM,
+            10,
+            &[coin(50, "quote"), coin(20, "quote2")], // quote per share = 5quote
+        );
+        let calc_all_quote_paid = calculate_marker_share_sale_bid_totals(
+            &collateral,
+            &[coin(50, "quote"), coin(20, "quote2")],
+            0,
+        )
+        .expect("no error should occur when calculating full quote paid");
+        assert!(
+            calc_all_quote_paid
+                .expected_remaining_bidder_coin
+                .is_empty(),
+            "zero quote should be remaining after all bidder coin is paid out, but got: {:?}",
+            calc_all_quote_paid.expected_remaining_bidder_coin,
+        );
+        assert!(
+            calc_all_quote_paid.actual_remaining_bidder_coin.is_empty(),
+            "the actual value should be identical to the expected value because all quote was paid, but got: {:?}",
+            calc_all_quote_paid.actual_remaining_bidder_coin,
+        );
+        assert!(
+            calc_all_quote_paid.bidder_refund.is_empty(),
+            "no refund should be required, but got: {:?}",
+            calc_all_quote_paid.bidder_refund,
+        );
+        let calc_partial_quote_paid = calculate_marker_share_sale_bid_totals(
+            &collateral,
+            &[coin(45, "quote"), coin(10, "quote2")],
+            0,
+        )
+        .expect("no error should occur when calculating partial quote paid");
+        assert!(
+            calc_partial_quote_paid.expected_remaining_bidder_coin.is_empty(),
+            "the expected remaining bidder coin should be empty because all shares were purchased, but got: {:?}",
+            calc_partial_quote_paid.expected_remaining_bidder_coin,
+        );
+        assert_eq!(
+            vec![coin(5, "quote"), coin(10, "quote2")],
+            calc_partial_quote_paid.actual_remaining_bidder_coin,
+            "the actual remaining bidder coin should be the leftover 5quote and 10quote2",
+        );
+        assert_eq!(
+            vec![coin(5, "quote"), coin(10, "quote2")],
+            calc_partial_quote_paid.bidder_refund,
+            "the refund should be correct and equivalent to the actual remaining coin",
+        );
+    }
+
+    #[test]
+    fn test_calculate_marker_share_sale_bid_totals_with_overage_shares() {
+        let collateral = MarkerShareSaleBidCollateral::new(
+            Addr::unchecked(DEFAULT_MARKER_ADDRESS),
+            DEFAULT_MARKER_DENOM,
+            10,
+            &[coin(50, "quote"), coin(20, "quote2")],
+        );
+        let calc_at_matching_price = calculate_marker_share_sale_bid_totals(
+            &collateral,
+            &[coin(25, "quote"), coin(10, "quote2")],
+            5,
+        )
+        .expect("buying 5 shares at stated prices should succeed");
+        assert_eq!(
+            vec![coin(25, "quote"), coin(10, "quote2")],
+            calc_at_matching_price.expected_remaining_bidder_coin,
+            "the expected bidder coin remaining should be half of the original values, but got: {:?}",
+            calc_at_matching_price.expected_remaining_bidder_coin,
+        );
+        assert_eq!(
+            vec![coin(25, "quote"), coin(10, "quote2")],
+            calc_at_matching_price.actual_remaining_bidder_coin,
+            "the actual bidder coin remaining should be half of the original values, but got: {:?}",
+            calc_at_matching_price.actual_remaining_bidder_coin,
+        );
+        assert!(
+            calc_at_matching_price.bidder_refund.is_empty(),
+            "the refund should be empty because the same price was used, but got: {:?}",
+            calc_at_matching_price.bidder_refund,
+        );
+        let calc_at_lower_price = calculate_marker_share_sale_bid_totals(
+            &collateral,
+            // Simulated: Asker wanted 4quote and 1quote2 per share, versus the bidder's request for
+            // 5quote and 2quote2 per share.
+            &[coin(20, "quote"), coin(5, "quote2")],
+            5,
+        )
+        .expect("buying 5 shares at lower prices should succeed");
+        assert_eq!(
+            vec![coin(25, "quote"), coin(10, "quote2")],
+            calc_at_lower_price.expected_remaining_bidder_coin,
+            "the expected bidder coin remaining should be half of the original values, but got: {:?}",
+            calc_at_lower_price.expected_remaining_bidder_coin,
+        );
+        assert_eq!(
+            vec![coin(30, "quote"), coin(15, "quote2")],
+            calc_at_lower_price.actual_remaining_bidder_coin,
+            "the actual bidder coin should reflect the actual totals after subtracting the quote spent, but got: {:?}",
+            calc_at_lower_price.actual_remaining_bidder_coin,
+        );
+        assert_eq!(
+            vec![coin(5, "quote"), coin(5, "quote2")],
+            calc_at_lower_price.bidder_refund,
+            "the refund should reflect the remaining totals in the actual values minus the expected values, but got: {:?}",
+            calc_at_lower_price.bidder_refund,
         );
     }
 

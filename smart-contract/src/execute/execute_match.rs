@@ -18,7 +18,9 @@ use crate::types::request::bid_types::bid_collateral::{
 };
 use crate::types::request::bid_types::bid_order::BidOrder;
 use crate::types::request::share_sale_type::ShareSaleType;
-use crate::util::coin_utilities::{multiply_coins_by_amount, subtract_coins};
+use crate::util::coin_utilities::{
+    calculate_marker_share_sale_bid_totals, multiply_coins_by_amount, MSSBidTotalsCalc,
+};
 use crate::util::extensions::ResultExtensions;
 use crate::util::provenance_utilities::{release_marker_from_contract, replace_scope_owner};
 use crate::validation::execute_match_validation::validate_match;
@@ -306,19 +308,31 @@ fn execute_marker_share_sale(
             }
         }
     };
+    let MSSBidTotalsCalc {
+        expected_remaining_bidder_coin,
+        bidder_refund,
+        ..
+    } = calculate_marker_share_sale_bid_totals(bid_collateral, &quote_paid, bid_overage_shares)?;
+    // Subtract coins will not add coin values of zero into the vector.  This ensures that a vector
+    // that would be the result of perfect subtraction and cause zeroed out values will be empty,
+    // allowing this check to ensure a refund message is only populated when actual coin needs to
+    // be sent
+    if !bidder_refund.is_empty() {
+        messages.push(CosmosMsg::Bank(BankMsg::Send {
+            to_address: bid_order.owner.to_string(),
+            amount: bidder_refund,
+        }));
+    }
     // If a bid overage occurred, then the bid should remain open with a reduced number of shares
     // and a reset quote.
     let bid_deleted = if bid_overage_shares > 0 {
         let mut updated_bidder_collateral = bid_collateral.to_owned();
         updated_bidder_collateral.share_count = Uint128::new(bid_overage_shares);
-        updated_bidder_collateral.quote = subtract_coins(
-            "failed to subtract bid coin spent from total bid quote",
-            &bid_collateral.quote,
-            &quote_paid,
-        )?;
+        updated_bidder_collateral.quote = expected_remaining_bidder_coin;
         let mut updated_bid_order = bid_order.to_owned();
         updated_bid_order.collateral = BidCollateral::MarkerShareSale(updated_bidder_collateral);
         update_bid_order(deps.storage, &updated_bid_order)?;
+        // False = the bid was not deleted because it still wants additional shares
         false
     } else {
         // If no bid overage occurred, then all shares were purchased at the expected amount and the
