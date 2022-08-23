@@ -419,7 +419,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(10, "quote")),
+            mock_info("bidder", &coins(15, "quote")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
             None,
         )
@@ -431,7 +431,7 @@ mod tests {
         let response = update_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(444, "quote")),
+            mock_info("bidder", &coins(500, "quote")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 25),
             Some(descriptor.clone()),
         )
@@ -440,12 +440,12 @@ mod tests {
             &deps,
             &response,
             RequestType::MarkerShareSale,
-            &coins(10, "quote"),
+            &coins(15, "quote"),
             Some(descriptor),
         );
         let collateral = bid_order.collateral.unwrap_marker_share_sale();
         assert_eq!(
-            coins(444, "quote"),
+            coins(500, "quote"),
             collateral.quote,
             "the correct quote should be set on the bid",
         );
@@ -474,7 +474,7 @@ mod tests {
         create_bid(
             deps.as_mut(),
             mock_env(),
-            mock_info("bidder", &coins(10, "quote")),
+            mock_info("bidder", &coins(15, "quote")),
             Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
             None,
         )
@@ -495,7 +495,7 @@ mod tests {
             &deps,
             &response,
             RequestType::CoinTrade,
-            &coins(10, "quote"),
+            &coins(15, "quote"),
             Some(descriptor),
         );
         let collateral = bid_order.collateral.unwrap_coin_trade();

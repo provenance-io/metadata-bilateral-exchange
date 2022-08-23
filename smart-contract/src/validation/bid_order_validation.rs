@@ -2,6 +2,8 @@ use crate::types::core::error::ContractError;
 use crate::types::request::bid_types::bid_collateral::BidCollateral;
 use crate::types::request::bid_types::bid_order::BidOrder;
 use crate::types::request::request_type::RequestType;
+use crate::util::coin_utilities::multiply_coins_by_amount;
+use crate::util::provenance_utilities::format_coin_display;
 use crate::validation::validation_handler::ValidationHandler;
 use cosmwasm_std::Coin;
 
@@ -139,6 +141,20 @@ pub fn validate_bid_order(bid_order: &BidOrder) -> Result<(), ContractError> {
                     "{} must request to purchase at least one share",
                     prefix
                 ));
+            } else {
+                // If share count is zero, then the division in this section will cause panics, so
+                // skip it if the former error is found.
+                let quote_per_share = collateral.get_quote_per_share();
+                let calculated_quote =
+                    multiply_coins_by_amount(&quote_per_share, collateral.share_count.u128());
+                if calculated_quote != collateral.quote {
+                    handler.push(format!(
+                        "{} quote per share [{}] could not be calculated accurately. all coins in the quote must be evenly divisible by the share count [{}]",
+                        prefix,
+                        format_coin_display(&quote_per_share),
+                        collateral.share_count.u128(),
+                    ));
+                }
             }
             if collateral.quote.is_empty() {
                 handler.push(format!("{} must include at least one quote coin", prefix));
