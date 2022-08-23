@@ -596,631 +596,6 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_marker_share_sale_single_tx_excess_bid_shares_leftover_no_admin_options() {
-        let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut());
-        deps.querier
-            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
-        create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &[]),
-            Ask::new_marker_share_sale(
-                "ask_id",
-                DEFAULT_MARKER_DENOM,
-                15,
-                &coins(1, "quote"),
-                ShareSaleType::SingleTransaction,
-            ),
-            None,
-        )
-        .expect("the ask should be created successfully");
-        create_bid(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("bidder", &coins(20, "quote")),
-            Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 20),
-            None,
-        )
-        .expect("the bid should be created successfully");
-        let response = execute_match(
-            deps.as_mut(),
-            mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
-            "ask_id".to_string(),
-            "bid_id".to_string(),
-            None,
-        )
-        .expect("the match should execute successfully");
-        assert_match_produced_correct_results_with_extras(
-            deps.as_ref().storage,
-            &response,
-            true,
-            false,
-            true,
-            "ask_id",
-            "bid_id",
-        );
-        assert_eq!(
-            4,
-            response.messages.len(),
-            "the correct number of messages should be produced",
-        );
-        response.messages.iter().for_each(|msg| match &msg.msg {
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
-                assert_eq!(
-                    "asker",
-                    to_address,
-                    "the asker should receive funds from the match",
-                );
-                assert_eq!(
-                    &coins(15, "quote"),
-                    amount,
-                    "the asker should get the correct quote funds"
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    marker_denom,
-                    "the correct marker should be referenced in the withdraw message",
-                );
-                assert_eq!(
-                    &cosmwasm_std::coin(15, DEFAULT_MARKER_DENOM),
-                    coin,
-                    "the correct amount of marker funds should be withdrawn",
-                );
-                assert_eq!(
-                    "bidder",
-                    recipient.as_str(),
-                    "the bidder should receive the marker tokens",
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    denom,
-                    "the correct marker denom should be referenced in the grant message",
-                );
-                assert_eq!(
-                    "asker",
-                    address.as_str(),
-                    "the asker should be re-granted its permissions on the marker after the sale",
-                );
-                assert_eq!(
-                    &MockMarker::get_default_owner_permissions(),
-                    permissions,
-                    "the asker should be returned all of its permissions",
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    denom,
-                    "the correct marker denom should be referenced in the revoke message",
-                );
-                assert_eq!(
-                    MOCK_CONTRACT_ADDR,
-                    address.as_str(),
-                    "the contract should have its permissions to the marker revoked after the sale completes",
-                );
-            },
-            msg => panic!("unexpected message: {:?}", msg),
-        });
-        let bid_order = get_bid_order_by_id(deps.as_ref().storage, "bid_id")
-            .expect("bid order should remain in storage");
-        let bid_collateral = bid_order.collateral.unwrap_marker_share_sale();
-        assert_eq!(
-            5,
-            bid_collateral.share_count.u128(),
-            "the five unpurchased shares should be indicated in the collateral",
-        );
-        assert_eq!(
-            coins(5, "quote"),
-            bid_collateral.quote,
-            "the quote should reflect the remaining unspent quote coin",
-        );
-    }
-
-    #[test]
-    fn test_execute_marker_share_sale_single_tx_use_lower_ask_amount_full_sale() {
-        let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut());
-        deps.querier
-            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
-        create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &[]),
-            Ask::new_marker_share_sale(
-                "ask_id",
-                DEFAULT_MARKER_DENOM,
-                15,
-                &coins(1, "quote"),
-                ShareSaleType::SingleTransaction,
-            ),
-            None,
-        )
-        .expect("the ask should be created successfully");
-        create_bid(
-            deps.as_mut(),
-            mock_env(),
-            // Quote per share = 3quote
-            mock_info("bidder", &coins(45, "quote")),
-            Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
-            None,
-        )
-        .expect("the bid should be created successfully");
-        let response = execute_match(
-            deps.as_mut(),
-            mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
-            "ask_id".to_string(),
-            "bid_id".to_string(),
-            Some(AdminMatchOptions::marker_share_sale_options(
-                OverrideQuoteSource::Ask,
-            )),
-        )
-        .expect("the match should execute successfully");
-        assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
-        assert_eq!(
-            5,
-            response.messages.len(),
-            "the correct number of messages should be produced",
-        );
-        response.messages.iter().for_each(|msg| match &msg.msg {
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
-                match to_address.as_str() {
-                    // The asker receives a coin send for their purchased shares
-                    "asker" => {
-                        assert_eq!(
-                            &coins(15, "quote"),
-                            amount,
-                            "the asker should get the correct quote funds"
-                        );
-                    },
-                    // The bidder receives a refund for the additional quote they didn't spend
-                    "bidder" => {
-                        assert_eq!(
-                            &coins(30, "quote"),
-                            amount,
-                            "the bidder should get a refund for the 30quote they didn't spend",
-                        );
-                    },
-                    unexpected_addr => panic!("unexpected send msg to address: {}", unexpected_addr),
-                }
-
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    marker_denom,
-                    "the correct marker should be referenced in the withdraw message",
-                );
-                assert_eq!(
-                    &cosmwasm_std::coin(15, DEFAULT_MARKER_DENOM),
-                    coin,
-                    "the correct amount of marker funds should be withdrawn",
-                );
-                assert_eq!(
-                    "bidder",
-                    recipient.as_str(),
-                    "the bidder should receive the marker tokens",
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    denom,
-                    "the correct marker denom should be referenced in the grant message",
-                );
-                assert_eq!(
-                    "asker",
-                    address.as_str(),
-                    "the asker should be re-granted its permissions on the marker after the sale",
-                );
-                assert_eq!(
-                    &MockMarker::get_default_owner_permissions(),
-                    permissions,
-                    "the asker should be returned all of its permissions",
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    denom,
-                    "the correct marker denom should be referenced in the revoke message",
-                );
-                assert_eq!(
-                    MOCK_CONTRACT_ADDR,
-                    address.as_str(),
-                    "the contract should have its permissions to the marker revoked after the sale completes",
-                );
-            },
-            msg => panic!("unexpected message: {:?}", msg),
-        });
-    }
-
-    #[test]
-    fn test_execute_marker_share_sale_single_tx_use_lower_ask_amount_bidder_shares_leftover() {
-        let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut());
-        deps.querier
-            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
-        create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &[]),
-            Ask::new_marker_share_sale(
-                "ask_id",
-                DEFAULT_MARKER_DENOM,
-                15,
-                &coins(1, "quote"),
-                ShareSaleType::SingleTransaction,
-            ),
-            None,
-        )
-        .expect("the ask should be created successfully");
-        create_bid(
-            deps.as_mut(),
-            mock_env(),
-            // Quote per share = 3quote
-            mock_info("bidder", &coins(90, "quote")),
-            Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 30),
-            None,
-        )
-        .expect("the bid should be created successfully");
-        let response = execute_match(
-            deps.as_mut(),
-            mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
-            "ask_id".to_string(),
-            "bid_id".to_string(),
-            Some(AdminMatchOptions::marker_share_sale_options(
-                OverrideQuoteSource::Ask,
-            )),
-        )
-        .expect("the match should execute successfully");
-        assert_match_produced_correct_results_with_extras(
-            deps.as_ref().storage,
-            &response,
-            true,
-            false,
-            true,
-            "ask_id",
-            "bid_id",
-        );
-        assert_eq!(
-            5,
-            response.messages.len(),
-            "the correct number of messages should be produced",
-        );
-        response.messages.iter().for_each(|msg| match &msg.msg {
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
-                match to_address.as_str() {
-                    // The asker receives a coin send for their purchased shares
-                    "asker" => {
-                        assert_eq!(
-                            &coins(15, "quote"),
-                            amount,
-                            "the asker should get the correct quote funds"
-                        );
-                    },
-                    // The bidder receives a refund for the additional quote they didn't spend
-                    "bidder" => {
-                        assert_eq!(
-                            &coins(30, "quote"),
-                            amount,
-                            "the bidder should get a refund for the 30quote they didn't spend",
-                        );
-                    },
-                    unexpected_addr => panic!("unexpected send msg to address: {}", unexpected_addr),
-                }
-
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    marker_denom,
-                    "the correct marker should be referenced in the withdraw message",
-                );
-                assert_eq!(
-                    &cosmwasm_std::coin(15, DEFAULT_MARKER_DENOM),
-                    coin,
-                    "the correct amount of marker funds should be withdrawn",
-                );
-                assert_eq!(
-                    "bidder",
-                    recipient.as_str(),
-                    "the bidder should receive the marker tokens",
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    denom,
-                    "the correct marker denom should be referenced in the grant message",
-                );
-                assert_eq!(
-                    "asker",
-                    address.as_str(),
-                    "the asker should be re-granted its permissions on the marker after the sale",
-                );
-                assert_eq!(
-                    &MockMarker::get_default_owner_permissions(),
-                    permissions,
-                    "the asker should be returned all of its permissions",
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    denom,
-                    "the correct marker denom should be referenced in the revoke message",
-                );
-                assert_eq!(
-                    MOCK_CONTRACT_ADDR,
-                    address.as_str(),
-                    "the contract should have its permissions to the marker revoked after the sale completes",
-                );
-            },
-            msg => panic!("unexpected message: {:?}", msg),
-        });
-        let bid_order = get_bid_order_by_id(deps.as_ref().storage, "bid_id")
-            .expect("bid order should remain in storage");
-        let bid_collateral = bid_order.collateral.unwrap_marker_share_sale();
-        assert_eq!(
-            15,
-            bid_collateral.share_count.u128(),
-            "the fifteen unpurchased shares should be indicated in the collateral",
-        );
-        assert_eq!(
-            coins(45, "quote"),
-            bid_collateral.quote,
-            "the quote should reflect the remaining unspent quote coin",
-        );
-    }
-
-    #[test]
-    fn test_execute_marker_share_sale_single_tx_use_higher_bid_amount_bidder_shares_leftover() {
-        let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut());
-        deps.querier
-            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
-        create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &[]),
-            Ask::new_marker_share_sale(
-                "ask_id",
-                DEFAULT_MARKER_DENOM,
-                15,
-                &coins(1, "quote"),
-                ShareSaleType::SingleTransaction,
-            ),
-            None,
-        )
-        .expect("the ask should be created successfully");
-        create_bid(
-            deps.as_mut(),
-            mock_env(),
-            // Quote per share = 3quote
-            mock_info("bidder", &coins(90, "quote")),
-            Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 30),
-            None,
-        )
-        .expect("the bid should be created successfully");
-        let response = execute_match(
-            deps.as_mut(),
-            mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
-            "ask_id".to_string(),
-            "bid_id".to_string(),
-            Some(AdminMatchOptions::marker_share_sale_options(
-                OverrideQuoteSource::Bid,
-            )),
-        )
-        .expect("the match should execute successfully");
-        assert_match_produced_correct_results_with_extras(
-            deps.as_ref().storage,
-            &response,
-            true,
-            false,
-            true,
-            "ask_id",
-            "bid_id",
-        );
-        assert_eq!(
-            4,
-            response.messages.len(),
-            "the correct number of messages should be produced",
-        );
-        response.messages.iter().for_each(|msg| match &msg.msg {
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
-                assert_eq!(
-                    "asker",
-                    to_address,
-                    "the asker should receive funds from the match",
-                );
-                assert_eq!(
-                    &coins(45, "quote"),
-                    amount,
-                    "the asker should get the correct quote funds"
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    marker_denom,
-                    "the correct marker should be referenced in the withdraw message",
-                );
-                assert_eq!(
-                    &cosmwasm_std::coin(15, DEFAULT_MARKER_DENOM),
-                    coin,
-                    "the correct amount of marker funds should be withdrawn",
-                );
-                assert_eq!(
-                    "bidder",
-                    recipient.as_str(),
-                    "the bidder should receive the marker tokens",
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    denom,
-                    "the correct marker denom should be referenced in the grant message",
-                );
-                assert_eq!(
-                    "asker",
-                    address.as_str(),
-                    "the asker should be re-granted its permissions on the marker after the sale",
-                );
-                assert_eq!(
-                    &MockMarker::get_default_owner_permissions(),
-                    permissions,
-                    "the asker should be returned all of its permissions",
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    denom,
-                    "the correct marker denom should be referenced in the revoke message",
-                );
-                assert_eq!(
-                    MOCK_CONTRACT_ADDR,
-                    address.as_str(),
-                    "the contract should have its permissions to the marker revoked after the sale completes",
-                );
-            },
-            msg => panic!("unexpected message: {:?}", msg),
-        });
-        let bid_order = get_bid_order_by_id(deps.as_ref().storage, "bid_id")
-            .expect("bid order should remain in storage");
-        let bid_collateral = bid_order.collateral.unwrap_marker_share_sale();
-        assert_eq!(
-            15,
-            bid_collateral.share_count.u128(),
-            "the fifteen unpurchased shares should be indicated in the collateral",
-        );
-        assert_eq!(
-            coins(45, "quote"),
-            bid_collateral.quote,
-            "the quote should reflect the remaining unspent quote coin",
-        );
-    }
-
-    #[test]
-    fn test_execute_marker_share_sale_single_tx_use_higher_bid_amount_full_sale() {
-        let mut deps = mock_dependencies(&[]);
-        default_instantiate(deps.as_mut());
-        deps.querier
-            .with_markers(vec![MockMarker::new_owned_marker("asker")]);
-        create_ask(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &[]),
-            Ask::new_marker_share_sale(
-                "ask_id",
-                DEFAULT_MARKER_DENOM,
-                15,
-                &coins(1, "quote"),
-                ShareSaleType::SingleTransaction,
-            ),
-            None,
-        )
-        .expect("the ask should be created successfully");
-        create_bid(
-            deps.as_mut(),
-            mock_env(),
-            // Quote per share = 3quote
-            mock_info("bidder", &coins(45, "quote")),
-            Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
-            None,
-        )
-        .expect("the bid should be created successfully");
-        let response = execute_match(
-            deps.as_mut(),
-            mock_env(),
-            mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
-            "ask_id".to_string(),
-            "bid_id".to_string(),
-            Some(AdminMatchOptions::marker_share_sale_options(
-                OverrideQuoteSource::Bid,
-            )),
-        )
-        .expect("the match should execute successfully");
-        assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
-        assert_eq!(
-            4,
-            response.messages.len(),
-            "the correct number of messages should be produced",
-        );
-        response.messages.iter().for_each(|msg| match &msg.msg {
-            CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
-                assert_eq!(
-                    "asker",
-                    to_address,
-                    "the asker should receive funds from the match",
-                );
-                assert_eq!(
-                    &coins(45, "quote"),
-                    amount,
-                    "the asker should get the correct quote funds"
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    marker_denom,
-                    "the correct marker should be referenced in the withdraw message",
-                );
-                assert_eq!(
-                    &cosmwasm_std::coin(15, DEFAULT_MARKER_DENOM),
-                    coin,
-                    "the correct amount of marker funds should be withdrawn",
-                );
-                assert_eq!(
-                    "bidder",
-                    recipient.as_str(),
-                    "the bidder should receive the marker tokens",
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    denom,
-                    "the correct marker denom should be referenced in the grant message",
-                );
-                assert_eq!(
-                    "asker",
-                    address.as_str(),
-                    "the asker should be re-granted its permissions on the marker after the sale",
-                );
-                assert_eq!(
-                    &MockMarker::get_default_owner_permissions(),
-                    permissions,
-                    "the asker should be returned all of its permissions",
-                );
-            },
-            CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
-                assert_eq!(
-                    DEFAULT_MARKER_DENOM,
-                    denom,
-                    "the correct marker denom should be referenced in the revoke message",
-                );
-                assert_eq!(
-                    MOCK_CONTRACT_ADDR,
-                    address.as_str(),
-                    "the contract should have its permissions to the marker revoked after the sale completes",
-                );
-            },
-            msg => panic!("unexpected message: {:?}", msg),
-        });
-    }
-
-    #[test]
     fn test_execute_marker_share_sale_multi_tx_from_admin() {
         do_marker_share_sale_multi_tx_test(DEFAULT_ADMIN_ADDRESS);
     }
@@ -1443,6 +818,798 @@ mod tests {
             },
             msg => panic!("unexpected message: {:?}", msg),
         });
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_excess_bid_shares_leftover_no_admin_options() {
+        for share_sale_type in vec![
+            ShareSaleType::SingleTransaction,
+            ShareSaleType::MultipleTransactions,
+        ] {
+            let mut deps = mock_dependencies(&[]);
+            default_instantiate(deps.as_mut());
+            deps.querier
+                .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+            create_ask(
+                deps.as_mut(),
+                mock_env(),
+                mock_info("asker", &[]),
+                Ask::new_marker_share_sale(
+                    "ask_id",
+                    DEFAULT_MARKER_DENOM,
+                    15,
+                    &coins(1, "quote"),
+                    share_sale_type.to_owned(),
+                ),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the ask should be created successfully",
+                    share_sale_type
+                )
+            });
+            create_bid(
+                deps.as_mut(),
+                mock_env(),
+                mock_info("bidder", &coins(20, "quote")),
+                Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 20),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the bid should be created successfully",
+                    share_sale_type
+                )
+            });
+            let response = execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the match should execute successfully",
+                    share_sale_type
+                )
+            });
+            assert_match_produced_correct_results_with_extras(
+                deps.as_ref().storage,
+                &response,
+                true,
+                false,
+                true,
+                "ask_id",
+                "bid_id",
+            );
+            assert_eq!(
+                4,
+                response.messages.len(),
+                "{:?}: the correct number of messages should be produced",
+                share_sale_type,
+            );
+            response.messages.iter().for_each(|msg| match &msg.msg {
+                CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                    assert_eq!(
+                        "asker",
+                        to_address,
+                        "{:?}: the asker should receive funds from the match",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &coins(15, "quote"),
+                        amount,
+                        "{:?}: the asker should get the correct quote funds",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        marker_denom,
+                        "{:?}: the correct marker should be referenced in the withdraw message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &cosmwasm_std::coin(15, DEFAULT_MARKER_DENOM),
+                        coin,
+                        "{:?}: the correct amount of marker funds should be withdrawn",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        "bidder",
+                        recipient.as_str(),
+                        "{:?}: the bidder should receive the marker tokens",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        denom,
+                        "{:?}: the correct marker denom should be referenced in the grant message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        "asker",
+                        address.as_str(),
+                        "{:?}: the asker should be re-granted its permissions on the marker after the sale",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &MockMarker::get_default_owner_permissions(),
+                        permissions,
+                        "{:?}: the asker should be returned all of its permissions",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        denom,
+                        "{:?}: the correct marker denom should be referenced in the revoke message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        MOCK_CONTRACT_ADDR,
+                        address.as_str(),
+                        "{:?}: the contract should have its permissions to the marker revoked after the sale completes",
+                        share_sale_type,
+                    );
+                },
+                msg => panic!("{:?}: unexpected message: {:?}", share_sale_type, msg),
+            });
+            let bid_order =
+                get_bid_order_by_id(deps.as_ref().storage, "bid_id").unwrap_or_else(|_| {
+                    panic!("{:?}: bid order should remain in storage", share_sale_type)
+                });
+            let bid_collateral = bid_order.collateral.unwrap_marker_share_sale();
+            assert_eq!(
+                5,
+                bid_collateral.share_count.u128(),
+                "{:?}: the five unpurchased shares should be indicated in the collateral",
+                share_sale_type,
+            );
+            assert_eq!(
+                coins(5, "quote"),
+                bid_collateral.quote,
+                "{:?}: the quote should reflect the remaining unspent quote coin",
+                share_sale_type,
+            );
+        }
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_use_lower_ask_amount_full_sale() {
+        for share_sale_type in vec![
+            ShareSaleType::SingleTransaction,
+            ShareSaleType::MultipleTransactions,
+        ] {
+            let mut deps = mock_dependencies(&[]);
+            default_instantiate(deps.as_mut());
+            deps.querier
+                .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+            create_ask(
+                deps.as_mut(),
+                mock_env(),
+                mock_info("asker", &[]),
+                Ask::new_marker_share_sale(
+                    "ask_id",
+                    DEFAULT_MARKER_DENOM,
+                    15,
+                    &coins(1, "quote"),
+                    share_sale_type.to_owned(),
+                ),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the ask should be created successfully",
+                    share_sale_type
+                )
+            });
+            create_bid(
+                deps.as_mut(),
+                mock_env(),
+                // Quote per share = 3quote
+                mock_info("bidder", &coins(45, "quote")),
+                Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the bid should be created successfully",
+                    share_sale_type
+                )
+            });
+            let response = execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                Some(AdminMatchOptions::marker_share_sale_options(
+                    OverrideQuoteSource::Ask,
+                )),
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the match should execute successfully",
+                    share_sale_type
+                )
+            });
+            assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
+            assert_eq!(
+                5,
+                response.messages.len(),
+                "{:?}: the correct number of messages should be produced",
+                share_sale_type,
+            );
+            response.messages.iter().for_each(|msg| match &msg.msg {
+                CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                    match to_address.as_str() {
+                        // The asker receives a coin send for their purchased shares
+                        "asker" => {
+                            assert_eq!(
+                                &coins(15, "quote"),
+                                amount,
+                                "{:?}: the asker should get the correct quote funds",
+                                share_sale_type,
+                            );
+                        },
+                        // The bidder receives a refund for the additional quote they didn't spend
+                        "bidder" => {
+                            assert_eq!(
+                                &coins(30, "quote"),
+                                amount,
+                                "{:?}: the bidder should get a refund for the 30quote they didn't spend",
+                                share_sale_type,
+                            );
+                        },
+                        unexpected_addr => panic!("{:?}: unexpected send msg to address: {}", share_sale_type, unexpected_addr),
+                    }
+
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        marker_denom,
+                        "{:?}: the correct marker should be referenced in the withdraw message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &cosmwasm_std::coin(15, DEFAULT_MARKER_DENOM),
+                        coin,
+                        "{:?}: the correct amount of marker funds should be withdrawn",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        "bidder",
+                        recipient.as_str(),
+                        "{:?}: the bidder should receive the marker tokens",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        denom,
+                        "{:?}: the correct marker denom should be referenced in the grant message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        "asker",
+                        address.as_str(),
+                        "{:?}: the asker should be re-granted its permissions on the marker after the sale",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &MockMarker::get_default_owner_permissions(),
+                        permissions,
+                        "{:?}: the asker should be returned all of its permissions",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        denom,
+                        "{:?}: the correct marker denom should be referenced in the revoke message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        MOCK_CONTRACT_ADDR,
+                        address.as_str(),
+                        "{:?}: the contract should have its permissions to the marker revoked after the sale completes",
+                        share_sale_type,
+                    );
+                },
+                msg => panic!("{:?}: unexpected message: {:?}", share_sale_type, msg),
+            });
+        }
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_use_lower_ask_amount_bidder_shares_leftover() {
+        for share_sale_type in vec![
+            ShareSaleType::SingleTransaction,
+            ShareSaleType::MultipleTransactions,
+        ] {
+            let mut deps = mock_dependencies(&[]);
+            default_instantiate(deps.as_mut());
+            deps.querier
+                .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+            create_ask(
+                deps.as_mut(),
+                mock_env(),
+                mock_info("asker", &[]),
+                Ask::new_marker_share_sale(
+                    "ask_id",
+                    DEFAULT_MARKER_DENOM,
+                    15,
+                    &coins(1, "quote"),
+                    share_sale_type.to_owned(),
+                ),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the ask should be created successfully",
+                    share_sale_type
+                )
+            });
+            create_bid(
+                deps.as_mut(),
+                mock_env(),
+                // Quote per share = 3quote
+                mock_info("bidder", &coins(90, "quote")),
+                Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 30),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the bid should be created successfully",
+                    share_sale_type
+                )
+            });
+            let response = execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                Some(AdminMatchOptions::marker_share_sale_options(
+                    OverrideQuoteSource::Ask,
+                )),
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the match should execute successfully",
+                    share_sale_type
+                )
+            });
+            assert_match_produced_correct_results_with_extras(
+                deps.as_ref().storage,
+                &response,
+                true,
+                false,
+                true,
+                "ask_id",
+                "bid_id",
+            );
+            assert_eq!(
+                5,
+                response.messages.len(),
+                "{:?}: the correct number of messages should be produced",
+                share_sale_type,
+            );
+            response.messages.iter().for_each(|msg| match &msg.msg {
+                CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                    match to_address.as_str() {
+                        // The asker receives a coin send for their purchased shares
+                        "asker" => {
+                            assert_eq!(
+                                &coins(15, "quote"),
+                                amount,
+                                "{:?}: the asker should get the correct quote funds",
+                                share_sale_type,
+                            );
+                        },
+                        // The bidder receives a refund for the additional quote they didn't spend
+                        "bidder" => {
+                            assert_eq!(
+                                &coins(30, "quote"),
+                                amount,
+                                "{:?}: the bidder should get a refund for the 30quote they didn't spend",
+                                share_sale_type,
+                            );
+                        },
+                        unexpected_addr => panic!("{:?}: unexpected send msg to address: {}", share_sale_type, unexpected_addr),
+                    }
+
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        marker_denom,
+                        "{:?}: the correct marker should be referenced in the withdraw message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &cosmwasm_std::coin(15, DEFAULT_MARKER_DENOM),
+                        coin,
+                        "{:?}: the correct amount of marker funds should be withdrawn",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        "bidder",
+                        recipient.as_str(),
+                        "{:?}: the bidder should receive the marker tokens",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        denom,
+                        "{:?}: the correct marker denom should be referenced in the grant message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        "asker",
+                        address.as_str(),
+                        "{:?}: the asker should be re-granted its permissions on the marker after the sale",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &MockMarker::get_default_owner_permissions(),
+                        permissions,
+                        "{:?}: the asker should be returned all of its permissions",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        denom,
+                        "{:?}: the correct marker denom should be referenced in the revoke message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        MOCK_CONTRACT_ADDR,
+                        address.as_str(),
+                        "{:?}: the contract should have its permissions to the marker revoked after the sale completes",
+                        share_sale_type,
+                    );
+                },
+                msg => panic!("{:?}: unexpected message: {:?}", share_sale_type, msg),
+            });
+            let bid_order =
+                get_bid_order_by_id(deps.as_ref().storage, "bid_id").unwrap_or_else(|_| {
+                    panic!("{:?}: bid order should remain in storage", share_sale_type)
+                });
+            let bid_collateral = bid_order.collateral.unwrap_marker_share_sale();
+            assert_eq!(
+                15,
+                bid_collateral.share_count.u128(),
+                "{:?}: the fifteen unpurchased shares should be indicated in the collateral",
+                share_sale_type,
+            );
+            assert_eq!(
+                coins(45, "quote"),
+                bid_collateral.quote,
+                "{:?}: the quote should reflect the remaining unspent quote coin",
+                share_sale_type,
+            );
+        }
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_single_tx_use_higher_bid_amount_bidder_shares_leftover() {
+        for share_sale_type in vec![
+            ShareSaleType::SingleTransaction,
+            ShareSaleType::MultipleTransactions,
+        ] {
+            let mut deps = mock_dependencies(&[]);
+            default_instantiate(deps.as_mut());
+            deps.querier
+                .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+            create_ask(
+                deps.as_mut(),
+                mock_env(),
+                mock_info("asker", &[]),
+                Ask::new_marker_share_sale(
+                    "ask_id",
+                    DEFAULT_MARKER_DENOM,
+                    15,
+                    &coins(1, "quote"),
+                    share_sale_type.to_owned(),
+                ),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the ask should be created successfully",
+                    share_sale_type
+                )
+            });
+            create_bid(
+                deps.as_mut(),
+                mock_env(),
+                // Quote per share = 3quote
+                mock_info("bidder", &coins(90, "quote")),
+                Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 30),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the bid should be created successfully",
+                    share_sale_type
+                )
+            });
+            let response = execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                Some(AdminMatchOptions::marker_share_sale_options(
+                    OverrideQuoteSource::Bid,
+                )),
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the match should execute successfully",
+                    share_sale_type
+                )
+            });
+            assert_match_produced_correct_results_with_extras(
+                deps.as_ref().storage,
+                &response,
+                true,
+                false,
+                true,
+                "ask_id",
+                "bid_id",
+            );
+            assert_eq!(
+                4,
+                response.messages.len(),
+                "{:?}: the correct number of messages should be produced",
+                share_sale_type,
+            );
+            response.messages.iter().for_each(|msg| match &msg.msg {
+                CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                    assert_eq!(
+                        "asker",
+                        to_address,
+                        "{:?}: the asker should receive funds from the match",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &coins(45, "quote"),
+                        amount,
+                        "{:?}: the asker should get the correct quote funds",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        marker_denom,
+                        "{:?}: the correct marker should be referenced in the withdraw message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &cosmwasm_std::coin(15, DEFAULT_MARKER_DENOM),
+                        coin,
+                        "{:?}: the correct amount of marker funds should be withdrawn",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        "bidder",
+                        recipient.as_str(),
+                        "{:?}: the bidder should receive the marker tokens",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        denom,
+                        "{:?}: the correct marker denom should be referenced in the grant message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        "asker",
+                        address.as_str(),
+                        "{:?}: the asker should be re-granted its permissions on the marker after the sale",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &MockMarker::get_default_owner_permissions(),
+                        permissions,
+                        "{:?}: the asker should be returned all of its permissions",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        denom,
+                        "{:?}: the correct marker denom should be referenced in the revoke message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        MOCK_CONTRACT_ADDR,
+                        address.as_str(),
+                        "{:?}: the contract should have its permissions to the marker revoked after the sale completes",
+                        share_sale_type,
+                    );
+                },
+                msg => panic!("{:?}: unexpected message: {:?}", share_sale_type, msg),
+            });
+            let bid_order =
+                get_bid_order_by_id(deps.as_ref().storage, "bid_id").unwrap_or_else(|_| {
+                    panic!("{:?}: bid order should remain in storage", share_sale_type)
+                });
+            let bid_collateral = bid_order.collateral.unwrap_marker_share_sale();
+            assert_eq!(
+                15,
+                bid_collateral.share_count.u128(),
+                "{:?}: the fifteen unpurchased shares should be indicated in the collateral",
+                share_sale_type,
+            );
+            assert_eq!(
+                coins(45, "quote"),
+                bid_collateral.quote,
+                "{:?}: the quote should reflect the remaining unspent quote coin",
+                share_sale_type,
+            );
+        }
+    }
+
+    #[test]
+    fn test_execute_marker_share_sale_use_higher_bid_amount_full_sale() {
+        for share_sale_type in vec![
+            ShareSaleType::SingleTransaction,
+            ShareSaleType::MultipleTransactions,
+        ] {
+            let mut deps = mock_dependencies(&[]);
+            default_instantiate(deps.as_mut());
+            deps.querier
+                .with_markers(vec![MockMarker::new_owned_marker("asker")]);
+            create_ask(
+                deps.as_mut(),
+                mock_env(),
+                mock_info("asker", &[]),
+                Ask::new_marker_share_sale(
+                    "ask_id",
+                    DEFAULT_MARKER_DENOM,
+                    15,
+                    &coins(1, "quote"),
+                    share_sale_type.to_owned(),
+                ),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the ask should be created successfully",
+                    share_sale_type
+                )
+            });
+            create_bid(
+                deps.as_mut(),
+                mock_env(),
+                // Quote per share = 3quote
+                mock_info("bidder", &coins(45, "quote")),
+                Bid::new_marker_share_sale("bid_id", DEFAULT_MARKER_DENOM, 15),
+                None,
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the bid should be created successfully",
+                    share_sale_type
+                )
+            });
+            let response = execute_match(
+                deps.as_mut(),
+                mock_env(),
+                mock_info(DEFAULT_ADMIN_ADDRESS, &[]),
+                "ask_id".to_string(),
+                "bid_id".to_string(),
+                Some(AdminMatchOptions::marker_share_sale_options(
+                    OverrideQuoteSource::Bid,
+                )),
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?}: the match should execute successfully",
+                    share_sale_type
+                )
+            });
+            assert_match_produced_correct_results(deps.as_ref().storage, &response, true);
+            assert_eq!(
+                4,
+                response.messages.len(),
+                "{:?}: the correct number of messages should be produced",
+                share_sale_type,
+            );
+            response.messages.iter().for_each(|msg| match &msg.msg {
+                CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
+                    assert_eq!(
+                        "asker",
+                        to_address,
+                        "{:?}: the asker should receive funds from the match",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &coins(45, "quote"),
+                        amount,
+                        "{:?}: the asker should get the correct quote funds",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::WithdrawCoins { marker_denom, coin, recipient }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        marker_denom,
+                        "{:?}: the correct marker should be referenced in the withdraw message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &cosmwasm_std::coin(15, DEFAULT_MARKER_DENOM),
+                        coin,
+                        "{:?}: the correct amount of marker funds should be withdrawn",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        "bidder",
+                        recipient.as_str(),
+                        "{:?}: the bidder should receive the marker tokens",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::GrantMarkerAccess { denom, address, permissions }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        denom,
+                        "{:?}: the correct marker denom should be referenced in the grant message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        "asker",
+                        address.as_str(),
+                        "{:?}: the asker should be re-granted its permissions on the marker after the sale",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        &MockMarker::get_default_owner_permissions(),
+                        permissions,
+                        "{:?}: the asker should be returned all of its permissions",
+                        share_sale_type,
+                    );
+                },
+                CosmosMsg::Custom(ProvenanceMsg { params: ProvenanceMsgParams::Marker(MarkerMsgParams::RevokeMarkerAccess { denom, address }), .. }) => {
+                    assert_eq!(
+                        DEFAULT_MARKER_DENOM,
+                        denom,
+                        "{:?}: the correct marker denom should be referenced in the revoke message",
+                        share_sale_type,
+                    );
+                    assert_eq!(
+                        MOCK_CONTRACT_ADDR,
+                        address.as_str(),
+                        "{:?}: the contract should have its permissions to the marker revoked after the sale completes",
+                        share_sale_type,
+                    );
+                },
+                msg => panic!("{:?}: unexpected message: {:?}", share_sale_type, msg),
+            });
+        }
     }
 
     #[test]
