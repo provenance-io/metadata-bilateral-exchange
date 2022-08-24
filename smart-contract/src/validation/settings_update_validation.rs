@@ -1,22 +1,15 @@
 use crate::types::core::error::ContractError;
 use crate::types::request::settings_update::SettingsUpdate;
-use crate::util::extensions::ResultExtensions;
+use crate::validation::validation_handler::ValidationHandler;
 
 pub fn validate_settings_update(update: &SettingsUpdate) -> Result<(), ContractError> {
-    let mut validation_errors: Vec<String> = vec![];
+    let handler = ValidationHandler::new();
     if let Some(ref new_admin_address) = update.new_admin_address {
         if new_admin_address.is_empty() {
-            validation_errors.push("new_admin_address was empty".to_string());
+            handler.push("new_admin_address was empty");
         }
     }
-    if !validation_errors.is_empty() {
-        ContractError::ValidationError {
-            messages: validation_errors,
-        }
-        .to_err()
-    } else {
-        ().to_ok()
-    }
+    handler.handle()
 }
 
 #[cfg(test)]

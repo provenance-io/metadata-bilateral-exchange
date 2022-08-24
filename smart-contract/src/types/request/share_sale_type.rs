@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 const SINGLE_TRANSACTION_NAME: &str = "single_transaction";
 const MULTIPLE_TRANSACTIONS_NAME: &str = "multiple_transactions";
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ShareSaleType {
     /// Indicates that only a single transaction will be made after an ask of this share type is made.

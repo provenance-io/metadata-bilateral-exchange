@@ -23,6 +23,7 @@ import io.provenance.bilateral.extensions.stringAttribute
 import io.provenance.bilateral.extensions.stringAttributeOrNull
 import io.provenance.bilateral.interfaces.BilateralContractExecuteMsg
 import io.provenance.bilateral.interfaces.BilateralContractQueryMsg
+import io.provenance.bilateral.models.AdminMatchOptions
 import io.provenance.bilateral.models.AskOrder
 import io.provenance.bilateral.models.BidOrder
 import io.provenance.bilateral.models.ContractInfo
@@ -202,9 +203,14 @@ class BilateralContractClient private constructor(
      *
      * @param askId The unique id of the ask to execute in the simulated match.
      * @param bidId The unique id of the bid to execute in the simulated match.
+     * @param adminMatchOptions Various options that alter the behavior of the matching mechanism.
      */
-    fun getMatchReport(askId: String, bidId: String): MatchReport = queryContract(
-        query = GetMatchReport(askId = askId, bidId = bidId),
+    fun getMatchReport(
+        askId: String,
+        bidId: String,
+        adminMatchOptions: AdminMatchOptions? = null,
+    ): MatchReport = queryContract(
+        query = GetMatchReport(askId = askId, bidId = bidId, adminMatchOptions = adminMatchOptions),
     )
 
     /**
@@ -214,9 +220,14 @@ class BilateralContractClient private constructor(
      *
      * @param askId The unique id of the ask to execute in the simulated match.
      * @param bidId The unique id of the bid to execute in the simulated match.
+     * @param adminMatchOptions Various options that alter the behavior of the matching mechanism.
      */
-    fun getMatchReportOrNull(askId: String, bidId: String): MatchReport? = queryContractOrNull(
-        query = GetMatchReport(askId = askId, bidId = bidId),
+    fun getMatchReportOrNull(
+        askId: String,
+        bidId: String,
+        adminMatchOptions: AdminMatchOptions? = null,
+    ): MatchReport? = queryContractOrNull(
+        query = GetMatchReport(askId = askId, bidId = bidId, adminMatchOptions = adminMatchOptions),
     )
 
     /**

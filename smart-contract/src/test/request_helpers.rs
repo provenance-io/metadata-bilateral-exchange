@@ -119,7 +119,7 @@ pub fn mock_bid_marker_trade<S1: Into<String>, S2: Into<String>>(
     )
 }
 
-pub fn mock_bid_marker_share<S1: Into<String>, S2: Into<String>>(
+pub fn mock_bid_marker_share_sale<S1: Into<String>, S2: Into<String>>(
     addr: S1,
     denom: S2,
     share_count: u128,

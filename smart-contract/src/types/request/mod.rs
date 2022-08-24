@@ -1,3 +1,4 @@
+pub mod admin_match_options;
 pub mod ask_types;
 pub mod bid_types;
 pub mod match_report;

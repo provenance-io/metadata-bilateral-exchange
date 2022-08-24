@@ -1,23 +1,16 @@
 use crate::types::core::error::ContractError;
 use crate::types::core::msg::InstantiateMsg;
-use crate::util::extensions::ResultExtensions;
+use crate::validation::validation_handler::ValidationHandler;
 
 pub fn validate_instantiate_msg(msg: &InstantiateMsg) -> Result<(), ContractError> {
-    let mut invalid_fields = vec![];
+    let handler = ValidationHandler::new();
     if msg.bind_name.is_empty() {
-        invalid_fields.push("bind_name value was empty".to_string());
+        handler.push("bind_name value was empty");
     }
     if msg.contract_name.is_empty() {
-        invalid_fields.push("contract_name value was empty".to_string());
+        handler.push("contract_name value was empty");
     }
-    if !invalid_fields.is_empty() {
-        ContractError::ValidationError {
-            messages: invalid_fields,
-        }
-        .to_err()
-    } else {
-        ().to_ok()
-    }
+    handler.handle()
 }
 
 #[cfg(test)]

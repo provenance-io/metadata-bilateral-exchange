@@ -7,9 +7,8 @@ package io.provenance.bilateral.models.executeresponse
  * @param bidId The unique identifier of the matched bid.
  * @param askDeleted Whether or not the ask was deleted after the match was completed.  In most cases, the ask is
  * deleted when a match is made, because no more information about the ask is needed within the contract.
- * @param bidDeleted Whether or not the bid was deleted after the match was completed.  As of now, this value should
- * always be true, but is represented as a boolean to ensure that future updates that might maintain a bid longer than
- * a single match can be easily supported.
+ * @param bidDeleted Whether or not the bid was deleted after the match was completed.  A bid may remain if a marker share
+ * sale ask matches with a bid that requests more shares than the ask is configured to provide.
  * @param collateralReleased Whether or not the collateral held on behalf of the asker was released to the target party.
  * In the case of a non-marker share sale, the collateral should always be released upon the completion of a match.  In
  * a marker share sale, however, the collateral is only released when the ask has been deleted and there are no other

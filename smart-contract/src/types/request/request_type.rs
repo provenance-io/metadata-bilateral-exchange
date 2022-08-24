@@ -16,7 +16,7 @@ static REQUEST_TYPES: [RequestType; 4] = [
     RequestType::ScopeTrade,
 ];
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RequestType {
     CoinTrade,

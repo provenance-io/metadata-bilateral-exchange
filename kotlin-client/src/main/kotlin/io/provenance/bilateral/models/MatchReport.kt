@@ -12,13 +12,9 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming
  * @param bidId The unique identifier for the bid in the match report.
  * @param askExists If true, an [io.provenance.bilateral.models.AskOrder] with [askId] exists.
  * @param bidExists If true, a [io.provenance.bilateral.models.BidOrder] with [bidId] exists.
- * @param standardMatchPossible If true, a match without using the [io.provenance.bilateral.execute.ExecuteMatch.acceptMismatchedBids]
- * flags is possible.
- * @param quoteMismatchMatchPossible If true, a match using the [io.provenance.bilateral.execute.ExecuteMatch.acceptMismatchedBids]
- * is possible.  If [standardMatchPossible] is false, this indicates that a match is only possible using the mismatched
- * bids flag.
- * @param errorMessages If either of [standardMatchPossible] or [quoteMismatchMatchPossible] are false, then this list
- * will be populated with detailed output errors indicating why those matches are not possible.
+ * @param matchPossible If true, a match with the provided askId, bidId and specified adminMatchOptions is possible.
+ * @param errorMessage If matchPossible is false, this value will be non-null with a detailed description of all issues
+ * that are preventing the match from being made.
  */
 @JsonNaming(SnakeCaseStrategy::class)
 data class MatchReport(
@@ -26,12 +22,6 @@ data class MatchReport(
     val bidId: String,
     val askExists: Boolean,
     val bidExists: Boolean,
-    // Indicates that this is a direct match for ask and bid
-    val standardMatchPossible: Boolean,
-    // Indicates that this is a direct match on the base, but the quote is different between ask and bid, and not
-    // exactly what the asker requested - this could be a higher, lower, or completely different bid quote.  The bidder
-    // will still get what the want if this match occurs, so the asker needs to determine if they want what the bidder
-    // is offering
-    val quoteMismatchMatchPossible: Boolean,
-    val errorMessages: List<String>,
+    val matchPossible: Boolean,
+    val errorMessage: String?,
 )

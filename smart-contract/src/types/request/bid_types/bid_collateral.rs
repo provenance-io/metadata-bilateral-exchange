@@ -1,4 +1,5 @@
 use crate::types::core::error::ContractError;
+use crate::util::coin_utilities::divide_coins_by_amount;
 use crate::util::extensions::ResultExtensions;
 use cosmwasm_std::{Addr, Coin, Uint128};
 use schemars::JsonSchema;
@@ -160,6 +161,10 @@ impl MarkerShareSaleBidCollateral {
             quote: quote.to_owned(),
         }
     }
+
+    pub fn get_quote_per_share(&self) -> Vec<Coin> {
+        divide_coins_by_amount(&self.quote, self.share_count.u128())
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -174,5 +179,27 @@ impl ScopeTradeBidCollateral {
             scope_address: scope_address.into(),
             quote: quote.to_owned(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test::mock_marker::{DEFAULT_MARKER_ADDRESS, DEFAULT_MARKER_DENOM};
+    use crate::types::request::bid_types::bid_collateral::MarkerShareSaleBidCollateral;
+    use cosmwasm_std::{coin, Addr};
+
+    #[test]
+    fn test_marker_share_sale_bid_collateral_get_quote_per_share() {
+        let collateral = MarkerShareSaleBidCollateral::new(
+            Addr::unchecked(DEFAULT_MARKER_ADDRESS),
+            DEFAULT_MARKER_DENOM,
+            100,
+            &[coin(1000, "quote1"), coin(1500, "quote2")],
+        );
+        assert_eq!(
+            vec![coin(10, "quote1"), coin(15, "quote2")],
+            collateral.get_quote_per_share(),
+            "the quote per share should be calculated correctly by dividing each coin amount by the share count",
+        );
     }
 }

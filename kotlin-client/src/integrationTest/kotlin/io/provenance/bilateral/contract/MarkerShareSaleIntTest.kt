@@ -9,6 +9,8 @@ import io.provenance.bilateral.execute.CreateBid
 import io.provenance.bilateral.execute.ExecuteMatch
 import io.provenance.bilateral.execute.UpdateAsk
 import io.provenance.bilateral.execute.UpdateBid
+import io.provenance.bilateral.models.AdminMatchOptions.MarkerShareSaleAdminOptions
+import io.provenance.bilateral.models.OverrideQuoteSource
 import io.provenance.bilateral.models.RequestDescriptor
 import io.provenance.bilateral.models.enums.ShareSaleType
 import io.provenance.marker.v1.Access
@@ -908,14 +910,14 @@ class MarkerShareSaleIntTest : ContractIntTest() {
                         id = bidUuid.toString(),
                         markerDenom = markerDenom,
                         shareCount = shareSaleAmount,
-                        quote = newCoins(999, quoteDenom2),
+                        quote = newCoins(1000, quoteDenom2),
                     ),
                     descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
                 ),
             )
         }
         assertEquals(
-            expected = newCoins(999, quoteDenom2),
+            expected = newCoins(1000, quoteDenom2),
             actual = response.updatedBidOrder.testGetMarkerShareSale().quote,
             message = "Expected the bid's quote to be properly updated",
         )
@@ -925,7 +927,7 @@ class MarkerShareSaleIntTest : ContractIntTest() {
             message = "The bidder's quote should be fully refunded from the original bid",
         )
         assertEquals(
-            expected = 1,
+            expected = 0,
             actual = pbClient.getBalance(bidder.address(), quoteDenom2),
             message = "The bidder's quote2 should be debited down by the appropriate amount",
         )
@@ -1090,6 +1092,499 @@ class MarkerShareSaleIntTest : ContractIntTest() {
         )
         secondQueryResults.assertSingle("The first ask should be returned in the query results") { it == firstAskCreateResponse.askOrder }
         secondQueryResults.assertSingle("The second ask should be returned in the query results") { it == secondAskCreateResponse.askOrder }
+    }
+
+    @Test
+    fun testMarkerShareSaleLeftoverBid() {
+        val markerDenom = "sharesaleleftover"
+        val shareCount = 200L
+        val shareSaleAmount = 25.toBigInteger()
+        val markerPermissions = listOf(Access.ACCESS_ADMIN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val bidderDenom = "sharesaleleftoverbid"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(100, bidderDenom),
+            receiverAddress = bidder.address(),
+        )
+        val askUuid = UUID.randomUUID()
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = askUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = shareSaleAmount,
+                    // 1 bid denom per share, wants 25 shares sold
+                    quotePerShare = newCoins(1, bidderDenom),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                ),
+                descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+            )
+        )
+        val bidUuid = UUID.randomUUID()
+        createBid(
+            createBid = CreateBid(
+                bid = MarkerShareSaleBid(
+                    id = bidUuid.toString(),
+                    markerDenom = markerDenom,
+                    shareCount = 100.toBigInteger(),
+                    // 1 bid denom per share, wants 100 shares purchased
+                    quote = newCoins(100, bidderDenom),
+                ),
+                descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+            ),
+        )
+        assertEquals(
+            expected = 0L,
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
+            message = "The bidder's denom [$bidderDenom] should be held in escrow when the bid is created",
+        )
+        val executeMatchResponse = executeMatch(ExecuteMatch(askUuid.toString(), bidUuid.toString()))
+        assertTrue(
+            actual = executeMatchResponse.askDeleted,
+            message = "The response should indicate that the ask was deleted",
+        )
+        assertFalse(
+            actual = executeMatchResponse.bidDeleted,
+            message = "The response should indicate that the bid was not deleted because it had remaining shares desired",
+        )
+        assertTrue(
+            actual = executeMatchResponse.collateralReleased,
+            message = "The collateral should be released because there are no outstanding asks remaining",
+        )
+        assertEquals(
+            expected = 25L,
+            actual = pbClient.getBalance(asker.address(), bidderDenom),
+            message = "The correct amount of [$bidderDenom] denom should be transferred to the asker",
+        )
+        assertEquals(
+            expected = 25L,
+            actual = pbClient.getBalance(bidder.address(), markerDenom),
+            message = "The correct amount of marker denom [$markerDenom] should be transferred to the bidder",
+        )
+        assertEquals(
+            expected = 0L,
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
+            message = "The bidder's bidder denom [$bidderDenom] should still be empty",
+        )
+        val outstandingBidCollateral = bilateralClient.getBid(bidUuid.toString()).testGetMarkerShareSale()
+        assertEquals(
+            expected = 75.toBigInteger(),
+            actual = outstandingBidCollateral.quote.assertSingle("A single coin should existing in the quote").amount.toBigInteger(),
+            message = "The outstanding bid quote amount should retain the other 75 [$bidderDenom] that was not sent to the asker",
+        )
+        assertEquals(
+            expected = 75.toBigInteger(),
+            actual = outstandingBidCollateral.shareCount,
+            message = "The share count in the outstanding bid should be the correct amount",
+        )
+    }
+
+    @Test
+    fun testMarkerShareSaleUseLowerAskPricesNoLeftoverBid() {
+        val markerDenom = "sharesaleloweraskprices"
+        val shareCount = 200L
+        val shareSaleAmount = 25.toBigInteger()
+        val markerPermissions = listOf(Access.ACCESS_ADMIN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val bidderDenom = "sharesaleloweraskpricesbid"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(50, bidderDenom),
+            receiverAddress = bidder.address(),
+        )
+        val askUuid = UUID.randomUUID()
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = askUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = shareSaleAmount,
+                    // 1 bid denom per share, wants 25 shares sold
+                    quotePerShare = newCoins(1, bidderDenom),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                ),
+                descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+            )
+        )
+        val bidUuid = UUID.randomUUID()
+        createBid(
+            createBid = CreateBid(
+                bid = MarkerShareSaleBid(
+                    id = bidUuid.toString(),
+                    markerDenom = markerDenom,
+                    shareCount = 25.toBigInteger(),
+                    // 2 bid denom per share, wants 25 shares purchased
+                    quote = newCoins(50, bidderDenom),
+                ),
+                descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+            ),
+        )
+        assertEquals(
+            expected = 0L,
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
+            message = "The bidder's denom [$bidderDenom] should be held in escrow when the bid is created",
+        )
+        assertFails("The bids aren't an exact match, so executing the match should fail without admin options") {
+            executeMatch(ExecuteMatch(askUuid.toString(), bidUuid.toString()))
+        }
+        val executeMatchResponse = assertSucceeds("With admin options to choose the ask prices, the match should succeed") {
+            executeMatch(ExecuteMatch(askUuid.toString(), bidUuid.toString(), MarkerShareSaleAdminOptions(OverrideQuoteSource.ASK)))
+        }
+        assertTrue(
+            actual = executeMatchResponse.askDeleted,
+            message = "The response should indicate that the ask was deleted",
+        )
+        assertTrue(
+            actual = executeMatchResponse.bidDeleted,
+            message = "The response should indicate that the bid was deleted",
+        )
+        assertTrue(
+            actual = executeMatchResponse.collateralReleased,
+            message = "The collateral should be released because there are no outstanding asks remaining",
+        )
+        assertEquals(
+            expected = 25L,
+            actual = pbClient.getBalance(asker.address(), bidderDenom),
+            message = "The correct amount of [$bidderDenom] denom should be transferred to the asker",
+        )
+        assertEquals(
+            expected = 25L,
+            actual = pbClient.getBalance(bidder.address(), markerDenom),
+            message = "The correct amount of marker denom [$markerDenom] should be transferred to the bidder",
+        )
+        assertEquals(
+            expected = 25L,
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
+            message = "The bidder should be refunded for their excess bidder denom [$bidderDenom]",
+        )
+    }
+
+    @Test
+    fun testMarkerShareSaleUseLowerAskPricesWithLeftoverBid() {
+        val markerDenom = "sharesaleloweraskpricesleftover"
+        val shareCount = 200L
+        val shareSaleAmount = 25.toBigInteger()
+        val markerPermissions = listOf(Access.ACCESS_ADMIN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val bidderDenom = "sharesaleloweraskpricesleftoverbid"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(100, bidderDenom),
+            receiverAddress = bidder.address(),
+        )
+        val askUuid = UUID.randomUUID()
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = askUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = shareSaleAmount,
+                    // 1 bid denom per share, wants 25 shares sold
+                    quotePerShare = newCoins(1, bidderDenom),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                ),
+                descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+            )
+        )
+        val bidUuid = UUID.randomUUID()
+        createBid(
+            createBid = CreateBid(
+                bid = MarkerShareSaleBid(
+                    id = bidUuid.toString(),
+                    markerDenom = markerDenom,
+                    shareCount = 50.toBigInteger(),
+                    // 2 bid denom per share, wants 50 shares purchased
+                    quote = newCoins(100, bidderDenom),
+                ),
+                descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+            ),
+        )
+        assertEquals(
+            expected = 0L,
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
+            message = "The bidder's denom [$bidderDenom] should be held in escrow when the bid is created",
+        )
+        assertFails("The bids aren't an exact match, so executing the match should fail without admin options") {
+            executeMatch(ExecuteMatch(askUuid.toString(), bidUuid.toString()))
+        }
+        val executeMatchResponse = assertSucceeds("With admin options to choose the ask prices, the match should succeed") {
+            executeMatch(ExecuteMatch(askUuid.toString(), bidUuid.toString(), MarkerShareSaleAdminOptions(OverrideQuoteSource.ASK)))
+        }
+        assertTrue(
+            actual = executeMatchResponse.askDeleted,
+            message = "The response should indicate that the ask was deleted",
+        )
+        assertFalse(
+            actual = executeMatchResponse.bidDeleted,
+            message = "The response should indicate that the bid was not deleted because it still wants more shares",
+        )
+        assertTrue(
+            actual = executeMatchResponse.collateralReleased,
+            message = "The collateral should be released because there are no outstanding asks remaining",
+        )
+        assertEquals(
+            expected = 25L,
+            actual = pbClient.getBalance(asker.address(), bidderDenom),
+            message = "The correct amount of [$bidderDenom] denom should be transferred to the asker",
+        )
+        assertEquals(
+            expected = 25L,
+            actual = pbClient.getBalance(bidder.address(), markerDenom),
+            message = "The correct amount of marker denom [$markerDenom] should be transferred to the bidder",
+        )
+        assertEquals(
+            expected = 25L,
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
+            message = "The bidder should be refunded for their excess bidder denom [$bidderDenom] that was not sent to the asker",
+        )
+        val outstandingBidCollateral = bilateralClient.getBid(bidUuid.toString()).testGetMarkerShareSale()
+        assertEquals(
+            expected = 50.toBigInteger(),
+            actual = outstandingBidCollateral.quote.assertSingle("A single coin should existing in the quote").amount.toBigInteger(),
+            message = "The outstanding bid quote amount should retain the other 50 [$bidderDenom] that was not sent to the asker",
+        )
+        assertEquals(
+            expected = 25.toBigInteger(),
+            actual = outstandingBidCollateral.shareCount,
+            message = "The share count in the outstanding bid should be the correct amount",
+        )
+    }
+
+    @Test
+    fun testMarkerShareSaleUseHigherBidPricesNoLeftoverBid() {
+        val markerDenom = "sharesalehigherbidprices"
+        val shareCount = 200L
+        val shareSaleAmount = 25.toBigInteger()
+        val markerPermissions = listOf(Access.ACCESS_ADMIN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val bidderDenom = "sharesalehigherbidpricesbid"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(50, bidderDenom),
+            receiverAddress = bidder.address(),
+        )
+        val askUuid = UUID.randomUUID()
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = askUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = shareSaleAmount,
+                    // 1 bid denom per share, wants 25 shares sold
+                    quotePerShare = newCoins(1, bidderDenom),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                ),
+                descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+            )
+        )
+        val bidUuid = UUID.randomUUID()
+        createBid(
+            createBid = CreateBid(
+                bid = MarkerShareSaleBid(
+                    id = bidUuid.toString(),
+                    markerDenom = markerDenom,
+                    shareCount = 25.toBigInteger(),
+                    // 2 bid denom per share, wants 25 shares purchased
+                    quote = newCoins(50, bidderDenom),
+                ),
+                descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+            ),
+        )
+        assertEquals(
+            expected = 0L,
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
+            message = "The bidder's denom [$bidderDenom] should be held in escrow when the bid is created",
+        )
+        assertFails("The bids aren't an exact match, so executing the match should fail without admin options") {
+            executeMatch(ExecuteMatch(askUuid.toString(), bidUuid.toString()))
+        }
+        val executeMatchResponse = assertSucceeds("With admin options to choose the bid prices, the match should succeed") {
+            executeMatch(ExecuteMatch(askUuid.toString(), bidUuid.toString(), MarkerShareSaleAdminOptions(OverrideQuoteSource.BID)))
+        }
+        assertTrue(
+            actual = executeMatchResponse.askDeleted,
+            message = "The response should indicate that the ask was deleted",
+        )
+        assertTrue(
+            actual = executeMatchResponse.bidDeleted,
+            message = "The response should indicate that the bid was deleted",
+        )
+        assertTrue(
+            actual = executeMatchResponse.collateralReleased,
+            message = "The collateral should be released because there are no outstanding asks remaining",
+        )
+        assertEquals(
+            expected = 50L,
+            actual = pbClient.getBalance(asker.address(), bidderDenom),
+            message = "The correct amount of [$bidderDenom] denom should be transferred to the asker",
+        )
+        assertEquals(
+            expected = 25L,
+            actual = pbClient.getBalance(bidder.address(), markerDenom),
+            message = "The correct amount of marker denom [$markerDenom] should be transferred to the bidder",
+        )
+        assertEquals(
+            expected = 0L,
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
+            message = "The bidder should retain no bidder denom [$bidderDenom] because it was all spent in the match",
+        )
+    }
+
+    @Test
+    fun testMarkerShareSaleUseHigherBidPricesWithLeftoverBid() {
+        val markerDenom = "sharesalehigherbidpricesleftover"
+        val shareCount = 200L
+        val shareSaleAmount = 25.toBigInteger()
+        val markerPermissions = listOf(Access.ACCESS_ADMIN)
+        createMarker(
+            pbClient = pbClient,
+            ownerAccount = asker,
+            denomName = markerDenom,
+            supply = shareCount,
+            permissions = markerPermissions,
+        )
+        grantMarkerAccess(
+            pbClient = pbClient,
+            markerAdminAccount = asker,
+            markerDenom = markerDenom,
+            grantAddress = contractInfo.contractAddress,
+            permissions = listOf(Access.ACCESS_ADMIN, Access.ACCESS_WITHDRAW),
+        )
+        val bidderDenom = "sharesalehigherbidpricesleftoverbid"
+        giveTestDenom(
+            pbClient = pbClient,
+            initialHoldings = newCoin(100, bidderDenom),
+            receiverAddress = bidder.address(),
+        )
+        val askUuid = UUID.randomUUID()
+        createAsk(
+            createAsk = CreateAsk(
+                ask = MarkerShareSaleAsk(
+                    id = askUuid.toString(),
+                    markerDenom = markerDenom,
+                    sharesToSell = shareSaleAmount,
+                    // 1 bid denom per share, wants 25 shares sold
+                    quotePerShare = newCoins(1, bidderDenom),
+                    shareSaleType = ShareSaleType.SINGLE_TRANSACTION,
+                ),
+                descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+            )
+        )
+        val bidUuid = UUID.randomUUID()
+        createBid(
+            createBid = CreateBid(
+                bid = MarkerShareSaleBid(
+                    id = bidUuid.toString(),
+                    markerDenom = markerDenom,
+                    shareCount = 50.toBigInteger(),
+                    // 2 bid denom per share, wants 50 shares purchased
+                    quote = newCoins(100, bidderDenom),
+                ),
+                descriptor = RequestDescriptor("Example description", OffsetDateTime.now()),
+            ),
+        )
+        assertEquals(
+            expected = 0L,
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
+            message = "The bidder's denom [$bidderDenom] should be held in escrow when the bid is created",
+        )
+        assertFails("The bids aren't an exact match, so executing the match should fail without admin options") {
+            executeMatch(ExecuteMatch(askUuid.toString(), bidUuid.toString()))
+        }
+        val executeMatchResponse = assertSucceeds("With admin options to choose the bid prices, the match should succeed") {
+            executeMatch(ExecuteMatch(askUuid.toString(), bidUuid.toString(), MarkerShareSaleAdminOptions(OverrideQuoteSource.BID)))
+        }
+        assertTrue(
+            actual = executeMatchResponse.askDeleted,
+            message = "The response should indicate that the ask was deleted",
+        )
+        assertFalse(
+            actual = executeMatchResponse.bidDeleted,
+            message = "The response should indicate that the bid was not deleted because it still wants more shares",
+        )
+        assertTrue(
+            actual = executeMatchResponse.collateralReleased,
+            message = "The collateral should be released because there are no outstanding asks remaining",
+        )
+        assertEquals(
+            expected = 50L,
+            actual = pbClient.getBalance(asker.address(), bidderDenom),
+            message = "The correct amount of [$bidderDenom] denom should be transferred to the asker",
+        )
+        assertEquals(
+            expected = 25L,
+            actual = pbClient.getBalance(bidder.address(), markerDenom),
+            message = "The correct amount of marker denom [$markerDenom] should be transferred to the bidder",
+        )
+        assertEquals(
+            expected = 0L,
+            actual = pbClient.getBalance(bidder.address(), bidderDenom),
+            message = "The bidder should not retain any of its denom [$bidderDenom] because it all remains in the contract",
+        )
+        val outstandingBidCollateral = bilateralClient.getBid(bidUuid.toString()).testGetMarkerShareSale()
+        assertEquals(
+            expected = 50.toBigInteger(),
+            actual = outstandingBidCollateral.quote.assertSingle("A single coin should existing in the quote").amount.toBigInteger(),
+            message = "The outstanding bid quote amount should retain the other 50 [$bidderDenom] that was not sent to the asker",
+        )
+        assertEquals(
+            expected = 25.toBigInteger(),
+            actual = outstandingBidCollateral.shareCount,
+            message = "The share count in the outstanding bid should be the correct amount",
+        )
     }
 
     private fun assertMarkerIsOwnedByAddress(

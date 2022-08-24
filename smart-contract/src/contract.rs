@@ -49,8 +49,8 @@ pub fn execute(
         ExecuteMsg::ExecuteMatch {
             ask_id,
             bid_id,
-            accept_mismatched_bids,
-        } => execute_match(deps, env, info, ask_id, bid_id, accept_mismatched_bids),
+            admin_match_options,
+        } => execute_match(deps, env, info, ask_id, bid_id, admin_match_options),
         ExecuteMsg::UpdateSettings { update } => update_settings(deps, info, update),
     }
 }
@@ -68,7 +68,11 @@ pub fn query(
             query_asks_by_collateral_id(deps, collateral_id)
         }
         QueryMsg::GetBid { id } => query_bid(deps, id),
-        QueryMsg::GetMatchReport { ask_id, bid_id } => get_match_report(deps, ask_id, bid_id),
+        QueryMsg::GetMatchReport {
+            ask_id,
+            bid_id,
+            admin_match_options,
+        } => get_match_report(deps, ask_id, bid_id, admin_match_options),
         QueryMsg::GetContractInfo {} => query_contract_info(deps),
         QueryMsg::SearchAsks { search } => search_asks(deps, search),
         QueryMsg::SearchBids { search } => search_bids(deps, search),
