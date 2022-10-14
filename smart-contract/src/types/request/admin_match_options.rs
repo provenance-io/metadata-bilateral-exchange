@@ -1,8 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// These options are to be used in matching by the contract admin.  Requests not made by the admin
-/// that include admin match options will be rejected.
+/// These options are to be used in matching to alter the behavior of the matching process.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AdminMatchOptions {

@@ -47,9 +47,6 @@ pub fn execute_match(
         handler.push("bid id must not be empty");
     }
     let contract_info = get_contract_info(deps.storage)?;
-    if admin_match_options.is_some() && info.sender != contract_info.admin {
-        handler.push("admin options cannot be provided when the sender is not the admin");
-    }
     // return error if either ids are badly formed
     handler.handle()?;
     // return error if funds sent
@@ -423,19 +420,6 @@ mod tests {
         )
         .expect_err("an error should occur when the bid id is empty");
         assert_validation_error_message(err, "bid id must not be empty");
-        let err = execute_match(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("asker", &[]),
-            "ask_id".to_string(),
-            "bid_id".to_string(),
-            Some(AdminMatchOptions::coin_trade_options(true)),
-        )
-        .expect_err("an error should occur when admin options are provided by a non-admin account");
-        assert_validation_error_message(
-            err,
-            "admin options cannot be provided when the sender is not the admin",
-        );
         let err = execute_match(
             deps.as_mut(),
             mock_env(),
