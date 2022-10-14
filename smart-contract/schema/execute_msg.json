@@ -219,7 +219,7 @@
   ],
   "definitions": {
     "AdminMatchOptions": {
-      "description": "These options are to be used in matching by the contract admin.  Requests not made by the admin that include admin match options will be rejected.",
+      "description": "These options are to be used in matching to alter the behavior of the matching process.",
       "anyOf": [
         {
           "type": "object",
